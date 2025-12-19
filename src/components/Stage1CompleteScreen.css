@@ -1,0 +1,80 @@
+.stage1-complete-screen{
+  min-height: 100vh;
+  padding: 24px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+}
+
+.s1c-card{
+  width: 100%;
+  max-width: 820px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 16px;
+  padding: 22px;
+  backdrop-filter: blur(10px);
+}
+
+.s1c-card h1{
+  margin: 0 0 8px 0;
+  font-size: 34px;
+  text-align: center;
+}
+
+.s1c-sub{
+  margin: 0 0 18px 0;
+  text-align: center;
+  opacity: 0.95;
+  font-size: 16px;
+}
+
+.s1c-box{
+  background: rgba(255,255,255,0.12);
+  border-radius: 14px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.s1c-box h3{ margin: 0 0 10px 0; }
+.s1c-box ul{ margin: 0; padding-left: 18px; }
+.s1c-box li{ margin: 6px 0; }
+
+.s1c-wait{
+  background: rgba(255,255,255,0.12);
+  border-radius: 14px;
+  padding: 16px;
+  text-align: center;
+}
+
+.s1c-progress-text{
+  font-size: 18px;
+  margin: 10px 0 12px 0;
+}
+
+.s1c-progress-bar{
+  height: 20px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(0,0,0,0.22);
+}
+
+.s1c-progress-fill{
+  height: 100%;
+  background: linear-gradient(90deg, #4caf50, #8bc34a);
+  transition: width 0.4s ease;
+}
+
+.s1c-tip{
+  margin-top: 12px;
+  opacity: 0.9;
+  font-style: italic;
+  font-size: 14px;
+}
+
+@media (max-width: 600px){
+  .s1c-card h1{ font-size: 26px; }
+  .s1c-progress-text{ font-size: 16px; }
+}

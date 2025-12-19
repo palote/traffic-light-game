@@ -1,0 +1,153 @@
+
+/* ================================
+   CUADRO DE ESTADO
+   ================================ */
+
+.status-box {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 20px 0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.status-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid rgba(255,255,255,0.3);
+}
+
+.status-icon {
+  font-size: 24px;
+}
+
+.status-title {
+  font-size: 18px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+}
+
+.status-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+}
+
+.status-row.main-action {
+  background: rgba(255,255,255,0.15);
+  padding: 12px;
+  border-radius: 8px;
+  margin: 5px 0;
+  font-weight: bold;
+  font-size: 17px;
+}
+
+.status-label {
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.status-value {
+  font-weight: bold;
+  color: #ffd700;
+}
+
+.status-action {
+  flex: 1;
+  text-align: center;
+}
+
+/* ================================
+   FASE DE RESPUESTA
+   ================================ */
+
+.response-phase {
+  background: #f8f9fa;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  padding: 30px;
+  margin: 25px 0;
+  text-align: center;
+}
+
+.response-instructions {
+  margin-bottom: 25px;
+}
+
+.response-instructions p {
+  margin: 10px 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: #2c3e50;
+}
+
+.btn-responded {
+  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+  color: white;
+  border: none;
+  padding: 20px 60px;
+  font-size: 22px;
+  font-weight: bold;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+}
+
+.btn-responded:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(76, 175, 80, 0.5);
+  background: linear-gradient(135deg, #45a049 0%, #388e3c 100%);
+}
+
+.btn-responded:active {
+  transform: translateY(-1px);
+}
+
+/* ================================
+   RECORDATORIO (cuando hay rezago)
+   ================================ */
+
+.reminder.pedagogical {
+  background: #fff3cd;
+  border: 1px solid #ffe69c;
+  color: #664d03;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 12px 0 18px 0;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .status-box {
+    padding: 15px;
+  }
+
+  .status-row {
+    font-size: 14px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .status-row.main-action {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .btn-responded {
+    padding: 15px 40px;
+    font-size: 18px;
+  }
+}
