@@ -144,10 +144,10 @@ export type Stage2Phase =
   | "rating"
   | "rating_reveal"
   | "justification"
-  | "validation_response" // 🆕 docente valida respuesta
-  | "validation_ratings"  // 🆕 antes era "validation"
+  | "validation_response"    // ← AGREGAR
+  | "validation_ratings"     // ← AGREGAR
+  | "validation"
   | "results";
-
 
 export interface Stage2Config {
   hintDuration: number; // default 60
@@ -203,31 +203,23 @@ export interface Stage2Round {
   questionId: string;
   phase: Stage2Phase;
 
-  // Timers
   hintStartedAt: number;
   hintDuration: number;
 
   questionRevealedAt: number | null;
 
-  // Designación
   respondingTeam: Stage2RespondingTeam | null;
   ratingTeams: Record<string, Stage2RatingTeam>;
 
-
-  responseValidated: boolean | null; // true correcta, false incorrecta, null pendiente
-
-  // ❌ ELIMINADO: raterOrder, currentRaterIndex (era secuencial)
-
-  // 🆕 CALIFICACIÓN SIMULTÁNEA
   ratingStartedAt: number | null;
   ratingTimerActive: boolean;
-  ratingsRevealed: boolean;  // Para controlar revelación
+  ratingsRevealed: boolean;
 
-  // 🆕 JUSTIFICACIÓN SECUENCIAL
-  justificationOrder?: string[];  // Array de teamIds en orden
-  currentJustificationIndex?: number;  // Índice actual
+  justificationOrder?: string[];
+  currentJustificationIndex?: number;
 
-  // Resultados
+  responseValidated?: boolean | null;  // ← AGREGAR ESTA LÍNEA
+
   pointsAwarded: Record<string, number>;
 
   timestamp: number;
@@ -240,7 +232,6 @@ export interface Stage2Round {
     };
   };
 }
-
 // ================================
 // ESTADO STAGE 2
 // ================================

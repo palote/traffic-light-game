@@ -1,661 +1,727 @@
 // src/components/Stage2/TeamDeviceView.tsx
-
-import { useEffect, useMemo, useState } from "react";
-import type { Game, Team } from "../../types/game";
-
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ref, onValue } from "firebase/database";
+import { database } from "../../firebase.config";
+import type { Game, Team, Question, RatingColor } from "../../types/game";
 import {
+  setRespondingHelpRequested,
+  setRespondingResponseGiven,
   submitRating,
+  setRaterJustification,
   getCurrentJustifyingTeamId,
 } from "../../services/stage2Repository";
 
 interface TeamDeviceViewProps {
-  game: Game;
+  gameId: string;
   teamId: string;
 }
 
-export function TeamDeviceView({ game, teamId }: TeamDeviceViewProps) {
-  // Estados locales
+export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
+  const [game, setGame] = useState<Game | null>(null);
+  const [localJustification, setLocalJustification] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+  
+  // 🆕 Estado local para saber si ya calificó
   const [hasRated, setHasRated] = useState(false);
+  
+  // 🆕 Estado para saber si es su turno de justificar
   const [isMyTurnToJustify, setIsMyTurnToJustify] = useState(false);
 
-  // GameId seguro (evita crashes raros en renders intermedios)
-  const gameId = (game as any)?.id ?? "";
+  const tickIntervalRef = useRef<number | null>(null);
 
-  // Stage 2
-  const stage2: any = (game as any)?.stage2;
-  const currentRoundIndex: number = stage2?.currentRound ?? 0;
-  const round: any = stage2?.rounds?.[currentRoundIndex] ?? null;
-  const phase: string | null = round?.phase ?? null;
+  useEffect(() => {
+    const gameRef = ref(database, `games/${gameId}`);
+    const unsub = onValue(gameRef, (snap) => {
+      setGame(snap.val() ?? null);
+    });
+    return () => unsub();
+  }, [gameId]);
 
-  // =========================
-  // Teams (ROBUSTO)
-  // - Filtra undefined/huecos de RTDB
-  // - Evita t.id sobre t undefined
-  // =========================
-  const teams: Team[] = useMemo(() => {
+  // Team robusto para RTDB
+  const team = useMemo(() => {
     const raw: any = (game as any)?.teams;
-    if (!raw) return [];
+    if (!raw) return null;
+    if (raw[teamId]) return raw[teamId] as Team;
 
-    const arr: any[] = Array.isArray(raw)
-      ? raw
+    const teamsArray: Team[] = Array.isArray(raw)
+      ? (raw as any)
       : typeof raw === "object"
-        ? Object.values(raw)
+        ? (Object.values(raw) as any)
         : [];
 
-    return arr.filter(
-      (t): t is Team => !!t && typeof t === "object" && !!(t as any).id
-    );
+    return (teamsArray.find((t: any) => t?.id === teamId) as any) ?? null;
+  }, [game, teamId]);
+
+  const round = useMemo(() => {
+    if (!game?.stage2) return null;
+    return game.stage2.rounds?.[game.stage2.currentRound] ?? null;
   }, [game]);
 
-  const team: Team | undefined = useMemo(() => {
-    if (!teamId) return undefined;
-    return teams.find((t) => t.id === teamId);
-  }, [teams, teamId]);
-
-  // Preguntas (robusto a object/array)
-  const questions: any[] = useMemo(() => {
-    const raw: any = (game as any)?.questions;
-    if (!raw) return [];
-
-    const arr: any[] = Array.isArray(raw)
-      ? raw
-      : typeof raw === "object"
-        ? Object.values(raw)
-        : [];
-
-    return arr.filter((q) => !!q && typeof q === "object" && !!(q as any).id);
-  }, [game]);
-
-  const currentQuestion: any = useMemo(() => {
-    if (!round?.questionId) return null;
-    return questions.find((q) => q?.id === round.questionId) ?? null;
-  }, [questions, round?.questionId]);
-
-  // Datos del equipo que respondió
-  const responding: any = round?.respondingTeam ?? null;
-
-  const respondingTeamName = useMemo(() => {
-    if (!responding?.teamId) return "—";
-    // OJO: teams puede cambiar; protegemos el acceso
-    return teams.find((t) => t?.id === responding.teamId)?.name ?? responding.teamId;
-  }, [responding?.teamId, teams]);
+  const phase = round?.phase ?? null;
+  const responding = round?.respondingTeam ?? null;
 
   const isRespondingTeam = responding?.teamId === teamId;
+  const isRaterTeam = !!round?.ratingTeams?.[teamId];
+  const myRaterData = isRaterTeam ? round?.ratingTeams?.[teamId] ?? null : null;
 
-  // Mi rating (del equipo)
-  const myRating: any = round?.ratingTeams?.[teamId] ?? null;
+  const roleLabel = isRespondingTeam
+    ? "🎤 Tu equipo RESPONDE"
+    : isRaterTeam
+      ? "✍️ Tu equipo CALIFICA"
+      : "👀 Observando";
 
-  // Detectar si ya calificamos
+  // Pregunta actual
+  const currentQuestion = useMemo(() => {
+    if (!game || !round) return null;
+    const raw: any = (game as any).questions;
+    const questionsArray: Question[] = Array.isArray(raw)
+      ? (raw as any)
+      : raw && typeof raw === "object"
+        ? (Object.values(raw) as any)
+        : [];
+
+    const found = questionsArray.find((q: any) => q?.id === round.questionId);
+
+    if (!found && raw && typeof raw === "object") {
+      const byKey = raw[round.questionId];
+      return byKey ? ({ id: round.questionId, ...byKey } as any) : null;
+    }
+    return (found as any) ?? null;
+  }, [game, round]);
+
+  // Sincroniza justificación desde RTDB
   useEffect(() => {
-    if (myRating?.rating) setHasRated(true);
-    else setHasRated(false);
-  }, [myRating?.rating]);
+    if (myRaterData?.justification != null) {
+      setLocalJustification(myRaterData.justification);
+    }
+  }, [myRaterData?.justification]);
 
-  // Detectar si es mi turno de justificar (poll cada 2s)
+  // 🆕 Sincroniza estado de calificación desde RTDB
+  useEffect(() => {
+    if (myRaterData?.rating != null) {
+      setHasRated(true);
+    } else {
+      setHasRated(false);
+    }
+  }, [myRaterData?.rating]);
+
+  // 🆕 Detectar si es el turno de justificar de este equipo
   useEffect(() => {
     if (phase !== "justification") {
       setIsMyTurnToJustify(false);
       return;
     }
 
-    // Si por alguna razón todavía no tenemos gameId, no poll
-    if (!gameId) {
-      setIsMyTurnToJustify(false);
-      return;
-    }
-
-    let alive = true;
-
     const checkTurn = async () => {
       try {
         const currentTeamId = await getCurrentJustifyingTeamId(gameId);
-        if (!alive) return;
         setIsMyTurnToJustify(currentTeamId === teamId);
       } catch (e) {
         console.error("Error checking justification turn:", e);
+        setIsMyTurnToJustify(false);
       }
     };
 
     checkTurn();
-    const interval = window.setInterval(checkTurn, 2000);
+  }, [gameId, teamId, phase, round?.currentJustificationIndex]);
+
+  // Countdown para responding help
+  const needsRespondingCountdown = useMemo(() => {
+    return phase === "responding_with_help" && isRespondingTeam && !!responding?.helpStartedAt;
+  }, [phase, isRespondingTeam, responding?.helpStartedAt]);
+
+  useEffect(() => {
+    if (tickIntervalRef.current) {
+      window.clearInterval(tickIntervalRef.current);
+      tickIntervalRef.current = null;
+    }
+
+    if (!needsRespondingCountdown) return;
+
+    tickIntervalRef.current = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
 
     return () => {
-      alive = false;
-      window.clearInterval(interval);
+      if (tickIntervalRef.current) {
+        window.clearInterval(tickIntervalRef.current);
+        tickIntervalRef.current = null;
+      }
     };
-  }, [phase, gameId, teamId]);
+  }, [needsRespondingCountdown]);
 
-  // Guards (orden importante: antes de usar team.name)
-  if (!team) return <div style={{ padding: 16 }}>⏳ Cargando equipo…</div>;
+  const respondingHelpRemaining = useMemo(() => {
+    if (phase !== "responding_with_help") return null;
+    if (!isRespondingTeam) return null;
+    if (!responding?.helpStartedAt) return null;
 
-  if (!stage2 || !round) {
+    const elapsedMs = now - responding.helpStartedAt;
+    const totalMs = (responding.helpDuration ?? 60) * 1000;
+    const left = Math.max(0, totalMs - elapsedMs);
+    return Math.ceil(left / 1000);
+  }, [phase, isRespondingTeam, responding?.helpStartedAt, responding?.helpDuration, now]);
+
+  // Returns tempranos
+  if (!game) return <div style={{ padding: 24 }}>⏳ Cargando…</div>;
+
+  if (!team) {
     return (
-      <div style={{ padding: 16 }}>
-        <h2>{team.name}</h2>
-        <p>Stage 2 todavía no empezó.</p>
-        <p style={{ opacity: 0.8 }}>
-          Volvé a Stage 1 o esperá al docente.
-        </p>
+      <div style={{ padding: 24 }}>
+        ❌ No encuentro el equipo <b>{teamId}</b> en Firebase.
       </div>
     );
   }
 
-  // UI helpers
-  const headerBoxStyle: React.CSSProperties = {
-    padding: 12,
-    border: "1px solid #ddd",
-    borderRadius: 8,
-    marginBottom: 12,
-    backgroundColor: "#fafafa",
-  };
-
-  const infoRow: React.CSSProperties = { marginBottom: 6 };
-  const prettyPhase = phase ?? "—";
-
-  const ratingLabel = (r: any) => {
-    if (r === "green") return "🟩 VERDE";
-    if (r === "yellow") return "🟨 AMARILLO";
-    if (r === "red") return "🟥 ROJO";
-    return "—";
-  };
-
-  const ratingEmoji = (r: any) => {
-    if (r === "green") return "🟩";
-    if (r === "yellow") return "🟨";
-    if (r === "red") return "🟥";
-    return "—";
-  };
-
-  /* =====================================================
-     RENDER
-  ===================================================== */
+  if (!game.stage2 || !round) {
+    return (
+      <div style={{ padding: 24 }}>
+        <h2>STAGE 2 – DISPOSITIVO DE EQUIPO</h2>
+        <p>
+          Equipo: <b>{team?.name ?? "—"}</b> ({teamId})
+        </p>
+        <p>Stage 2 todavía no está iniciado. Esperá al docente…</p>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: 16 }}>
-      {/* HEADER SIEMPRE VISIBLE */}
-      <div style={headerBoxStyle}>
-        <div style={infoRow}>
-          <strong>Equipo:</strong> {team.name} ({teamId})
+    <div style={{ padding: 24 }}>
+      <h2>STAGE 2 – DISPOSITIVO DE EQUIPO</h2>
+
+      <div style={{ marginBottom: 12 }}>
+        <div>
+          Equipo: <b>{team.name}</b> ({teamId})
         </div>
-        <div style={infoRow}>
-          <strong>Puntaje total:</strong> {(team as any).totalScore ?? 0} pts
+        <div>
+          Puntaje: <b>{team.totalScore ?? 0}</b> pts
         </div>
-        <div style={infoRow}>
-          <strong>Ronda:</strong> {currentRoundIndex + 1}
+        <div>
+          Ronda: <b>{game.stage2.currentRound + 1}</b>
         </div>
-        <div style={infoRow}>
-          <strong>Fase:</strong> {prettyPhase}
+        <div>
+          Fase: <b>{phase}</b>
+        </div>
+        <div>
+          Rol: <b>{roleLabel}</b>
         </div>
       </div>
 
-      {/* BLOQUE: PREGUNTA / CONTEXTO (en fases relevantes) */}
-      {(phase === "responding" ||
-        phase === "responding_with_help" ||
-        phase === "rating" ||
-        phase === "rating_reveal" ||
-        phase === "justification" ||
-        phase === "validation_response" ||
-        phase === "validation_ratings" ||
-        phase === "results") && (
-        <div
-          style={{
-            padding: 12,
-            border: "1px solid #ddd",
-            borderRadius: 8,
-            marginBottom: 12,
-            backgroundColor: "#f5f5f5",
-            fontSize: 14,
-          }}
-        >
-          <div style={{ marginBottom: 8 }}>
-            <strong>Pregunta:</strong> {currentQuestion?.text ?? "—"}
-          </div>
-          <div>
-            <strong>Respondió:</strong>{" "}
-            {responding
-              ? `${responding.playerName ?? "—"} (${respondingTeamName})`
-              : "—"}
-          </div>
+      {/* Mostrar pregunta/hint */}
+      <div style={{ padding: 12, border: "1px solid #ddd", marginBottom: 12 }}>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>
+          {phase === "hint" ? "💡 PISTA" : 
+           phase === "designated" ? "👥 REPRESENTANTES" :
+           "📝 PREGUNTA"}
+        </div>
+        <div style={{ fontSize: 16 }}>
+          {phase === "hint" ? (
+            currentQuestion?.hint ?? "—"
+          ) : phase === "designated" ? (
+            "Esperando que el docente revele la pregunta..."
+          ) : (
+            currentQuestion?.text ?? "—"
+          )}
+        </div>
+      </div>
+
+      {/* HINT */}
+      {phase === "hint" && (
+        <div style={{ padding: 16, border: "1px solid #ddd" }}>
+          <p>💬 Discutan en equipo la estrategia mientras corre el tiempo.</p>
+          <p>⏳ Esperá a que el docente designe representantes.</p>
         </div>
       )}
 
-      {/* =========================
-          RESPONDING / RESPONDING_WITH_HELP
-         ========================= */}
-      {(phase === "responding" || phase === "responding_with_help") && (
-        <div style={{ padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
+      {/* DESIGNATED */}
+      {phase === "designated" && (
+        <div style={{ padding: 16, border: "1px solid #ddd" }}>
+          <h3>👤 REPRESENTANTES</h3>
+
+          {isRespondingTeam && responding && (
+            <p>
+              Tu representante es: <b>{responding.playerName}</b>. Pasá al frente debajo de tu equipo.
+            </p>
+          )}
+
+          {isRaterTeam && myRaterData && (
+            <p>
+              Tu representante es: <b>{myRaterData.playerName}</b>. Pasá al frente debajo de tu equipo.
+            </p>
+          )}
+
+          {!isRespondingTeam && !isRaterTeam && (
+            <p>Tu equipo no tiene representante en esta ronda. Observá y ayudá.</p>
+          )}
+
+          <p>⏳ Esperá a que el docente revele la pregunta.</p>
+        </div>
+      )}
+
+      {/* QUESTION REVEALED */}
+      {phase === "question_revealed" && (
+        <div style={{ padding: 16, border: "1px solid #ddd" }}>
+          <h3>📝 PREGUNTA REVELADA</h3>
+          {isRespondingTeam ? (
+            <p>⏳ Esperando que el docente inicie la fase de respuesta…</p>
+          ) : isRaterTeam ? (
+            <p>👂 Escuchá la respuesta. Prepárate para calificar.</p>
+          ) : (
+            <p>👀 Observá la proyección y ayudá a tu equipo desde el lugar.</p>
+          )}
+        </div>
+      )}
+
+      {/* RESPONDING */}
+      {phase === "responding" && (
+        <div style={{ padding: 16, border: "1px solid #ddd" }}>
           {isRespondingTeam ? (
             <>
-              <h3 style={{ marginTop: 0 }}>🎤 TU TURNO: RESPONDER</h3>
+              <h3>🎤 TU TURNO: RESPONDER</h3>
               <p>Respondé oralmente al frente.</p>
 
-              {/* Mensaje pedagógico sobre ayuda */}
-              <div
-                style={{
-                  padding: 12,
-                  backgroundColor: "#fff3cd",
-                  borderRadius: 8,
-                  marginBottom: 12,
-                  fontSize: 14,
-                }}
-              >
-                💡 Podés pedir ayuda a tu equipo con un{" "}
-                <strong>descuento de 3 puntos</strong> (12 pts → 9 pts)
-              </div>
-
-              {phase === "responding_with_help" && (
-                <div
-                  style={{
-                    padding: 12,
-                    backgroundColor: "#ffe0b2",
-                    borderRadius: 8,
-                    fontWeight: 700,
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
+                <button
+                  onClick={async () => {
+                    try {
+                      await setRespondingHelpRequested(gameId, true);
+                    } catch (e) {
+                      console.error(e);
+                      alert("Error pidiendo ayuda.");
+                    }
                   }}
                 >
-                  ⚠️ Estás respondiendo CON ayuda (máx. 9 pts)
+                  🆘 CON AYUDA
+                </button>
+
+                <button
+                  onClick={async () => {
+                    try {
+                      await setRespondingResponseGiven(gameId, true);
+                    } catch (e) {
+                      console.error(e);
+                      alert("Error marcando respuesta dada.");
+                    }
+                  }}
+                >
+                  ✅ RESPUESTA DADA
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h3>👂 ESCUCHANDO</h3>
+              <p>⏳ Esperando que responda el equipo que está al frente.</p>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* RESPONDING WITH HELP */}
+      {phase === "responding_with_help" && (
+        <div style={{ padding: 16, border: "1px solid #ddd" }}>
+          {isRespondingTeam ? (
+            <>
+              <h3>🤝 AYUDA ACTIVADA</h3>
+              <p>
+                💬 Discutí con tu equipo. Tiempo restante: <b>{respondingHelpRemaining ?? "—"}</b> s
+              </p>
+              <p style={{ marginTop: 12, opacity: 0.8 }}>
+                ⏳ El docente controlará el timer y avanzará cuando esté listo.
+              </p>
+            </>
+          ) : (
+            <p>⏳ Esperando… (el equipo que responde pidió ayuda)</p>
+          )}
+        </div>
+      )}
+
+      {/* 🆕 RATING (CALIFICACIÓN SIMULTÁNEA) */}
+      {phase === "rating" && (
+        <div style={{ padding: 16, border: "1px solid #ddd" }}>
+          {isRaterTeam ? (
+            <>
+              <h3>✍️ CALIFICÁ LA RESPUESTA</h3>
+
+              <div style={{ 
+                padding: 12, 
+                backgroundColor: "#f5f5f5", 
+                marginBottom: 12,
+                borderRadius: 4 
+              }}>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>Pregunta:</div>
+                <div style={{ marginBottom: 8 }}>{currentQuestion?.text ?? "—"}</div>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>Respuesta escuchada:</div>
+                <div style={{ fontStyle: "italic" }}>(lo que dijo el representante)</div>
+              </div>
+
+              {!hasRated ? (
+                <>
+                  <div style={{ marginBottom: 12, fontSize: 14 }}>
+                    Elegí un color según la calidad de la respuesta:
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await submitRating(gameId, teamId, "green");
+                          setHasRated(true);
+                        } catch (e) {
+                          console.error(e);
+                          alert("Error enviando calificación VERDE.");
+                        }
+                      }}
+                      style={{
+                        padding: 16,
+                        fontSize: 18,
+                        backgroundColor: "#4CAF50",
+                        color: "white",
+                        border: "none",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      🟩 VERDE<br/>
+                      <span style={{ fontSize: 14 }}>Correcta y completa</span>
+                    </button>
+
+                    <button
+                      onClick={async () => {
+                        try {
+                          await submitRating(gameId, teamId, "yellow");
+                          setHasRated(true);
+                        } catch (e) {
+                          console.error(e);
+                          alert("Error enviando calificación AMARILLO.");
+                        }
+                      }}
+                      style={{
+                        padding: 16,
+                        fontSize: 18,
+                        backgroundColor: "#FFC107",
+                        color: "white",
+                        border: "none",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      🟨 AMARILLO<br/>
+                      <span style={{ fontSize: 14 }}>Correcta pero incompleta</span>
+                    </button>
+
+                    <button
+                      onClick={async () => {
+                        try {
+                          await submitRating(gameId, teamId, "red");
+                          setHasRated(true);
+                        } catch (e) {
+                          console.error(e);
+                          alert("Error enviando calificación ROJO.");
+                        }
+                      }}
+                      style={{
+                        padding: 16,
+                        fontSize: 18,
+                        backgroundColor: "#F44336",
+                        color: "white",
+                        border: "none",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      🟥 ROJO<br/>
+                      <span style={{ fontSize: 14 }}>Incorrecta</span>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div style={{ 
+                  padding: 16, 
+                  backgroundColor: "#4CAF50", 
+                  color: "white",
+                  borderRadius: 8,
+                  textAlign: "center",
+                  fontSize: 18,
+                  fontWeight: 700,
+                }}>
+                  ✅ CALIFICACIÓN ENVIADA
+                  <div style={{ fontSize: 14, marginTop: 8, fontWeight: 400 }}>
+                    Esperá a que el docente finalice la fase
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ padding: 16, textAlign: "center" }}>
+              <p>👀 Observando fase de calificación</p>
+              <p style={{ fontSize: 14, opacity: 0.8 }}>
+                {isRespondingTeam 
+                  ? "Tu equipo respondió, ahora esperá las calificaciones"
+                  : "Tu equipo no participa en esta ronda"
+                }
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 🆕 RATING REVEAL */}
+      {phase === "rating_reveal" && (
+        <div style={{ padding: 16, border: "1px solid #ddd" }}>
+          <h3>📊 CALIFICACIONES REVELADAS</h3>
+          
+          {isRaterTeam && myRaterData ? (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ marginBottom: 8 }}>Tu calificación fue:</div>
+              <div style={{ 
+                fontSize: 48, 
+                textAlign: "center",
+                padding: 16,
+                backgroundColor: "#f5f5f5",
+                borderRadius: 8,
+              }}>
+                {myRaterData.rating === "green" ? "🟩 VERDE" :
+                 myRaterData.rating === "yellow" ? "🟨 AMARILLO" :
+                 myRaterData.rating === "red" ? "🟥 ROJO" : "—"}
+              </div>
+            </div>
+          ) : (
+            <p>👀 Mirá la pantalla principal para ver todas las calificaciones</p>
+          )}
+
+          <p style={{ marginTop: 12, fontSize: 14, opacity: 0.8 }}>
+            ⏳ El docente avanzará a la siguiente fase
+          </p>
+        </div>
+      )}
+
+      {/* JUSTIFICATION */}
+      {phase === "justification" && (
+        <div style={{ padding: 16, border: "1px solid #ddd" }}>
+          {isRaterTeam && myRaterData && (myRaterData.rating === "yellow" || myRaterData.rating === "red") ? (
+            <>
+              {isMyTurnToJustify && (
+                <div style={{
+                  padding: 16,
+                  backgroundColor: "#FF9800",
+                  color: "white",
+                  borderRadius: 8,
+                  textAlign: "center",
+                  marginBottom: 16,
+                  fontSize: 20,
+                  fontWeight: 700,
+                }}>
+                  🎤 ES TU TURNO DE JUSTIFICAR
                 </div>
               )}
 
-              <p style={{ marginTop: 12, opacity: 0.8, fontSize: 14 }}>
-                ⏳ El docente controla el ritmo y avanzará cuando corresponda.
-              </p>
-            </>
-          ) : (
-            <>
-              <h3 style={{ marginTop: 0 }}>👂 ESCUCHANDO</h3>
-              <p>Otro equipo está respondiendo. Escuchá atentamente.</p>
-            </>
-          )}
-        </div>
-      )}
+              <h3>📝 JUSTIFICÁ TU CALIFICACIÓN</h3>
+              
+              <div style={{ marginBottom: 12 }}>
+                <div>Calificaste: 
+                  <span style={{ 
+                    marginLeft: 8,
+                    fontSize: 24,
+                  }}>
+                    {myRaterData.rating === "yellow" ? "🟨 AMARILLO" : "🟥 ROJO"}
+                  </span>
+                </div>
+              </div>
 
-      {/* =========================
-          RATING (COMPLETO)
-         ========================= */}
-      {phase === "rating" && (
-        <div style={{ padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
-          <h3 style={{ fontSize: 24, margin: 0, marginBottom: 16 }}>
-            🎨 CALIFICAR RESPUESTA
-          </h3>
+              <div style={{ 
+                padding: 12, 
+                backgroundColor: "#fff3cd",
+                borderRadius: 4,
+                marginBottom: 12,
+              }}>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                  {myRaterData.rating === "yellow" 
+                    ? "Explicá qué le falta o qué puede mejorarse"
+                    : "Explicá cuál es el error en la respuesta"
+                  }
+                </div>
+              </div>
 
-          {!hasRated ? (
-            <>
-              {/* Leyenda */}
-              <div
-                style={{
+              <textarea
+                value={localJustification}
+                onChange={(e) => setLocalJustification(e.target.value)}
+                placeholder="Escribí tu justificación (opcional, podés justificar solo oralmente)"
+                rows={4}
+                style={{ 
+                  width: "100%", 
+                  padding: 10,
+                  fontSize: 16,
+                  borderRadius: 4,
+                  border: "1px solid #ddd",
+                }}
+              />
+
+              <button
+                style={{ 
+                  marginTop: 12,
                   padding: 12,
-                  backgroundColor: "#e3f2fd",
+                  fontSize: 16,
+                  backgroundColor: "#2196F3",
+                  color: "white",
+                  border: "none",
                   borderRadius: 8,
-                  marginBottom: 16,
-                  fontSize: 13,
+                  cursor: "pointer",
+                  width: "100%",
+                }}
+                onClick={async () => {
+                  try {
+                    await setRaterJustification(gameId, teamId, localJustification);
+                    alert("✅ Justificación guardada");
+                  } catch (e) {
+                    console.error(e);
+                    alert("Error guardando justificación.");
+                  }
                 }}
               >
-                <div style={{ marginBottom: 4 }}>
-                  🟩 <strong>VERDE:</strong> Correcta, nada que agregar (5 pts)
-                </div>
-                <div style={{ marginBottom: 4 }}>
-                  🟨 <strong>AMARILLO:</strong> Correcta, pero tengo algo importante
-                  que agregar (10 pts)
-                </div>
-                <div>
-                  🟥 <strong>ROJO:</strong> Incorrecta, voy a explicar por qué (10
-                  pts si aceptado)
-                </div>
-              </div>
+                💾 GUARDAR JUSTIFICACIÓN
+              </button>
 
-              {/* Botones */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <button
-                  onClick={async () => {
-                    try {
-                      await submitRating(gameId, teamId, "green");
-                      setHasRated(true);
-                    } catch (e) {
-                      console.error(e);
-                      alert("Error al calificar");
-                    }
-                  }}
-                  style={{
-                    padding: 20,
-                    fontSize: 18,
-                    backgroundColor: "#4CAF50",
-                    color: "white",
-                    border: "none",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    fontWeight: 700,
-                  }}
-                >
-                  🟩 VERDE
-                </button>
-
-                <button
-                  onClick={async () => {
-                    try {
-                      await submitRating(gameId, teamId, "yellow");
-                      setHasRated(true);
-                    } catch (e) {
-                      console.error(e);
-                      alert("Error al calificar");
-                    }
-                  }}
-                  style={{
-                    padding: 20,
-                    fontSize: 18,
-                    backgroundColor: "#FFC107",
-                    color: "black",
-                    border: "none",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    fontWeight: 700,
-                  }}
-                >
-                  🟨 AMARILLO
-                </button>
-
-                <button
-                  onClick={async () => {
-                    try {
-                      await submitRating(gameId, teamId, "red");
-                      setHasRated(true);
-                    } catch (e) {
-                      console.error(e);
-                      alert("Error al calificar");
-                    }
-                  }}
-                  style={{
-                    padding: 20,
-                    fontSize: 18,
-                    backgroundColor: "#F44336",
-                    color: "white",
-                    border: "none",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    fontWeight: 700,
-                  }}
-                >
-                  🟥 ROJO
-                </button>
+              <div style={{ 
+                marginTop: 12,
+                padding: 12,
+                backgroundColor: isMyTurnToJustify ? "#e3f2fd" : "#f5f5f5",
+                borderRadius: 4,
+              }}>
+                <p style={{ margin: 0, fontSize: 14 }}>
+                  {isMyTurnToJustify ? (
+                    <>💬 <strong>Justificá oralmente al frente AHORA</strong></>
+                  ) : (
+                    <>⏳ Esperá tu turno para justificar oralmente</>
+                  )}
+                </p>
               </div>
             </>
+          ) : isRaterTeam && myRaterData?.rating === "green" ? (
+            <div style={{ 
+              padding: 16, 
+              backgroundColor: "#4CAF50",
+              color: "white",
+              borderRadius: 8,
+              textAlign: "center",
+            }}>
+              <div style={{ fontSize: 24, marginBottom: 8 }}>🟩</div>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>
+                Calificaste VERDE
+              </div>
+              <div style={{ marginTop: 8, fontSize: 14 }}>
+                No necesitás justificar (verde = auto-aceptado)
+              </div>
+            </div>
           ) : (
-            <div
-              style={{
-                padding: 20,
-                backgroundColor: "#4CAF50",
-                color: "white",
-                borderRadius: 8,
-                textAlign: "center",
-                fontSize: 18,
-                fontWeight: 700,
-              }}
-            >
-              ✅ CALIFICACIÓN ENVIADA
-              <div style={{ fontSize: 14, marginTop: 8, fontWeight: 400 }}>
-                Esperá a que el docente continúe…
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* =========================
-          RATING_REVEAL (MUESTRA TU COLOR)
-         ========================= */}
-      {phase === "rating_reveal" && myRating && (
-        <div style={{ padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
-          <h3 style={{ fontSize: 24, marginBottom: 16, textAlign: "center" }}>
-            🎨 TU CALIFICACIÓN
-          </h3>
-
-          <div
-            style={{
-              padding: 40,
-              backgroundColor:
-                myRating.rating === "green"
-                  ? "#4CAF50"
-                  : myRating.rating === "yellow"
-                    ? "#FFC107"
-                    : "#F44336",
-              color: myRating.rating === "yellow" ? "black" : "white",
-              borderRadius: 8,
-              textAlign: "center",
-            }}
-          >
-            <div style={{ fontSize: 64, marginBottom: 16 }}>
-              {ratingEmoji(myRating.rating)}
-            </div>
-            <div style={{ fontSize: 24, fontWeight: 700 }}>
-              {myRating.rating === "green" && "VERDE"}
-              {myRating.rating === "yellow" && "AMARILLO"}
-              {myRating.rating === "red" && "ROJO"}
-            </div>
-            <div style={{ marginTop: 12, fontSize: 14, opacity: 0.9 }}>
-              Tu equipo calificó: <strong>{ratingLabel(myRating.rating)}</strong>
-            </div>
-          </div>
-
-          <p
-            style={{
-              textAlign: "center",
-              marginTop: 16,
-              fontSize: 14,
-              opacity: 0.8,
-            }}
-          >
-            ⏳ Esperando que el docente continúe...
-          </p>
-        </div>
-      )}
-
-      {/* =========================
-          JUSTIFICATION (CON TURNOS)
-         ========================= */}
-      {phase === "justification" && myRating && (
-        <div style={{ padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
-          <h3 style={{ fontSize: 24, marginBottom: 16 }}>💬 JUSTIFICACIÓN</h3>
-
-          {/* Recordatorio */}
-          <div
-            style={{
-              padding: 12,
-              backgroundColor: "#f5f5f5",
-              borderRadius: 8,
-              marginBottom: 16,
-              fontSize: 14,
-            }}
-          >
-            <div style={{ marginBottom: 8 }}>
-              <strong>Pregunta:</strong> {currentQuestion?.text ?? "—"}
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <strong>Respondió:</strong> {responding?.playerName ?? "—"} (
-              {respondingTeamName})
-            </div>
-            <div>
-              <strong>Tu calificación:</strong> {ratingLabel(myRating.rating)}
-            </div>
-          </div>
-
-          {myRating.rating === "green" ? (
-            <div
-              style={{
-                padding: 16,
-                backgroundColor: "#4CAF50",
-                color: "white",
-                borderRadius: 8,
-                textAlign: "center",
-                fontWeight: 700,
-              }}
-            >
-              ✅ No necesitás justificar
-              <br />
-              (Verde = auto-aceptado)
-            </div>
-          ) : isMyTurnToJustify ? (
-            <div
-              style={{
-                padding: 20,
-                backgroundColor: "#FF5722",
-                color: "white",
-                borderRadius: 8,
-                marginBottom: 16,
-              }}
-            >
-              <div style={{ fontSize: 48, textAlign: "center", marginBottom: 8 }}>
-                🎤
-              </div>
-              <div style={{ fontSize: 20, fontWeight: 700, textAlign: "center" }}>
-                ES TU TURNO DE JUSTIFICAR
-              </div>
-              <p style={{ textAlign: "center", marginTop: 8, fontSize: 16 }}>
-                Justificá oralmente al frente AHORA
+            <div style={{ textAlign: "center", padding: 16 }}>
+              <p>👀 Observando justificaciones</p>
+              <p style={{ fontSize: 14, opacity: 0.8 }}>
+                Mirá la pantalla principal
               </p>
             </div>
-          ) : (
-            <div
-              style={{
-                padding: 16,
-                backgroundColor: "#fff3cd",
-                borderRadius: 8,
-                textAlign: "center",
-              }}
-            >
-              ⏳ Esperá tu turno para justificar
-            </div>
           )}
         </div>
       )}
 
-      {/* =========================
-          VALIDATION_RESPONSE (DOCENTE)
-         ========================= */}
-      {phase === "validation_response" && (
-        <div
-          style={{
-            padding: 16,
-            border: "2px solid #FF5722",
-            borderRadius: 8,
-            backgroundColor: "#fff3cd",
-          }}
-        >
-          <h3 style={{ marginTop: 0 }}>⚖️ Validación de la respuesta</h3>
-          <p>
-            El docente está decidiendo si la respuesta fue <strong>correcta</strong>{" "}
-            o <strong>incorrecta</strong>.
-          </p>
+      {/* VALIDATION */}
+      {phase === "validation" && (
+        <div style={{ padding: 16, border: "1px solid #ddd" }}>
+          <h3>⚖️ VALIDACIÓN</h3>
+          <p>El docente está validando las calificaciones.</p>
           <p style={{ fontSize: 14, opacity: 0.8 }}>
-            ⏳ Esperá… esta decisión define cómo se reparten los puntos.
+            ⏳ Esperá a ver los resultados finales
           </p>
         </div>
       )}
 
-      {/* =========================
-          VALIDATION_RATINGS (DOCENTE)
-         ========================= */}
-      {phase === "validation_ratings" && (
-        <div style={{ padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
-          <h3 style={{ marginTop: 0 }}>⚖️ Validación de calificaciones</h3>
-          <p>
-            El docente está validando las calificaciones <strong>amarillas</strong>{" "}
-            y <strong>rojas</strong>.
-          </p>
-          <p style={{ fontSize: 14, opacity: 0.8 }}>
-            ⏳ Esperá… cuando termine, aparecerán los resultados.
-          </p>
-        </div>
-      )}
-
-      {/* =========================
-          RESULTS (PUNTOS GANADOS + TOTAL)
-         ========================= */}
+      {/* RESULTS */}
       {phase === "results" && (
-        <div style={{ padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
+        <div style={{ padding: 16, border: "1px solid #ddd" }}>
           <h3 style={{ fontSize: 24, marginBottom: 16, textAlign: "center" }}>
             🏁 RESULTADOS
           </h3>
 
-          {/* Puntos ganados */}
-          <div
-            style={{
-              padding: 16,
-              backgroundColor: "#4CAF50",
-              color: "white",
-              borderRadius: 8,
-              marginBottom: 16,
-              textAlign: "center",
-            }}
-          >
+          {/* Puntos ganados por este equipo */}
+          <div style={{
+            padding: 16,
+            backgroundColor: "#4CAF50",
+            color: "white",
+            borderRadius: 8,
+            marginBottom: 16,
+            textAlign: "center",
+          }}>
             <div style={{ fontSize: 16, marginBottom: 4 }}>
               Tu equipo ganó en esta ronda:
             </div>
             <div style={{ fontSize: 48, fontWeight: 700 }}>
-              +{round?.pointsAwarded?.[teamId] ?? 0}
+              +{round.pointsAwarded?.[teamId] ?? 0}
             </div>
-            <div style={{ fontSize: 16, marginTop: 4 }}>puntos</div>
+            <div style={{ fontSize: 16, marginTop: 4 }}>
+              puntos
+            </div>
           </div>
 
-          {/* Puntaje total */}
-          <div
-            style={{
-              padding: 16,
-              backgroundColor: "#f5f5f5",
-              borderRadius: 8,
-              marginBottom: 16,
-              textAlign: "center",
-            }}
-          >
+          {/* Puntaje total actualizado */}
+          <div style={{
+            padding: 16,
+            backgroundColor: "#f5f5f5",
+            borderRadius: 8,
+            marginBottom: 16,
+            textAlign: "center",
+          }}>
             <div style={{ fontSize: 16, marginBottom: 4 }}>
               Puntaje total del equipo:
             </div>
             <div style={{ fontSize: 36, fontWeight: 700 }}>
-              {(team as any).totalScore ?? 0} pts
+              {team.totalScore ?? 0} pts
             </div>
           </div>
 
-          {/* Info adicional */}
-          <div
-            style={{
-              padding: 12,
-              backgroundColor: "#fff3cd",
-              borderRadius: 8,
-              fontSize: 14,
-              textAlign: "center",
-            }}
-          >
+          {/* Información adicional */}
+          <div style={{ 
+            padding: 12, 
+            backgroundColor: "#fff3cd",
+            borderRadius: 8,
+            fontSize: 14,
+            textAlign: "center",
+          }}>
             <p style={{ margin: 0 }}>
-              📊 Mirá la pantalla principal para ver el ranking completo
+              📊 Mirá la pantalla principal para ver:
             </p>
+            <ul style={{ 
+              listStyle: "none", 
+              padding: 0, 
+              margin: "8px 0 0 0",
+              textAlign: "left",
+            }}>
+              <li>• Ganador de la ronda</li>
+              <li>• Puntos de todos los equipos</li>
+              <li>• Ranking actualizado</li>
+              <li>• Resumen pedagógico</li>
+            </ul>
           </div>
 
-          <p
-            style={{
-              marginTop: 16,
-              fontSize: 14,
-              opacity: 0.8,
-              textAlign: "center",
-            }}
-          >
+          <p style={{ marginTop: 16, fontSize: 14, opacity: 0.8, textAlign: "center" }}>
             ⏳ El docente iniciará la próxima ronda
           </p>
         </div>
       )}
 
-      {/* =========================
-          FALLBACK
-         ========================= */}
+      {/* Otras fases no implementadas */}
       {phase &&
+        phase !== "hint" &&
+        phase !== "designated" &&
+        phase !== "question_revealed" &&
         phase !== "responding" &&
         phase !== "responding_with_help" &&
         phase !== "rating" &&
         phase !== "rating_reveal" &&
         phase !== "justification" &&
-        phase !== "validation_response" &&
-        phase !== "validation_ratings" &&
+        phase !== "validation" &&
         phase !== "results" && (
-          <div style={{ padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
+          <div style={{ padding: 16, border: "1px solid #ddd" }}>
             <h3>🚧 En construcción</h3>
-            <p>Fase actual: {phase}</p>
+            <p>Esta fase todavía no está implementada en el dispositivo.</p>
           </div>
         )}
     </div>

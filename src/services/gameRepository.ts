@@ -111,7 +111,11 @@ export async function createGame(
 export async function addTeams(gameId: string, teams: Team[]): Promise<void> {
   const updates: Record<string, any> = {};
   for (const t of teams) {
-    updates[`${GAMES_ROOT}/${gameId}/teams/${t.id}`] = t;
+    updates[`${GAMES_ROOT}/${gameId}/teams/${t.id}`] = {
+      ...t,
+      currentRound: 0, // ✅ NUEVO: cada equipo empieza en ronda 0
+      currentQuestionIndex: 0, // ✅ NUEVO
+    };
   }
   updates[`${GAMES_ROOT}/${gameId}/updatedAt`] = nowMs();
   await update(ref(database), updates);
@@ -137,52 +141,54 @@ export async function startGame(gameId: string): Promise<void> {
   if (!teams.length) throw new Error("No teams");
   if (!questions.length) throw new Error("No questions");
 
-  // Primera pregunta Stage 1
   const stage1Questions = questions.filter((q: any) => (q as any).suggestedStage !== 2);
   const firstQ = stage1Questions[0] ?? questions[0];
 
-  // Seleccionar respondedor inicial (el de menor score del equipo 0)
-  const firstTeam = teams[0];
-  const players = normalizePlayers((firstTeam as any).players ?? (firstTeam as any).members ?? []);
-  const sorted = [...players].sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
-  const responder = sorted[0] ?? players[0];
-  if (!responder) throw new Error("No players in first team");
+  // ✅ NUEVO: Crear ronda inicial para CADA equipo
+  const updates: Record<string, any> = {};
 
-  const captain = responder; // en Stage 1 el “capitán” puede ser el respondedor
+  for (const team of teams) {
+    const players = normalizePlayers((team as any).players ?? (team as any).members ?? []);
+    const sorted = [...players].sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
+    const responder = sorted[0] ?? players[0];
+    
+    if (!responder) continue;
 
-  const firstRound: Round = {
-    roundNumber: 0,
-    questionId: (firstQ as any).id,
-    respondingPlayerId: responder.id,
-    respondingPlayerName: responder.name,
-    captainId: captain.id,
-    captainName: captain.name,
-    ratings: {},
-    pointsAwarded: {},
-    hasResponded: false,
-    timestamp: Date.now(),
-  };
+    const captain = responder;
 
-  // ✅ Stage 1: guardar ronda en stage1Rounds (no en rounds)
-  await set(ref(database, `${GAMES_ROOT}/${gameId}/stage1Rounds/0`), firstRound);
+    const firstRound: Round = {
+      roundNumber: 0,
+      questionId: (firstQ as any).id,
+      respondingPlayerId: responder.id,
+      respondingPlayerName: responder.name,
+      captainId: captain.id,
+      captainName: captain.name,
+      ratings: {},
+      pointsAwarded: {},
+      hasResponded: false,
+      timestamp: Date.now(),
+    };
 
-  await update(ref(database), {
-    [`${GAMES_ROOT}/${gameId}/status/currentRound`]: 0,
-    [`${GAMES_ROOT}/${gameId}/status/currentQuestionIndex`]: 0,
-    [`${GAMES_ROOT}/${gameId}/status/status`]: "stage1",
-    [`${GAMES_ROOT}/${gameId}/status/currentStage`]: 1,
-    [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
-  });
+    // Guardar ronda en el equipo específico
+    updates[`${GAMES_ROOT}/${gameId}/teams/${team.id}/stage1Rounds/0`] = firstRound;
+    updates[`${GAMES_ROOT}/${gameId}/teams/${team.id}/currentRound`] = 0;
+    updates[`${GAMES_ROOT}/${gameId}/teams/${team.id}/currentQuestionIndex`] = 0;
+  }
+
+  updates[`${GAMES_ROOT}/${gameId}/status/status`] = "stage1";
+  updates[`${GAMES_ROOT}/${gameId}/status/currentStage`] = 1;
+  updates[`${GAMES_ROOT}/${gameId}/updatedAt`] = Date.now();
+
+  await update(ref(database), updates);
 }
 
 /* ============================================================
-  STAGE 1 ROUNDS
+  STAGE 1 ROUNDS - AHORA POR EQUIPO
 ============================================================ */
 
-export async function createRound(gameId: string, round: Round): Promise<void> {
-  // ✅ Stage 1: crear ronda en stage1Rounds (no en rounds)
+export async function createRound(gameId: string, teamId: string, round: Round): Promise<void> {
   await set(
-    ref(database, `${GAMES_ROOT}/${gameId}/stage1Rounds/${round.roundNumber}`),
+    ref(database, `${GAMES_ROOT}/${gameId}/teams/${teamId}/stage1Rounds/${round.roundNumber}`),
     round
   );
   await updateGameTimestamp(gameId);
@@ -190,14 +196,14 @@ export async function createRound(gameId: string, round: Round): Promise<void> {
 
 export async function setRoundHasResponded(
   gameId: string,
+  teamId: string,
   roundNumber: number,
   value: boolean
 ): Promise<void> {
   if (value === true) {
-    // 🔥 CORREGIDO: stage1Rounds en lugar de rounds
     const refHas = ref(
       database,
-      `games/${gameId}/stage1Rounds/${roundNumber}/hasResponded`
+      `games/${gameId}/teams/${teamId}/stage1Rounds/${roundNumber}/hasResponded`
     );
 
     await runTransaction(refHas, (current) => {
@@ -205,27 +211,27 @@ export async function setRoundHasResponded(
       return true;
     });
 
-    console.log(`✅ Stage 1 Round ${roundNumber} marked as responded`);
+    console.log(`✅ Team ${teamId} Round ${roundNumber} marked as responded`);
   } else {
     await set(
-      ref(database, `${GAMES_ROOT}/${gameId}/stage1Rounds/${roundNumber}/hasResponded`),
+      ref(database, `${GAMES_ROOT}/${gameId}/teams/${teamId}/stage1Rounds/${roundNumber}/hasResponded`),
       false
     );
     await updateGameTimestamp(gameId);
-    console.log(`✅ Stage 1 Round ${roundNumber} unmarked as responded`);
+    console.log(`✅ Team ${teamId} Round ${roundNumber} unmarked as responded`);
   }
 }
 
 export async function addRating(
   gameId: string,
+  teamId: string,
   roundNumber: number,
   rating: Rating
 ): Promise<void> {
-  // ✅ Stage 1: guardar rating en stage1Rounds (no en rounds)
   await set(
     ref(
       database,
-      `${GAMES_ROOT}/${gameId}/stage1Rounds/${roundNumber}/ratings/${rating.playerId}`
+      `${GAMES_ROOT}/${gameId}/teams/${teamId}/stage1Rounds/${roundNumber}/ratings/${rating.playerId}`
     ),
     rating
   );
@@ -234,13 +240,13 @@ export async function addRating(
 
 export async function validateRating(
   gameId: string,
+  teamId: string,
   roundNumber: number,
   playerId: string,
   isValid: boolean
 ): Promise<void> {
-  // ✅ Stage 1: validar rating en stage1Rounds (no en rounds)
   await update(ref(database), {
-    [`${GAMES_ROOT}/${gameId}/stage1Rounds/${roundNumber}/ratings/${playerId}/validated`]:
+    [`${GAMES_ROOT}/${gameId}/teams/${teamId}/stage1Rounds/${roundNumber}/ratings/${playerId}/validated`]:
       isValid,
     [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
   });
@@ -248,12 +254,12 @@ export async function validateRating(
 
 export async function markAnswerCorrectness(
   gameId: string,
+  teamId: string,
   roundNumber: number,
   wasCorrect: boolean
 ): Promise<void> {
-  // ✅ Stage 1: guardar correctness en stage1Rounds (no en rounds)
   await update(ref(database), {
-    [`${GAMES_ROOT}/${gameId}/stage1Rounds/${roundNumber}/answerWasCorrect`]:
+    [`${GAMES_ROOT}/${gameId}/teams/${teamId}/stage1Rounds/${roundNumber}/answerWasCorrect`]:
       wasCorrect,
     [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
   });
@@ -261,14 +267,14 @@ export async function markAnswerCorrectness(
 
 export async function awardPoints(
   gameId: string,
+  teamId: string,
   roundNumber: number,
   pointsAwarded: Record<string, number>
 ): Promise<void> {
-  // ✅ Stage 1: puntos de ronda en stage1Rounds (no en rounds)
   await set(
     ref(
       database,
-      `${GAMES_ROOT}/${gameId}/stage1Rounds/${roundNumber}/pointsAwarded`
+      `${GAMES_ROOT}/${gameId}/teams/${teamId}/stage1Rounds/${roundNumber}/pointsAwarded`
     ),
     pointsAwarded
   );
@@ -277,22 +283,22 @@ export async function awardPoints(
 
 export async function arePointsConfirmed(
   gameId: string,
+  teamId: string,
   roundNumber: number
 ): Promise<boolean> {
-  // ✅ Stage 1: pointsConfirmed vive en stage1Rounds
   const snap = await get(
-    ref(database, `${GAMES_ROOT}/${gameId}/stage1Rounds/${roundNumber}`)
+    ref(database, `${GAMES_ROOT}/${gameId}/teams/${teamId}/stage1Rounds/${roundNumber}`)
   );
   return snap.val()?.pointsConfirmed === true;
 }
 
 export async function markPointsAsConfirmed(
   gameId: string,
+  teamId: string,
   roundNumber: number
 ): Promise<void> {
-  // ✅ Stage 1: pointsConfirmed vive en stage1Rounds
   await update(ref(database), {
-    [`${GAMES_ROOT}/${gameId}/stage1Rounds/${roundNumber}/pointsConfirmed`]: true,
+    [`${GAMES_ROOT}/${gameId}/teams/${teamId}/stage1Rounds/${roundNumber}/pointsConfirmed`]: true,
     [`${GAMES_ROOT}/${gameId}/status/updatedAt`]: Date.now(),
     [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
   });
@@ -369,7 +375,7 @@ export async function updateGameStatus(
 }
 
 /* ============================================================
-  PREPARE NEXT ROUND (STAGE 1)
+  PREPARE NEXT ROUND (STAGE 1) - AHORA POR EQUIPO
 ============================================================ */
 
 export async function prepareNextRound(gameId: string, teamId: string): Promise<void> {
@@ -377,18 +383,18 @@ export async function prepareNextRound(gameId: string, teamId: string): Promise<
   const game = snap.val() as Game;
   if (!game) throw new Error("Game not found");
 
-  const status = game.status as any;
-  const currentRound = status?.currentRound ?? 0;
+  const teams = normalizeTeams((game as any).teams);
+  const currentTeam = teams.find((t) => t.id === teamId);
+  if (!currentTeam) throw new Error("Team not found");
+
+  const currentRound = (currentTeam as any).currentRound ?? 0;
+  const currentQuestionIndex = (currentTeam as any).currentQuestionIndex ?? 0;
 
   const questions = normalizeQuestions((game as any).questions);
   const stage1Questions = questions.filter((q: any) => (q as any).suggestedStage !== 2);
 
-  const nextQuestionIndex = (status?.currentQuestionIndex ?? 0) + 1;
+  const nextQuestionIndex = currentQuestionIndex + 1;
   const nextRoundNumber = currentRound + 1;
-
-  const teams = normalizeTeams((game as any).teams);
-  const currentTeam = teams.find((t) => t.id === teamId) ?? (game as any).teams?.[teamId];
-  if (!currentTeam) throw new Error("Team not found");
 
   const players = normalizePlayers((currentTeam as any).players);
   if (!players.length) throw new Error("No players in team");
@@ -421,24 +427,20 @@ export async function prepareNextRound(gameId: string, teamId: string): Promise<
     timestamp: Date.now(),
   };
 
-  // ✅ Stage 1: guardar en stage1Rounds
-  await set(ref(database, `${GAMES_ROOT}/${gameId}/stage1Rounds/${nextRoundNumber}`), nextRound);
+  await set(ref(database, `${GAMES_ROOT}/${gameId}/teams/${teamId}/stage1Rounds/${nextRoundNumber}`), nextRound);
 
   await update(ref(database), {
-    [`${GAMES_ROOT}/${gameId}/status/currentRound`]: nextRoundNumber,
-    [`${GAMES_ROOT}/${gameId}/status/currentQuestionIndex`]: nextQuestionIndex,
+    [`${GAMES_ROOT}/${gameId}/teams/${teamId}/currentRound`]: nextRoundNumber,
+    [`${GAMES_ROOT}/${gameId}/teams/${teamId}/currentQuestionIndex`]: nextQuestionIndex,
     [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
   });
 
-  console.log(`✅ Stage 1 advanced to round ${nextRoundNumber}`);
+  console.log(`✅ Team ${teamId} advanced to round ${nextRoundNumber}`);
 }
 
 /* ============================================================
-  STAGE 2 BOOTSTRAP (solo helpers usados por tu UI)
+  STAGE 2 BOOTSTRAP
 ============================================================ */
-
-// Nota: Stage 2 real lo manejás en stage2Repository.ts,
-// acá queda solamente lo que ya tenías como orquestación.
 
 export async function startStage2Safely(gameId: string): Promise<void> {
   const snap = await get(ref(database, `${GAMES_ROOT}/${gameId}`));
@@ -479,12 +481,91 @@ export async function devSetStage(gameId: string, stage: 1 | 2): Promise<void> {
 export async function deleteGame(gameId: string): Promise<void> {
   await remove(ref(database, `${GAMES_ROOT}/${gameId}`));
 }
-// ✅ Genera un código corto para que los alumnos entren (por ej: "A7K9Q2")
+
 export function generateRoomCode(length: number = 6): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin I, O, 0, 1
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let out = "";
   for (let i = 0; i < length; i++) {
     out += chars[Math.floor(Math.random() * chars.length)];
   }
   return out;
+}
+
+/**
+ * Compat: actualiza score aunque `players` sea array u object
+ */
+export async function updatePlayerScoreSmartCompat(
+  gameId: string,
+  teamId: string,
+  playerId: string,
+  newScore: number
+): Promise<void> {
+  const playersRef = ref(database, `${GAMES_ROOT}/${gameId}/teams/${teamId}/players`);
+  const snap = await get(playersRef);
+  const players = snap.val();
+
+  if (!players) return;
+
+  if (!Array.isArray(players) && typeof players === "object") {
+    const p = (players as any)[playerId];
+    if (!p) return;
+    const curr = p?.score ?? 0;
+    if (curr >= newScore) return;
+
+    await update(ref(database), {
+      [`${GAMES_ROOT}/${gameId}/teams/${teamId}/players/${playerId}/score`]: newScore,
+      [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
+    });
+    return;
+  }
+
+  if (Array.isArray(players)) {
+    const idx = players.findIndex((p: any) => p?.id === playerId);
+    if (idx < 0) return;
+
+    const curr = players[idx]?.score ?? 0;
+    if (curr >= newScore) return;
+
+    await update(ref(database), {
+      [`${GAMES_ROOT}/${gameId}/teams/${teamId}/players/${idx}/score`]: newScore,
+      [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
+    });
+  }
+}
+
+/**
+ * Compat: actualiza consecutiveLastPlace aunque `players` sea array u object
+ */
+export async function updatePlayerLastPlaceCounterSmartCompat(
+  gameId: string,
+  teamId: string,
+  playerId: string,
+  newCount: number
+): Promise<void> {
+  const playersRef = ref(database, `${GAMES_ROOT}/${gameId}/teams/${teamId}/players`);
+  const snap = await get(playersRef);
+  const players = snap.val();
+
+  if (!players) return;
+
+  if (!Array.isArray(players) && typeof players === "object") {
+    const p = (players as any)[playerId];
+    if (!p) return;
+
+    await update(ref(database), {
+      [`${GAMES_ROOT}/${gameId}/teams/${teamId}/players/${playerId}/consecutiveLastPlace`]: newCount,
+      [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
+    });
+    return;
+  }
+
+  if (Array.isArray(players)) {
+    const idx = players.findIndex((p: any) => p?.id === playerId);
+    if (idx < 0) return;
+
+    await update(ref(database), {
+      [`${GAMES_ROOT}/${gameId}/teams/${teamId}/players/${idx}/consecutiveLastPlace`]: newCount,
+      [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
+    });
+  }
 }

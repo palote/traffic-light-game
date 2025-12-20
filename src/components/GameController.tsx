@@ -1,6 +1,8 @@
 // src/components/GameController.tsx
 
 import { useEffect, useRef, useState } from "react";
+import { ref, update } from "firebase/database";
+import { database } from "../firebase.config";
 import type { Game, Player, Team, Round } from "../types/game";
 
 import {
@@ -95,13 +97,9 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ Guard local para NO spamear transition desde este cliente
   const transitionRequestedRef = useRef(false);
-
-  // ✅ NUEVO: anti-spam DEV (evita doble click / efectos raros sin bloquear para siempre)
   const devForceCooldownRef = useRef<number>(0);
 
-  // ✅ DEV: controlar vista Stage 2 (solo local)
   const [devStage2ViewMode, setDevStage2ViewMode] = useState<DevStage2ViewMode>(() => {
     const v = localStorage.getItem("devStage2ViewMode") as DevStage2ViewMode | null;
     return v ?? "auto";
@@ -124,7 +122,6 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
   ========================= */
 
   const forceStage1 = async () => {
-    // ✅ NUEVO: cooldown (no loop, pero te deja testear muchas veces)
     const now = Date.now();
     if (now - devForceCooldownRef.current < 800) {
       console.warn("⛔ DEV: Ignorado forceStage1 (cooldown)");
@@ -141,7 +138,6 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
   };
 
   const forceStage2 = async () => {
-    // ✅ NUEVO: cooldown (no loop, pero te deja testear muchas veces)
     const now = Date.now();
     if (now - devForceCooldownRef.current < 800) {
       console.warn("⛔ DEV: Ignorado forceStage2 (cooldown)");
@@ -176,12 +172,10 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
 
       const status = updatedGame.status?.status;
 
-      // ✅ Reset del guard si ya no estamos en stage1-complete
       if (status !== "stage1-complete") {
         transitionRequestedRef.current = false;
       }
 
-      // ✅ Si estamos en stage1-complete, chequear si TODOS los equipos completaron
       if (status === "stage1-complete") {
         const teams = normalizeTeams(updatedGame.teams);
         const allCompleted =
@@ -197,14 +191,14 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
     return () => unsubscribe();
   }, [gameId]);
 
-  // ✅ Handler único para iniciar Stage 2 (lock-safe)
+  /* =========================
+     HANDLERS
+  ========================= */
+
   const handleStartStage2 = async () => {
     try {
       console.log("🚀 Starting Stage 2...");
-
-      // ✅ FIX: startStage2Safely devuelve void en tu proyecto => no se testea "started"
       await startStage2Safely(gameId);
-
       console.log("✅ Stage 2 iniciado (lock-safe)");
     } catch (err) {
       console.error("❌ Error starting Stage 2:", err);
@@ -212,9 +206,40 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
     }
   };
 
+  const resetGameToRound1 = async () => {
+    if (!confirm('¿Resetear TODOS los equipos a ronda 1? Perderán todo el progreso.')) return;
+
+    try {
+      const updates: any = {};
+
+      updates[`games/${gameId}/status/status`] = 'stage1';
+
+      const teams = normalizeTeams(game?.teams);
+      teams.forEach(team => {
+        // ✅ NUEVO: Resetear currentRound de cada equipo
+        updates[`games/${gameId}/teams/${team.id}/currentRound`] = 0;
+        updates[`games/${gameId}/teams/${team.id}/currentQuestionIndex`] = 0;
+        updates[`games/${gameId}/teams/${team.id}/stage1Completed`] = false;
+        updates[`games/${gameId}/teams/${team.id}/stage1Rounds`] = {};
+
+        team.players.forEach(player => {
+          updates[`games/${gameId}/teams/${team.id}/players/${player.id}/score`] = 0;
+          updates[`games/${gameId}/teams/${team.id}/players/${player.id}/consecutiveLastPlace`] = 0;
+        });
+      });
+
+      await update(ref(database), updates);
+
+      console.log('✅ Juego reseteado a ronda 1');
+      alert('✅ Juego reseteado. Todos los equipos vuelven a ronda 1.');
+    } catch (e) {
+      console.error('❌ Error reseteando:', e);
+      alert('Error al resetear el juego');
+    }
+  };
+
   /* =========================
      Pantalla principal (screen)
-     + UN SOLO return al final
   ========================= */
 
   let screen: React.ReactNode = null;
@@ -237,7 +262,6 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
     const teamsNormalized = normalizeTeams(game.teams);
     const team = teamsNormalized.find((t: any) => t?.id === teamId);
 
-    // ✅ IMPORTANTE: Stage2 (sobre todo classroom) no debe depender de teamId válido
     if (game.status?.status === "stage2") {
       const effectiveStage2TeamId =
         devStage2ViewMode === "classroom"
@@ -246,7 +270,6 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
             ? (devStage2TeamId || "").trim() || teamId
             : teamId;
 
-      // ✅ CLAVE: forzar remount cuando cambia modo/teamId
       const stage2Key = `${devStage2ViewMode}:${effectiveStage2TeamId ?? "classroom"}`;
 
       screen = (
@@ -258,10 +281,8 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
       );
 
     } else if (game.status?.status === "transition") {
-      // Transition tampoco debería depender de teamId válido
       screen = <TransitionScreen teams={teamsNormalized} onStartStage2={handleStartStage2} />;
     } else {
-      // A partir de acá, sí: Stage 1 requiere teamId válido
       if (!team) {
         screen = (
           <div className="game-controller error">
@@ -272,10 +293,10 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
       } else if (game.status?.status === "stage1-complete") {
         screen = <Stage1CompleteScreen gameId={gameId} team={team} />;
       } else {
-        // ===== Stage 1 normal (TeamView) =====
-        const roundsByNumber = normalizeRounds((game as any).stage1Rounds);
-        const currentRoundNumber =
-          typeof game.status?.currentRound === "number" ? game.status.currentRound : 0;
+        // ✅ NUEVO: Leer rounds del equipo específico
+        const teamData = (game.teams as any)?.[teamId];
+        const roundsByNumber = normalizeRounds(teamData?.stage1Rounds);
+        const currentRoundNumber = teamData?.currentRound ?? 0;
 
         const currentRound = roundsByNumber[currentRoundNumber];
 
@@ -287,10 +308,7 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
             </div>
           );
         } else {
-          const currentQuestionIndex =
-            typeof game.status?.currentQuestionIndex === "number"
-              ? game.status.currentQuestionIndex
-              : 0;
+          const currentQuestionIndex = teamData?.currentQuestionIndex ?? 0;
 
           const questionsArray = Object.values(game.questions || {}).sort((a: any, b: any) => {
             const na = Number(String(a?.id || "").replace(/\D+/g, "")) || 0;
@@ -312,9 +330,9 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
             (q: any) => q?.suggestedStage === 1
           ).length;
 
-          // ✅ FIX CLAVE: Stage 1 SIEMPRE renderiza TeamView (no depende de devStage2ViewMode)
           screen = (
             <TeamView
+              key={teamId}
               gameId={gameId}
               team={team}
               currentRound={currentRound}
@@ -331,11 +349,11 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
     <div className="game-controller" style={{ position: "relative", minHeight: "100vh" }}>
       {screen}
 
-      {/* DEV CONSOLE (SIEMPRE VISIBLE + FIJA) */}
       <div style={{ position: "fixed", bottom: 12, right: 12, zIndex: 999999 }}>
         <DevConsole
           onSetStage1={forceStage1}
           onSetStage2={forceStage2}
+          onResetGame={resetGameToRound1}
           stage2ViewMode={devStage2ViewMode}
           setStage2ViewMode={setDevStage2ViewMode}
           stage2TeamId={devStage2TeamId}

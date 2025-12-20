@@ -5,7 +5,7 @@ import { TeamDeviceViewAdapter } from "./TeamDeviceViewAdapter";
 
 interface Stage2ControllerProps {
   gameId: string;
-  teamId?: string; // si existe => dispositivo de equipo
+  teamId?: string;
 }
 
 export function Stage2Controller({ gameId, teamId }: Stage2ControllerProps) {

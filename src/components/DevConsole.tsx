@@ -5,6 +5,7 @@ type DevStage2ViewMode = "auto" | "classroom" | "team";
 interface DevConsoleProps {
   onSetStage1: () => void;
   onSetStage2: () => void;
+  onResetGame: () => void;  // ← AGREGAR ESTA LÍNEA
 
   // 🆕 Stage 2 view override (solo DEV, no Firebase)
   stage2ViewMode: DevStage2ViewMode;
@@ -17,6 +18,7 @@ interface DevConsoleProps {
 export function DevConsole({
   onSetStage1,
   onSetStage2,
+  onResetGame,  // ← AGREGAR ESTA LÍNEA
   stage2ViewMode,
   setStage2ViewMode,
   stage2TeamId,
@@ -79,6 +81,31 @@ export function DevConsole({
 
         <div className="dev-note">
           Esto solo cambia la vista local (DEV). No toca Firebase.
+        </div>
+      </div>
+
+      <hr className="dev-sep" />
+
+      {/* ✅ BOTÓN DE RESET */}
+      <div className="dev-section">
+        <button
+          onClick={onResetGame}  // ← CAMBIAR resetGameToRound1 POR onResetGame
+          style={{
+            width: '100%',
+            padding: '10px',
+            background: '#e74c3c',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '13px',
+            fontWeight: 'bold',
+          }}
+        >
+          🔄 RESET A RONDA 1
+        </button>
+        <div className="dev-note" style={{ marginTop: '6px' }}>
+          Resetea TODOS los equipos y puntos
         </div>
       </div>
     </div>

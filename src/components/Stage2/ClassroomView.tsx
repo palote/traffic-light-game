@@ -1,29 +1,23 @@
 // src/components/Stage2/ClassroomView.tsx
-
 import { useEffect, useMemo, useState } from "react";
 import { ref, onValue, update } from "firebase/database";
 import { database } from "../../firebase.config";
-
 import {
   getRoundRanking,
   getRoundWinner,
   getRoundSummary,
 } from "../../services/stage2ResultsHelpers";
-
 import type { Game, Team, Question } from "../../types/game";
-
 import {
   startStage2Round,
   designateRepresentatives,
   setStage2Phase,
   setRespondingResponseGiven,
 
-  // Control docente del timer (responding)
   teacherStartRespondingHelp,
   teacherPauseRespondingHelp,
   teacherEndRespondingHelp,
 
-  // 🆕 Calificación simultánea
   startRatingPhase,
   getRatingProgress,
   finalizeRatings,
@@ -31,18 +25,14 @@ import {
   teacherPauseRatingTimer,
   teacherStopRatingTimer,
 
-  // 🆕 Justificación secuencial
   startJustificationPhase,
   advanceJustification,
   getCurrentJustifyingTeamId,
 
-  // 🆕 Validación (calificaciones)
   validateRating,
+  validateResponse,        // ← AGREGAR ESTA LÍNEA
   isValidationComplete,
   calculateAndAwardPoints,
-
-  // 🆕 Validación de respuesta (docente)
-  validateResponse,
 } from "../../services/stage2Repository";
 
 interface ClassroomViewProps {
@@ -84,21 +74,17 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
   // 4) Pregunta actual
   const currentQuestion = useMemo(() => {
     if (!game || !round) return null;
-
     const raw: any = (game as any).questions;
     const questionsArray: Question[] = Array.isArray(raw)
       ? raw
       : raw && typeof raw === "object"
         ? Object.values(raw)
         : [];
-
     const found = questionsArray.find((q: any) => q?.id === round.questionId);
-
     if (!found && raw && typeof raw === "object") {
       const byKey = raw[round.questionId];
       return byKey ? ({ id: round.questionId, ...byKey } as any) : null;
     }
-
     return found ?? null;
   }, [game, round]);
 
@@ -240,10 +226,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
 
       <div style={{ marginBottom: 12 }}>
         <div>
-          Ronda actual: <b>{game.stage2.currentRound + 1}</b>
-        </div>
-        <div>
-          Fase: <b>{safePhase}</b>
+          <strong>Ronda actual:</strong> {game.stage2.currentRound + 1}
         </div>
       </div>
 
@@ -256,7 +239,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
 
           {respondingHelpRequested ? (
             <div style={{ marginBottom: 8 }}>
-              🆘 <b>{responding.playerName}</b> pidió ayuda.
+              🆘 <b>{responding.playerName}</b> pidió ayuda y se reúne con su equipo.
             </div>
           ) : (
             <div style={{ marginBottom: 8, opacity: 0.8 }}>
@@ -309,7 +292,17 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
         {safePhase === "hint" ? (
           <>
             <h3>💡 Pista</h3>
-            <p style={{ fontSize: 18 }}>{currentQuestion?.hint ?? "⚠️ Pista no encontrada"}</p>
+            <p style={{ fontSize: 18, marginBottom: 16 }}>{currentQuestion?.hint ?? "⚠️ Pista no encontrada"}</p>
+            <div style={{
+              padding: 12,
+              backgroundColor: "#e3f2fd",
+              borderRadius: 8,
+              fontSize: 14,
+              marginTop: 12,
+            }}>
+              📚 Los alumnos pueden repasar el tema basándose en el hint (pista).<br />
+              El profesor designará a los representantes cuando finalice esta etapa.
+            </div>
           </>
         ) : safePhase === "designated" ? (
           <>
@@ -324,7 +317,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
             <p style={{ fontSize: 18 }}>{currentQuestion?.text ?? "⚠️ Pregunta no encontrada"}</p>
           </>
         )}
-        <small>questionId: {round.questionId}</small>
+
       </div>
 
       {/* RANKING */}
@@ -543,7 +536,6 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
           )}
         </div>
       )}
-
       {/* 🆕 PANEL: VALIDACIÓN DE RESPUESTA */}
       {safePhase === "validation_response" && (
         <div style={{ marginBottom: 12, padding: 12, border: "2px solid #FF5722" }}>
@@ -651,164 +643,199 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
             </p>
             <p style={{ margin: 0 }}>
               • Si CORRECTA: verdes 5pts, amarillos validados 10pts, rojos 0pts<br />
-              • Si INCORRECTA: solo rojos validados 10pts, resto 0pts
+              • Si INCORRECTA: solo rojos validados 12pts, resto 0pts
             </p>
           </div>
         </div>
       )}
-
-      {/* 🆕 PANEL: VALIDACIÓN DE CALIFICACIONES (renombrado) */}
+      {/* 🆕 PANEL: VALIDACIÓN DE CALIFICACIONES (CON ORDEN Y CARTEL) */}
       {safePhase === "validation_ratings" && (
         <div style={{ marginBottom: 12, padding: 12, border: "2px solid #9C27B0" }}>
           <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 18 }}>
             ⚖️ VALIDACIÓN DE CALIFICACIONES
           </div>
 
+          {/* 🆕 CARTEL PEDAGÓGICO si hay rojo */}
+          {(() => {
+            const hasRed = Object.values(round.ratingTeams || {}).some(
+              (rt: any) => rt.rating === "red"
+            );
+
+            if (hasRed) {
+              return (
+                <div style={{
+                  marginBottom: 16,
+                  padding: 16,
+                  backgroundColor: "#fff3cd",
+                  border: "2px solid #ff9800",
+                  borderRadius: 8,
+                  fontSize: 14,
+                }}>
+                  <div style={{ fontWeight: 700, marginBottom: 8, color: "#ff6f00" }}>
+                    ⚠️ IMPORTANTE: Hay calificación(es) ROJA(s)
+                  </div>
+                  <div style={{ marginBottom: 4 }}>
+                    • Si el ROJO es aceptado → la respuesta estaba <strong>incorrecta</strong>
+                  </div>
+                  <div style={{ marginBottom: 4 }}>
+                    • Rojo aceptado recibe <strong>12 puntos</strong> por detectar el error
+                  </div>
+                  <div>
+                    • Los equipos que NO detectaron el error podrían ver <strong>anuladas sus justificaciones y recibir 0 pts</strong>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
           <div style={{ marginBottom: 16, padding: 12, backgroundColor: "#f5f5f5", borderRadius: 4 }}>
             <div style={{ fontSize: 14 }}>
-              <strong>Verde:</strong> Auto-aceptado (5 pts) — No requiere acción<br />
-              <strong>Amarillo/Rojo:</strong> Aceptar (10 pts) o Rechazar (0 pts)
+              <strong>Verde:</strong> Validar manualmente (5 pts si aceptado, 0 si rechazado)<br />
+              <strong>Amarillo:</strong> Aceptar (10 pts) o Rechazar (0 pts)<br />
+              <strong>Rojo:</strong> Aceptar (12 pts) o Rechazar (0 pts)
             </div>
           </div>
 
+          {/* 🆕 ORDENAR: Rojos primero, luego amarillos, luego verdes */}
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {Object.entries(round.ratingTeams || {}).map(([teamId, rater]: [string, any]) => {
-              const team = teamsSorted.find((t) => t.id === teamId);
+            {(() => {
+              const ratersArray = Object.entries(round.ratingTeams || {});
 
-              const colorEmoji =
-                rater.rating === "green" ? "🟩" :
-                  rater.rating === "yellow" ? "🟨" :
-                    rater.rating === "red" ? "🟥" : "⬜";
+              // Ordenar: rojo → amarillo → verde
+              const sortedRaters = ratersArray.sort(([, a], [, b]) => {
+                const colorOrder: Record<string, number> = { red: 0, yellow: 1, green: 2 };
+                const orderA = colorOrder[(a as any).rating] ?? 3;
+                const orderB = colorOrder[(b as any).rating] ?? 3;
+                return orderA - orderB;
+              });
 
-              const colorBg =
-                rater.rating === "green" ? "#4CAF50" :
-                  rater.rating === "yellow" ? "#FFC107" :
-                    rater.rating === "red" ? "#F44336" : "#999";
+              return sortedRaters.map(([teamId, rater]: [string, any]) => {
+                const team = teamsSorted.find((t) => t.id === teamId);
 
-              const isGreen = rater.rating === "green";
-              const isValidated = rater.validated !== null && rater.validated !== undefined;
+                const colorEmoji =
+                  rater.rating === "green" ? "🟩" :
+                    rater.rating === "yellow" ? "🟨" :
+                      rater.rating === "red" ? "🟥" : "⬜";
 
-              return (
-                <div
-                  key={teamId}
-                  style={{
-                    padding: 16,
-                    border: "2px solid " + colorBg,
-                    borderRadius: 8,
-                    backgroundColor: colorBg + "10",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                    <div>
-                      <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
-                        {rater.teamName} - {rater.playerName}
-                      </div>
-                      <div style={{ fontSize: 14, opacity: 0.8 }}>
-                        Puntaje del equipo: {team?.totalScore ?? 0} pts
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 32 }}>
-                      {colorEmoji}
-                    </div>
-                  </div>
+                const colorBg =
+                  rater.rating === "green" ? "#4CAF50" :
+                    rater.rating === "yellow" ? "#FFC107" :
+                      rater.rating === "red" ? "#F44336" : "#999";
 
-                  {rater.justification && (
-                    <div style={{
-                      padding: 12,
-                      backgroundColor: "white",
-                      borderRadius: 4,
-                      marginBottom: 12,
-                      fontSize: 14,
-                      border: "1px solid #ddd",
-                    }}>
-                      <div style={{ fontWeight: 700, marginBottom: 4 }}>
-                        Justificación:
-                      </div>
-                      <div>{rater.justification}</div>
-                    </div>
-                  )}
+                const isValidated = rater.validated !== null && rater.validated !== undefined;
 
-                  {isGreen ? (
-                    <div style={{
-                      padding: 12,
-                      backgroundColor: "#4CAF50",
-                      color: "white",
-                      borderRadius: 4,
-                      textAlign: "center",
-                      fontWeight: 700,
-                    }}>
-                      ✅ AUTO-ACEPTADO (5 puntos)
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", gap: 12 }}>
-                      {!isValidated ? (
-                        <>
-                          <button
-                            onClick={async () => {
-                              try {
-                                await validateRating(gameId, teamId, true);
-                              } catch (e) {
-                                console.error(e);
-                                alert("Error aceptando calificación");
-                              }
-                            }}
-                            style={{
-                              flex: 1,
-                              padding: 12,
-                              fontSize: 16,
-                              backgroundColor: "#4CAF50",
-                              color: "white",
-                              border: "none",
-                              borderRadius: 8,
-                              cursor: "pointer",
-                              fontWeight: 700,
-                            }}
-                          >
-                            ✅ ACEPTAR (10 pts)
-                          </button>
-
-                          <button
-                            onClick={async () => {
-                              try {
-                                await validateRating(gameId, teamId, false);
-                              } catch (e) {
-                                console.error(e);
-                                alert("Error rechazando calificación");
-                              }
-                            }}
-                            style={{
-                              flex: 1,
-                              padding: 12,
-                              fontSize: 16,
-                              backgroundColor: "#F44336",
-                              color: "white",
-                              border: "none",
-                              borderRadius: 8,
-                              cursor: "pointer",
-                              fontWeight: 700,
-                            }}
-                          >
-                            ❌ RECHAZAR (0 pts)
-                          </button>
-                        </>
-                      ) : (
-                        <div style={{
-                          flex: 1,
-                          padding: 12,
-                          backgroundColor: rater.validated ? "#4CAF50" : "#F44336",
-                          color: "white",
-                          borderRadius: 8,
-                          textAlign: "center",
-                          fontWeight: 700,
-                        }}>
-                          {rater.validated ? "✅ ACEPTADO (10 pts)" : "❌ RECHAZADO (0 pts)"}
+                return (
+                  <div
+                    key={teamId}
+                    style={{
+                      padding: 16,
+                      border: "2px solid " + colorBg,
+                      borderRadius: 8,
+                      backgroundColor: colorBg + "10",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
+                          {rater.teamName} - {rater.playerName}
                         </div>
-                      )}
+                        <div style={{ fontSize: 14, opacity: 0.8 }}>
+                          Puntaje del equipo: {team?.totalScore ?? 0} pts
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 32 }}>
+                        {colorEmoji}
+                      </div>
                     </div>
-                  )}
-                </div>
-              );
-            })}
+
+                    {rater.justification && (
+                      <div style={{
+                        padding: 12,
+                        backgroundColor: "white",
+                        borderRadius: 4,
+                        marginBottom: 12,
+                        fontSize: 14,
+                        border: "1px solid #ddd",
+                      }}>
+                        <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                          Justificación:
+                        </div>
+                        <div>{rater.justification}</div>
+                      </div>
+                    )}
+
+                    {/* Botones de validación */}
+                    {!isValidated ? (
+                      <div style={{ display: "flex", gap: 12 }}>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await validateRating(gameId, teamId, true);
+                            } catch (e) {
+                              console.error(e);
+                              alert("Error aceptando calificación");
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: 12,
+                            fontSize: 16,
+                            backgroundColor: "#4CAF50",
+                            color: "white",
+                            border: "none",
+                            borderRadius: 8,
+                            cursor: "pointer",
+                            fontWeight: 700,
+                          }}
+                        >
+                          ✅ ACEPTAR ({rater.rating === "red" ? "12" : rater.rating === "yellow" ? "10" : "5"} pts)
+                        </button>
+
+                        <button
+                          onClick={async () => {
+                            try {
+                              await validateRating(gameId, teamId, false);
+                            } catch (e) {
+                              console.error(e);
+                              alert("Error rechazando calificación");
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: 12,
+                            fontSize: 16,
+                            backgroundColor: "#F44336",
+                            color: "white",
+                            border: "none",
+                            borderRadius: 8,
+                            cursor: "pointer",
+                            fontWeight: 700,
+                          }}
+                        >
+                          ❌ RECHAZAR (0 pts)
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{
+                        flex: 1,
+                        padding: 12,
+                        backgroundColor: rater.validated ? "#4CAF50" : "#F44336",
+                        color: "white",
+                        borderRadius: 8,
+                        textAlign: "center",
+                        fontWeight: 700,
+                      }}>
+                        {rater.validated
+                          ? `✅ ACEPTADO (${rater.rating === "red" ? "12" : rater.rating === "yellow" ? "10" : "5"} pts)`
+                          : "❌ RECHAZADO (0 pts)"
+                        }
+                      </div>
+                    )}
+                  </div>
+                );
+              });
+            })()}
           </div>
 
           {isValidationComplete(round) ? (
@@ -860,27 +887,41 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
         )}
 
         {safePhase === "designated" && (
-          <button onClick={() => setStage2Phase(gameId, "question_revealed")}>
-            👁️ REVELAR PREGUNTA
-          </button>
-        )}
-
-        {safePhase === "question_revealed" && (
-          <button onClick={() => setStage2Phase(gameId, "responding")}>
-            ▶️ INICIAR RESPUESTA
+          <button onClick={async () => {
+            try {
+              await setStage2Phase(gameId, "question_revealed");
+              // Auto-avanzar a responding después de 2 segundos
+              setTimeout(() => setStage2Phase(gameId, "responding"), 2000);
+            } catch (e) {
+              console.error(e);
+            }
+          }}>
+            👁️ REVELAR PREGUNTA E INICIAR RESPUESTA
           </button>
         )}
 
         {safePhase === "responding" && (
-          <>
-            <button onClick={() => setRespondingResponseGiven(gameId, true)}>
-              ✅ RESPUESTA DADA (DOCENTE)
-            </button>
-
-            <button onClick={() => startRatingPhase(gameId)}>
-              ➡️ IR A CALIFICACIÓN
-            </button>
-          </>
+          <button onClick={async () => {
+            try {
+              await setRespondingResponseGiven(gameId, true);
+              await startRatingPhase(gameId);
+            } catch (e) {
+              console.error(e);
+              alert("Error al pasar a calificación");
+            }
+          }}
+            style={{
+              padding: 16,
+              fontSize: 18,
+              backgroundColor: "#4CAF50",
+              color: "white",
+              border: "none",
+              borderRadius: 8,
+              cursor: "pointer",
+              fontWeight: 700,
+            }}>
+            ✅ RESPUESTA COMPLETA → IR A CALIFICACIÓN
+          </button>
         )}
 
         <button onClick={() => setStage2Phase(gameId, "hint")}>🧪 VOLVER A HINT</button>
@@ -892,7 +933,10 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
 
           {/* GANADOR(ES) */}
           {(() => {
+            // Encontrar máximo puntaje de la ronda
             const maxRoundPoints = Math.max(...roundRanking.map(r => r.roundPoints), 0);
+
+            // Todos los equipos con el máximo puntaje (pueden ser varios en empate)
             const winners = roundRanking.filter(r => r.roundPoints === maxRoundPoints);
             const isPlural = winners.length > 1;
 
@@ -909,7 +953,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
                   {isPlural ? "GANADORES DE LA RONDA" : "GANADOR DE LA RONDA"}
                 </div>
                 <div style={{ fontSize: 32, fontWeight: 700, marginTop: 8 }}>
-                  {winners.map((w) => (
+                  {winners.map((w, idx) => (
                     <div key={w.teamId}>
                       {w.teamName} 👑
                     </div>
@@ -924,7 +968,10 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
             <h3 style={{ fontSize: 20, marginBottom: 12 }}>📊 Puntos ganados en esta ronda</h3>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {roundRanking.map((r) => {
-                const maxRoundPoints = Math.max(...roundRanking.map(rr => rr.roundPoints), 0);
+                const team = teamsSorted.find((t) => t.id === r.teamId);
+
+                // Verificar si es ganador (máximo puntaje de la ronda)
+                const maxRoundPoints = Math.max(...roundRanking.map(r => r.roundPoints), 0);
                 const isWinner = r.roundPoints === maxRoundPoints && maxRoundPoints > 0;
 
                 return (
@@ -966,10 +1013,13 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
             <h3 style={{ fontSize: 20, marginBottom: 12 }}>📈 Ranking General Actualizado</h3>
             <ol style={{ margin: 0, paddingLeft: 24 }}>
               {(() => {
+                // Ordenar por puntaje total (mayor a menor)
                 const sorted = [...teamsSorted].sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
+
+                // Encontrar máximo puntaje total
                 const maxTotalScore = sorted[0]?.totalScore || 0;
 
-                return sorted.map((t) => {
+                return sorted.map((t, index) => {
                   const isLeader = t.totalScore === maxTotalScore && maxTotalScore > 0;
 
                   return (
@@ -1025,6 +1075,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
           <button
             onClick={async () => {
               try {
+                // Incrementar índice de pregunta
                 const nextQIndex = (game.stage2?.currentQuestionIndex ?? 0) + 1;
                 const nextRound = (game.stage2?.currentRound ?? 0) + 1;
 
@@ -1034,6 +1085,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
                   [`games/${gameId}/updatedAt`]: Date.now(),
                 });
 
+                // Iniciar siguiente ronda
                 await startStage2Round(gameId);
               } catch (e) {
                 console.error(e);

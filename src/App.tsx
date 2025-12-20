@@ -1,6 +1,8 @@
 // src/App.tsx
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { ref, onValue } from 'firebase/database';
+import { database } from './firebase.config';
 import { SetupScreen } from './components/SetupScreen';
 import { GameController } from './components/GameController';
 import './App.css';
@@ -10,9 +12,29 @@ type AppView = 'setup' | 'game';
 function App() {
   const [currentView, setCurrentView] = useState<AppView>('setup');
   const [gameId, setGameId] = useState<string | null>(null);
+  const [teamId, setTeamId] = useState('teamA'); // ← Ahora con setState
+  const [availableTeams, setAvailableTeams] = useState<string[]>([]);
 
-  // ✅ Por ahora fijo para testing (después lo harás seleccionable en Setup o por room/team join)
-  const [teamId] = useState('teamA');
+  // ✅ Cargar equipos disponibles cuando hay gameId
+  useEffect(() => {
+    if (!gameId) return;
+
+    const teamsRef = ref(database, `games/${gameId}/teams`);
+    const unsubscribe = onValue(teamsRef, (snapshot) => {
+      const teams = snapshot.val();
+      if (teams) {
+        const teamIds = Object.keys(teams);
+        setAvailableTeams(teamIds);
+        
+        // Si el equipo actual no existe, seleccionar el primero
+        if (teamIds.length > 0 && !teamIds.includes(teamId)) {
+          setTeamId(teamIds[0]);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [gameId, teamId]);
 
   const handleGameCreated = (newGameId: string) => {
     console.log('Game created with ID:', newGameId);
@@ -28,7 +50,6 @@ function App() {
       <div className="App">
         <SetupScreen onGameCreated={handleGameCreated} />
 
-        {/* Botón temporal para testing */}
         {gameId && (
           <div
             style={{
@@ -55,7 +76,62 @@ function App() {
   if (currentView === 'game' && gameId) {
     return (
       <div className="App">
-        <GameController gameId={gameId} teamId={teamId} />
+        {/* ✅ SELECTOR DE EQUIPOS - ARRIBA A LA IZQUIERDA */}
+        <div
+          style={{
+            position: 'fixed',
+            top: '20px',
+            left: '20px',
+            zIndex: 10000,
+            background: 'white',
+            padding: '12px 16px',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}
+        >
+          <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#666' }}>
+            🎮 CONSOLA DEL PROFESOR
+          </div>
+          
+          <select
+            value={teamId}
+            onChange={(e) => setTeamId(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              fontSize: '14px',
+              borderRadius: '6px',
+              border: '2px solid #3498db',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+            }}
+          >
+            {availableTeams.map((tId) => (
+              <option key={tId} value={tId}>
+                {tId === 'teamA' && '🔴 Team A'}
+                {tId === 'teamB' && '🟢 Team B'}
+                {tId === 'teamC' && '🔵 Team C'}
+                {tId === 'teamD' && '🟡 Team D'}
+                {tId === 'teamE' && '🟣 Team E'}
+                {tId === 'teamF' && '🟠 Team F'}
+                {!['teamA', 'teamB', 'teamC', 'teamD', 'teamE', 'teamF'].includes(tId) && `📦 ${tId}`}
+              </option>
+            ))}
+          </select>
+
+          <div style={{ fontSize: '11px', color: '#999' }}>
+            Equipo actual: <strong>{teamId}</strong>
+          </div>
+        </div>
+
+        {/* ✅ GAME CONTROLLER CON TEAM ID DINÁMICO */}
+        <GameController 
+          key={teamId} // ← Fuerza remount al cambiar equipo
+          gameId={gameId} 
+          teamId={teamId} 
+        />
 
         {/* Botón volver */}
         <button
@@ -71,6 +147,7 @@ function App() {
             fontSize: '12px',
             border: 'none',
             boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+            zIndex: 9999,
           }}
           onClick={() => setCurrentView('setup')}
         >

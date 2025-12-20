@@ -738,11 +738,11 @@ export async function advanceJustification(gameId: string): Promise<void> {
   } else {
     // Era el último → validation
     await update(ref(database), {
-      [`${base}/phase`]: "validation_response",
+      [`${base}/phase`]: "validation_response",  // ← CAMBIAR ESTA LÍNEA
       [`${GAMES_ROOT}/${gameId}/updatedAt`]: now,
     });
 
-    console.log("✅ Last justification finished → validation");
+    console.log("✅ Last justification finished → validation_response");
   }
 }
 
@@ -763,7 +763,29 @@ export async function getCurrentJustifyingTeamId(gameId: string): Promise<string
 
   return order[currentIndex] ?? null;
 }
+/**
+ * Valida si la respuesta del equipo que respondió fue correcta o incorrecta.
+ * Esto lo decide el docente y determina cómo se distribuyen los puntos.
+ */
+export async function validateResponse(
+  gameId: string,
+  correct: boolean
+): Promise<void> {
+  const snap = await get(ref(database, `${GAMES_ROOT}/${gameId}`));
+  const game = snap.val() as Game;
+  if (!game?.stage2) throw new Error("Stage 2 not found");
 
+  const r = game.stage2.currentRound;
+  const base = `${GAMES_ROOT}/${gameId}/stage2/rounds/${r}`;
+
+  await update(ref(database), {
+    [`${base}/responseValidated`]: correct,
+    [`${base}/phase`]: "validation_ratings",
+    [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
+  });
+
+  console.log(`✅ Response validated as: ${correct ? "CORRECT" : "INCORRECT"}`);
+}
 /* =========================================
    🆕 VALIDATION
 ========================================= */
@@ -804,25 +826,6 @@ export async function validateRating(
 
   console.log(`✅ Rating validated for ${teamId}: ${accepted ? "ACCEPTED" : "REJECTED"}`);
 }
-export async function validateResponse(
-  gameId: string,
-  correct: boolean
-): Promise<void> {
-  const snap = await get(ref(database, `${GAMES_ROOT}/${gameId}`));
-  const game = snap.val() as Game;
-  if (!game?.stage2) throw new Error("Stage 2 not found");
-
-  const r = game.stage2.currentRound;
-  const base = `${GAMES_ROOT}/${gameId}/stage2/rounds/${r}`;
-
-  await update(ref(database), {
-    [`${base}/responseValidated`]: correct,
-    [`${base}/phase`]: "validation_ratings",
-    [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
-  });
-
-  console.log(`✅ Response validated as: ${correct ? "CORRECT" : "INCORRECT"}`);
-}
 
 /**
  * Verifica si todas las validaciones están completas.
@@ -830,28 +833,22 @@ export async function validateResponse(
  * Amarillo/Rojo = requiere validación manual (validated debe ser true o false)
  */
 export function isValidationComplete(round: Stage2Round): boolean {
-  // 🆕 Primero: docente debe validar la respuesta
-  if (round.responseValidated === null || round.responseValidated === undefined) {
-    return false;
-  }
-
   const raters = Object.values(round.ratingTeams || {});
 
   for (const rater of raters) {
-    // Verdes auto-aceptados
+    // Verde: auto-aceptado, no necesita validación manual
     if (rater.rating === "green") continue;
 
-    // Amarillos y rojos requieren validación
+    // Amarillo/Rojo: debe tener validated = true o false
     if (rater.rating === "yellow" || rater.rating === "red") {
       if (rater.validated === null || rater.validated === undefined) {
-        return false;
+        return false; // Falta validar
       }
     }
   }
 
-  return true;
+  return true; // Todo validado
 }
-
 
 /**
  * Calcula y asigna puntos automáticamente según las validaciones.
@@ -878,7 +875,7 @@ export async function calculateAndAwardPoints(gameId: string): Promise<void> {
   const pointsAwarded: Record<string, number> = {};
   const teams = normalizeTeams((game as any).teams);
 
-  // 🔑 docente define si fue correcta
+  // 🔑 Docente define si fue correcta
   const responseWasCorrect = round.responseValidated === true;
 
   const responding = round.respondingTeam;
@@ -890,10 +887,10 @@ export async function calculateAndAwardPoints(gameId: string): Promise<void> {
     // 1) Respondió: 0
     if (responding) pointsAwarded[responding.teamId] = 0;
 
-    // 2) Solo ROJOS aceptados: 10
+    // 2) Solo ROJOS aceptados: 12 pts (cambio de 10 a 12)
     for (const rater of raters) {
       if (rater.rating === "red" && rater.validated === true) {
-        pointsAwarded[rater.teamId] = 10;
+        pointsAwarded[rater.teamId] = 12; // ← CAMBIO
       } else {
         pointsAwarded[rater.teamId] = 0;
       }
@@ -901,32 +898,33 @@ export async function calculateAndAwardPoints(gameId: string): Promise<void> {
   } else {
     console.log("✅ Response was CORRECT - normal point distribution");
 
-    // 1) puntos por responder (helpStartedAt define ayuda)
+    // 1) Puntos por responder (cambio: sin ayuda = 12 pts)
     if (responding) {
       const helpUsed = responding.helpStartedAt !== null;
-      const responsePoints = helpUsed ? 9 : 12;
+      const responsePoints = helpUsed ? 9 : 12; // ← CAMBIO (antes era 9 : 12)
       pointsAwarded[responding.teamId] = responsePoints;
     }
 
-    // 2) puntos por calificar
+    // 2) Puntos por calificar
     for (const rater of raters) {
       if (!rater.rating) continue;
 
       let ratingPoints = 0;
 
       if (rater.rating === "green") {
-        ratingPoints = 5;
+        // Verde YA NO es auto-aceptado, depende de validated
+        ratingPoints = rater.validated === true ? 5 : 0; // ← CAMBIO
       } else if (rater.rating === "yellow") {
         ratingPoints = rater.validated === true ? 10 : 0;
       } else if (rater.rating === "red") {
-        ratingPoints = 0;
+        ratingPoints = 0; // Rojo en respuesta correcta no suma
       }
 
       pointsAwarded[rater.teamId] = (pointsAwarded[rater.teamId] || 0) + ratingPoints;
     }
   }
 
-  // 3) actualizar totalScore
+  // 3) Actualizar totalScore
   const teamUpdates: Record<string, any> = {};
 
   for (const [teamId, roundPoints] of Object.entries(pointsAwarded)) {
@@ -937,7 +935,7 @@ export async function calculateAndAwardPoints(gameId: string): Promise<void> {
     teamUpdates[`${GAMES_ROOT}/${gameId}/teams/${teamId}/totalScore`] = newTotal;
   }
 
-  // 4) guardar resultados
+  // 4) Guardar resultados
   const base = `${GAMES_ROOT}/${gameId}/stage2/rounds/${r}`;
   const now = Date.now();
 
@@ -950,7 +948,6 @@ export async function calculateAndAwardPoints(gameId: string): Promise<void> {
 
   console.log("✅ Points calculated and awarded. Phase → results");
 }
-
 
 /* =========================================
    LEGACY / COMPATIBILITY

@@ -1,9 +1,10 @@
 // src/components/Stage2/TeamDeviceViewAdapter.tsx
 
 import { useEffect, useState } from "react";
-import type { Game } from "../../types/game";
-import { subscribeToGame } from "../../services/gameRepository";
+import { ref, onValue } from "firebase/database";
+import { database } from "../../firebase.config";
 import { TeamDeviceView } from "./TeamDeviceView";
+import type { Game } from "../../types/game";
 
 interface TeamDeviceViewAdapterProps {
   gameId: string;
@@ -12,21 +13,37 @@ interface TeamDeviceViewAdapterProps {
 
 export function TeamDeviceViewAdapter({ gameId, teamId }: TeamDeviceViewAdapterProps) {
   const [game, setGame] = useState<Game | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = subscribeToGame(gameId, (g) => setGame((g as Game) ?? null));
-    return () => unsub();
+    const gameRef = ref(database, `games/${gameId}`);
+    const unsubscribe = onValue(gameRef, (snapshot) => {
+      const data = snapshot.val();
+      setGame(data || null);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [gameId]);
 
-  if (!game) {
+  if (loading) {
     return (
-      <div style={{ padding: 16 }}>
-        <h2>Stage 2 – Team Device</h2>
-        <p>Cargando juego…</p>
+      <div style={{ padding: 40, textAlign: "center" }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+        <div style={{ fontSize: 18 }}>Cargando...</div>
       </div>
     );
   }
 
-  // 👇 Acá está la magia: TeamDeviceView recibe `game` (como te pide TS)
-  return <TeamDeviceView game={game} teamId={teamId} />;
+  if (!game) {
+    return (
+      <div style={{ padding: 40, textAlign: "center" }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
+        <div style={{ fontSize: 18 }}>No se encontró el juego</div>
+      </div>
+    );
+  }
+
+  return <TeamDeviceView gameId={gameId} teamId={teamId} />;
+
 }
