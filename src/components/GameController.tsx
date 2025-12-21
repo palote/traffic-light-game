@@ -14,6 +14,7 @@ import {
 
 import { TeamView } from "./TeamView";
 import { Stage1CompleteScreen } from "./Stage1CompleteScreen";
+import { Stage1ClassroomView } from "./Stage1/Stage1ClassroomView";  // ← AGREGAR
 import { TransitionScreen } from "./TransitionScreen";
 import { Stage2Controller } from "./Stage2/Stage2Controller";
 import { DevConsole } from "./DevConsole";
@@ -96,6 +97,8 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [showStage1Classroom, setShowStage1Classroom] = useState(false);
 
   const transitionRequestedRef = useRef(false);
   const devForceCooldownRef = useRef<number>(0);
@@ -330,7 +333,13 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
             (q: any) => q?.suggestedStage === 1
           ).length;
 
-          screen = (
+          // ✅ NUEVO: permitir cambiar entre TeamView y ClassroomView
+          screen = showStage1Classroom ? (
+            <Stage1ClassroomView
+              game={game}
+              gameId={gameId}
+            />
+          ) : (
             <TeamView
               key={teamId}
               gameId={gameId}
@@ -348,9 +357,32 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
   return (
     <div className="game-controller" style={{ position: "relative", minHeight: "100vh" }}>
       {screen}
+{/* Botón toggle ClassroomView Stage 1 */}
+{game?.status?.status === "stage1" && (
+  <button
+    onClick={() => setShowStage1Classroom(!showStage1Classroom)}
+    style={{
+      position: "fixed",
+      top: 20,
+      right: 20,
+      zIndex: 10000,
+      padding: "12px 20px",
+      backgroundColor: showStage1Classroom ? "#4caf50" : "#2196f3",
+      color: "white",
+      border: "none",
+      borderRadius: 8,
+      cursor: "pointer",
+      fontSize: 14,
+      fontWeight: 700,
+      boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+    }}
+  >
+    {showStage1Classroom ? "👥 Ver Equipo" : "📊 Vista Aula"}
+  </button>
+)}
 
-      <div style={{ position: "fixed", bottom: 12, right: 12, zIndex: 999999 }}>
-        <DevConsole
+<div style={{ position: "fixed", bottom: 12, right: 12, zIndex: 999999 }}>
+  <DevConsole
           onSetStage1={forceStage1}
           onSetStage2={forceStage2}
           onResetGame={resetGameToRound1}
@@ -360,6 +392,6 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
           setStage2TeamId={setDevStage2TeamId}
         />
       </div>
-    </div>
+</div>
   );
 }

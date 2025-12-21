@@ -151,10 +151,18 @@ export async function startGame(gameId: string): Promise<void> {
     const players = normalizePlayers((team as any).players ?? (team as any).members ?? []);
     const sorted = [...players].sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
     const responder = sorted[0] ?? players[0];
-    
+
     if (!responder) continue;
 
-    const captain = responder;
+    // ✅ Capitán rota en orden fijo
+    let captainIndex = 0 % players.length;
+    let captain = players[captainIndex];
+
+    // Si el capitán es el respondedor, pasar al siguiente
+    if (captain.id === responder.id) {
+      captainIndex = (captainIndex + 1) % players.length;
+      captain = players[captainIndex];
+    }
 
     const firstRound: Round = {
       roundNumber: 0,
@@ -181,7 +189,6 @@ export async function startGame(gameId: string): Promise<void> {
 
   await update(ref(database), updates);
 }
-
 /* ============================================================
   STAGE 1 ROUNDS - AHORA POR EQUIPO
 ============================================================ */

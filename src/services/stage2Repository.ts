@@ -810,11 +810,6 @@ export async function validateRating(
   const rater = round.ratingTeams?.[teamId];
   if (!rater) throw new Error(`Team ${teamId} is not a rater`);
 
-  // Verde siempre es aceptado automáticamente
-  if (rater.rating === "green") {
-    console.log("⚠️ Green ratings are auto-accepted, no manual validation needed");
-    return;
-  }
 
   const base = `${GAMES_ROOT}/${gameId}/stage2/rounds/${r}`;
   const now = Date.now();

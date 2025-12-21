@@ -20,10 +20,10 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
   const [game, setGame] = useState<Game | null>(null);
   const [localJustification, setLocalJustification] = useState("");
   const [now, setNow] = useState(() => Date.now());
-  
+
   // 🆕 Estado local para saber si ya calificó
   const [hasRated, setHasRated] = useState(false);
-  
+
   // 🆕 Estado para saber si es su turno de justificar
   const [isMyTurnToJustify, setIsMyTurnToJustify] = useState(false);
 
@@ -59,7 +59,7 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
 
   const phase = round?.phase ?? null;
   const responding = round?.respondingTeam ?? null;
-
+  const myRating: any = round?.ratingTeams?.[teamId] ?? null;
   const isRespondingTeam = responding?.teamId === teamId;
   const isRaterTeam = !!round?.ratingTeams?.[teamId];
   const myRaterData = isRaterTeam ? round?.ratingTeams?.[teamId] ?? null : null;
@@ -209,9 +209,9 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
       {/* Mostrar pregunta/hint */}
       <div style={{ padding: 12, border: "1px solid #ddd", marginBottom: 12 }}>
         <div style={{ fontWeight: 700, marginBottom: 6 }}>
-          {phase === "hint" ? "💡 PISTA" : 
-           phase === "designated" ? "👥 REPRESENTANTES" :
-           "📝 PREGUNTA"}
+          {phase === "hint" ? "💡 PISTA" :
+            phase === "designated" ? "👥 REPRESENTANTES" :
+              "📝 PREGUNTA"}
         </div>
         <div style={{ fontSize: 16 }}>
           {phase === "hint" ? (
@@ -342,11 +342,11 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
             <>
               <h3>✍️ CALIFICÁ LA RESPUESTA</h3>
 
-              <div style={{ 
-                padding: 12, 
-                backgroundColor: "#f5f5f5", 
+              <div style={{
+                padding: 12,
+                backgroundColor: "#f5f5f5",
                 marginBottom: 12,
-                borderRadius: 4 
+                borderRadius: 4
               }}>
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>Pregunta:</div>
                 <div style={{ marginBottom: 8 }}>{currentQuestion?.text ?? "—"}</div>
@@ -381,7 +381,7 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
                         cursor: "pointer",
                       }}
                     >
-                      🟩 VERDE<br/>
+                      🟩 VERDE<br />
                       <span style={{ fontSize: 14 }}>Correcta y completa</span>
                     </button>
 
@@ -405,7 +405,7 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
                         cursor: "pointer",
                       }}
                     >
-                      🟨 AMARILLO<br/>
+                      🟨 AMARILLO<br />
                       <span style={{ fontSize: 14 }}>Correcta pero incompleta</span>
                     </button>
 
@@ -429,15 +429,15 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
                         cursor: "pointer",
                       }}
                     >
-                      🟥 ROJO<br/>
+                      🟥 ROJO<br />
                       <span style={{ fontSize: 14 }}>Incorrecta</span>
                     </button>
                   </div>
                 </>
               ) : (
-                <div style={{ 
-                  padding: 16, 
-                  backgroundColor: "#4CAF50", 
+                <div style={{
+                  padding: 16,
+                  backgroundColor: "#4CAF50",
                   color: "white",
                   borderRadius: 8,
                   textAlign: "center",
@@ -455,7 +455,7 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
             <div style={{ padding: 16, textAlign: "center" }}>
               <p>👀 Observando fase de calificación</p>
               <p style={{ fontSize: 14, opacity: 0.8 }}>
-                {isRespondingTeam 
+                {isRespondingTeam
                   ? "Tu equipo respondió, ahora esperá las calificaciones"
                   : "Tu equipo no participa en esta ronda"
                 }
@@ -469,20 +469,20 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
       {phase === "rating_reveal" && (
         <div style={{ padding: 16, border: "1px solid #ddd" }}>
           <h3>📊 CALIFICACIONES REVELADAS</h3>
-          
+
           {isRaterTeam && myRaterData ? (
             <div style={{ marginTop: 12 }}>
               <div style={{ marginBottom: 8 }}>Tu calificación fue:</div>
-              <div style={{ 
-                fontSize: 48, 
+              <div style={{
+                fontSize: 48,
                 textAlign: "center",
                 padding: 16,
                 backgroundColor: "#f5f5f5",
                 borderRadius: 8,
               }}>
                 {myRaterData.rating === "green" ? "🟩 VERDE" :
-                 myRaterData.rating === "yellow" ? "🟨 AMARILLO" :
-                 myRaterData.rating === "red" ? "🟥 ROJO" : "—"}
+                  myRaterData.rating === "yellow" ? "🟨 AMARILLO" :
+                    myRaterData.rating === "red" ? "🟥 ROJO" : "—"}
               </div>
             </div>
           ) : (
@@ -516,10 +516,10 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
               )}
 
               <h3>📝 JUSTIFICÁ TU CALIFICACIÓN</h3>
-              
+
               <div style={{ marginBottom: 12 }}>
-                <div>Calificaste: 
-                  <span style={{ 
+                <div>Calificaste:
+                  <span style={{
                     marginLeft: 8,
                     fontSize: 24,
                   }}>
@@ -528,14 +528,14 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
                 </div>
               </div>
 
-              <div style={{ 
-                padding: 12, 
+              <div style={{
+                padding: 12,
                 backgroundColor: "#fff3cd",
                 borderRadius: 4,
                 marginBottom: 12,
               }}>
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>
-                  {myRaterData.rating === "yellow" 
+                  {myRaterData.rating === "yellow"
                     ? "Explicá qué le falta o qué puede mejorarse"
                     : "Explicá cuál es el error en la respuesta"
                   }
@@ -547,8 +547,8 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
                 onChange={(e) => setLocalJustification(e.target.value)}
                 placeholder="Escribí tu justificación (opcional, podés justificar solo oralmente)"
                 rows={4}
-                style={{ 
-                  width: "100%", 
+                style={{
+                  width: "100%",
                   padding: 10,
                   fontSize: 16,
                   borderRadius: 4,
@@ -557,7 +557,7 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
               />
 
               <button
-                style={{ 
+                style={{
                   marginTop: 12,
                   padding: 12,
                   fontSize: 16,
@@ -581,7 +581,7 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
                 💾 GUARDAR JUSTIFICACIÓN
               </button>
 
-              <div style={{ 
+              <div style={{
                 marginTop: 12,
                 padding: 12,
                 backgroundColor: isMyTurnToJustify ? "#e3f2fd" : "#f5f5f5",
@@ -597,8 +597,8 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
               </div>
             </>
           ) : isRaterTeam && myRaterData?.rating === "green" ? (
-            <div style={{ 
-              padding: 16, 
+            <div style={{
+              padding: 16,
               backgroundColor: "#4CAF50",
               color: "white",
               borderRadius: 8,
@@ -678,8 +678,8 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
           </div>
 
           {/* Información adicional */}
-          <div style={{ 
-            padding: 12, 
+          <div style={{
+            padding: 12,
             backgroundColor: "#fff3cd",
             borderRadius: 8,
             fontSize: 14,
@@ -688,9 +688,9 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
             <p style={{ margin: 0 }}>
               📊 Mirá la pantalla principal para ver:
             </p>
-            <ul style={{ 
-              listStyle: "none", 
-              padding: 0, 
+            <ul style={{
+              listStyle: "none",
+              padding: 0,
               margin: "8px 0 0 0",
               textAlign: "left",
             }}>
@@ -707,6 +707,96 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
         </div>
       )}
 
+      {/* =========================
+          VALIDATION_RESPONSE
+         ========================= */}
+      {phase === "validation_response" && (
+        <div style={{ padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
+          <h3 style={{ fontSize: 24, marginTop: 0 }}>⚖️ Validación en curso</h3>
+
+          <div style={{
+            padding: 20,
+            backgroundColor: "#fff3cd",
+            borderRadius: 8,
+            textAlign: "center",
+            marginBottom: 16,
+          }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+              El profesor está validando si la respuesta fue correcta
+            </div>
+            <div style={{ fontSize: 14, opacity: 0.8 }}>
+              Esperá... Esta decisión determina quién recibe puntos
+            </div>
+          </div>
+
+          <div style={{
+            padding: 12,
+            backgroundColor: "#e3f2fd",
+            borderRadius: 8,
+            fontSize: 14,
+          }}>
+            💡 Esta validación es pedagógica: el profesor evalúa si la respuesta
+            cumplió con los criterios esperados.
+          </div>
+        </div>
+      )}
+
+      {/* =========================
+          VALIDATION_RATINGS
+         ========================= */}
+      {phase === "validation_ratings" && (
+        <div style={{ padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
+          <h3 style={{ fontSize: 24, marginTop: 0 }}>⚖️ Validación de calificaciones</h3>
+
+          <div style={{
+            padding: 20,
+            backgroundColor: "#f3e5f5",
+            borderRadius: 8,
+            textAlign: "center",
+            marginBottom: 16,
+          }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+              El profesor está validando las calificaciones
+            </div>
+            <div style={{ fontSize: 14, opacity: 0.8 }}>
+              Esperá... Cuando termine, verás los resultados
+            </div>
+          </div>
+
+          {/* Mostrar tu calificación mientras esperás */}
+          {myRating && (
+            <div style={{
+              padding: 16,
+              backgroundColor: "#f5f5f5",
+              borderRadius: 8,
+              marginBottom: 16,
+            }}>
+              <div style={{ fontSize: 14, marginBottom: 8, opacity: 0.8 }}>
+                Tu equipo calificó:
+              </div>
+              <div style={{ fontSize: 32, textAlign: "center" }}>
+                {myRating.rating === "green" && "🟩 VERDE"}
+                {myRating.rating === "yellow" && "🟨 AMARILLO"}
+                {myRating.rating === "red" && "🟥 ROJO"}
+              </div>
+            </div>
+          )}
+
+          <div style={{
+            padding: 12,
+            backgroundColor: "#e3f2fd",
+            borderRadius: 8,
+            fontSize: 14,
+          }}>
+            💡 El profesor está decidiendo si acepta o rechaza cada justificación
+            presentada por los equipos.
+          </div>
+        </div>
+      )}
+
+      {/* Otras fases no implementadas */}
       {/* Otras fases no implementadas */}
       {phase &&
         phase !== "hint" &&
@@ -717,6 +807,8 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
         phase !== "rating" &&
         phase !== "rating_reveal" &&
         phase !== "justification" &&
+        phase !== "validation_response" &&      // ← AGREGAR
+        phase !== "validation_ratings" &&       // ← AGREGAR
         phase !== "validation" &&
         phase !== "results" && (
           <div style={{ padding: 16, border: "1px solid #ddd" }}>
