@@ -26,7 +26,19 @@ import { parseCSV } from "../utils/csvParser";
 import type { ParseResult, ParsedQuestion } from "../utils/csvParser";
 
 
-
+// 🦁 Nombres de equipos con animales
+const TEAM_ANIMALS = [
+  { emoji: '🦁', name: 'Leones', nameEn: 'Lions' },
+  { emoji: '🐯', name: 'Tigres', nameEn: 'Tigers' },
+  { emoji: '🐻', name: 'Osos', nameEn: 'Bears' },
+  { emoji: '🦅', name: 'Águilas', nameEn: 'Eagles' },
+  { emoji: '🦊', name: 'Zorros', nameEn: 'Foxes' },
+  { emoji: '🐺', name: 'Lobos', nameEn: 'Wolves' },
+  { emoji: '🦒', name: 'Jirafas', nameEn: 'Giraffes' },
+  { emoji: '🐘', name: 'Elefantes', nameEn: 'Elephants' },
+  { emoji: '🦓', name: 'Cebras', nameEn: 'Zebras' },
+  { emoji: '🦘', name: 'Canguros', nameEn: 'Kangaroos' },
+];
 
 interface SetupScreenProps {
   onGameCreated: (gameId: string) => void;
@@ -34,7 +46,8 @@ interface SetupScreenProps {
 
 export function SetupScreen({ onGameCreated }: SetupScreenProps) {
   // Estado del formulario
-  const [level, setLevel] = useState<GameLevel>('primary');
+  const [level] = useState<GameLevel>('primary'); // ← Fijo, no se cambia
+  const [ratingMode] = useState<'devices' | 'physical-cards'>('devices'); // ← Fijo
   const [language, setLanguage] = useState<Language>('es');
   const [className, setClassName] = useState('');
   const [subject, setSubject] = useState('');
@@ -49,7 +62,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
 
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [ratingMode, setRatingMode] = useState<'devices' | 'physical-cards'>('devices');
   const [showPreview, setShowPreview] = useState(false);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
 
@@ -239,7 +251,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
 
       newTeams.push({
         id: teamId,
-        name: `Team ${String.fromCharCode(65 + i)}`,
+        name: `${TEAM_ANIMALS[i].emoji} ${language === 'es' ? TEAM_ANIMALS[i].name : TEAM_ANIMALS[i].nameEn}`,
         players: teamPlayers,
         totalScore: 0,
         stage0Bonus: 0,
@@ -301,7 +313,8 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
     setIsCreating(true);
 
     try {
-      const config: Omit<GameConfig, 'id'> = {
+      const config = {
+        id: '',
         level,
         language,
         className,
@@ -317,7 +330,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
           stage2Help: stage2HelpTimer,
         },
         createdAt: Date.now(),
-      };
+      } as Omit<GameConfig, 'createdAt' | 'updatedAt'>;
 
       const gameId = await createGame(config);
       setCreatedGameId(gameId);
@@ -357,30 +370,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         <div className="step-content">
           <h2>{t.step1}</h2>
 
-          <div className="form-group">
-            <label>{t.level}</label>
-            <div className="radio-group">
-              <label>
-                <input
-                  type="radio"
-                  value="primary"
-                  checked={level === 'primary'}
-                  onChange={(e) => setLevel(e.target.value as GameLevel)}
-                />
-                {t.primary}
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  value="secondary"
-                  checked={level === 'secondary'}
-                  onChange={(e) => setLevel(e.target.value as GameLevel)}
-                />
-                {t.secondary}
-              </label>
-            </div>
-          </div>
-
+          {/* ✅ IDIOMA - SE MANTIENE */}
           <div className="form-group">
             <label>{t.lang}</label>
             <div className="radio-group">
@@ -405,32 +395,8 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
             </div>
           </div>
 
-          {/* Modo de calificación */}
-          <div className="form-group">
-            <label>{t.ratingModeLabel}</label>
-            <div className="radio-group">
-              <label>
-                <input
-                  type="radio"
-                  name="ratingMode"
-                  value="devices"
-                  checked={ratingMode === 'devices'}
-                  onChange={(e) => setRatingMode(e.target.value as 'devices' | 'physical-cards')}
-                />
-                {t.ratingDevices}
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  name="ratingMode"
-                  value="physical-cards"
-                  checked={ratingMode === 'physical-cards'}
-                  onChange={(e) => setRatingMode(e.target.value as 'devices' | 'physical-cards')}
-                />
-                {t.ratingCards}
-              </label>
-            </div>
-          </div>
+          {/* ❌ NIVEL - OCULTO (siempre primary) */}
+          {/* ❌ MODO CALIFICACIÓN - OCULTO (siempre devices) */}
 
           <div className="form-group">
             <label>{t.className}</label>
