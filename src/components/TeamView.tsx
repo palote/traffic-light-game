@@ -1,6 +1,7 @@
 // src/components/TeamView.tsx
+// CON SONIDOS INTEGRADOS 🔊
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { ref, update } from 'firebase/database';
 import { database } from '../firebase.config';
 import type { Team, Round, Rating, RatingColor } from '../types/game';
@@ -18,6 +19,8 @@ import {
   markPointsAsConfirmed,
   areAllTeamsStage1Complete,
 } from '../services/gameRepository';
+
+import { useSound } from '../hooks/useSound'; // 🔊 NUEVO
 
 import './TeamView.css';
 
@@ -47,6 +50,10 @@ export function TeamView({
   const [pointsAlreadyConfirmed, setPointsAlreadyConfirmed] = useState(false);
   const [showPedagogicalTip, setShowPedagogicalTip] = useState(false);
 
+  const prevPhaseRef = useRef<string | null>(null); // 🔊 Para detectar cambios de fase
+
+  const { play } = useSound(); // 🔊 NUEVO
+
   const displayRoundNumber = currentRound?.roundNumber ?? 0;
 
   // =========================
@@ -66,7 +73,6 @@ export function TeamView({
     const unsubscribe = subscribeToGame(gameId, (game) => {
       if (!game?.teams) return;
 
-      // ✅ NUEVO: Leer del equipo específico
       const teamData = (game.teams as any)?.[team.id];
       if (!teamData) return;
 
@@ -137,6 +143,18 @@ export function TeamView({
     }
   }, [hasResponded, ratingsCount, totalRaters]);
 
+  // 🔊 Sonido al cambiar de fase
+  useEffect(() => {
+    if (phase && prevPhaseRef.current && phase !== prevPhaseRef.current) {
+      if (phase === 'rating') {
+        play('transition');
+      } else if (phase === 'validation') {
+        play('reveal');
+      }
+    }
+    prevPhaseRef.current = phase;
+  }, [phase, play]);
+
   // =========================
   // Auto-aceptar verdes al entrar en validación
   // =========================
@@ -177,6 +195,8 @@ export function TeamView({
   // =========================
   // Handlers
   // =========================
+  
+  // 🔊 Handler con sonido para calificación
   const handleRating = async (playerId: string, playerName: string, color: RatingColor) => {
     const targetRoundNumber = currentRound?.roundNumber ?? 0;
 
@@ -188,27 +208,38 @@ export function TeamView({
     };
 
     try {
+      play('rating'); // 🔊 Sonido al calificar
       await addRating(gameId, team.id, targetRoundNumber, rating);
+      play('correct'); // 🔊 Sonido de confirmación
     } catch (error) {
       console.error('Error adding rating:', error);
+      play('incorrect'); // 🔊 Sonido de error
       alert('Error al guardar la calificación');
     }
   };
 
+  // 🔊 Handler con sonido para validación
   const handleSetValidation = async (playerId: string, value: boolean) => {
+    play('click'); // 🔊 Sonido de click
     setValidations((prev) => ({ ...prev, [playerId]: value }));
     try {
       await validateRating(gameId, team.id, displayRoundNumber, playerId, value);
+      play(value ? 'correct' : 'incorrect'); // 🔊 Sonido según resultado
     } catch (error) {
       console.error('Error validating rating:', error);
+      play('incorrect');
     }
   };
 
+  // 🔊 Handler con sonido para marcar respuesta
   const handleMarkResponded = async () => {
     try {
+      play('click'); // 🔊 Sonido de click
       await setRoundHasResponded(gameId, team.id, displayRoundNumber, true);
+      play('transition'); // 🔊 Sonido de transición
     } catch (e) {
       console.error('Error setting hasResponded:', e);
+      play('incorrect');
       alert('Error al marcar "ya respondió".');
     }
   };
@@ -223,7 +254,7 @@ export function TeamView({
     // Solo contar ratings validados (aceptados)
     const validatedRatings = ratingsArray.filter((rating) => validations[rating.playerId] === true);
 
-    // ✅ NUEVO: Verificar si hay algún ROJO VALIDADO
+    // Verificar si hay algún ROJO VALIDADO
     const hasValidatedRed = validatedRatings.some((rating) => rating.color === 'red');
 
     // Si hay rojo validado → respuesta INCORRECTA
@@ -289,6 +320,7 @@ export function TeamView({
     }
   };
 
+  // 🔊 Handler con sonido para confirmar puntos
   const handleConfirmPoints = async () => {
     const targetRoundNumber = currentRound?.roundNumber ?? 0;
 
@@ -296,11 +328,13 @@ export function TeamView({
       const alreadyConfirmed = await arePointsConfirmed(gameId, team.id, targetRoundNumber);
       if (alreadyConfirmed) {
         console.log('⚠️ Puntos ya confirmados - solo avanzando ronda (prepareNextRound)');
+        play('click');
         await prepareNextRound(gameId, team.id);
 
         const allComplete = await areAllTeamsStage1Complete(gameId);
         if (allComplete) {
           console.log('🎉 Todos los equipos completaron Stage 1');
+          play('roundComplete'); // 🔊 Fanfare
           await update(ref(database), {
             [`games/${gameId}/status/status`]: 'transition',
             [`games/${gameId}/status/currentStage`]: 2,
@@ -315,16 +349,19 @@ export function TeamView({
     }
 
     if (phase !== 'validation') {
+      play('incorrect');
       alert('Primero deben calificar todos (Fase 1).');
       return;
     }
 
     if (!allValidated) {
+      play('incorrect');
       alert('Debés completar la validación (Fase 2) antes de confirmar puntos.');
       return;
     }
 
     setIsConfirmingPoints(true);
+    play('click'); // 🔊 Click inicial
 
     try {
       await markPointsAsConfirmed(gameId, team.id, targetRoundNumber);
@@ -349,6 +386,8 @@ export function TeamView({
       }
       console.log('👥 Scores actualizados');
 
+      play('points'); // 🔊 Sonido de puntos ganados
+
       await updateLastPlaceCounters();
       console.log('📉 Contadores actualizados');
 
@@ -358,11 +397,14 @@ export function TeamView({
       const allComplete = await areAllTeamsStage1Complete(gameId);
       if (allComplete) {
         console.log('🎉 Todos los equipos completaron Stage 1');
+        play('roundComplete'); // 🔊 Fanfare grande
         await update(ref(database), {
           [`games/${gameId}/status/status`]: 'transition',
           [`games/${gameId}/status/currentStage`]: 2,
           [`games/${gameId}/updatedAt`]: Date.now(),
         });
+      } else {
+        play('correct'); // 🔊 Sonido de éxito
       }
 
       setShowPedagogicalTip(true);
@@ -370,6 +412,7 @@ export function TeamView({
 
     } catch (error) {
       console.error('❌ Error confirmando puntos:', error);
+      play('incorrect'); // 🔊 Sonido de error
       alert('Error al confirmar puntos. Intentá de nuevo.');
     } finally {
       setIsConfirmingPoints(false);

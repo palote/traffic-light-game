@@ -33,6 +33,12 @@ import {
   isValidationComplete,
   calculateAndAwardPoints,
 } from "../../services/stage2Repository";
+import {
+  startCountdownMusic,
+  stopCountdownMusic,
+  pauseCountdownMusic,
+} from "../../hooks/useCountdownMusic";
+
 
 interface ClassroomViewProps {
   gameId: string;
@@ -43,7 +49,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
   const [now, setNow] = useState(() => Date.now());
   const [ratingProgress, setRatingProgress] = useState<{ rated: number; total: number } | null>(null);
   const [currentJustifyingTeamId, setCurrentJustifyingTeamId] = useState<string | null>(null);
-  
+
   // 🆕 Toggle para mostrar/ocultar panel de progreso
   const [showProgressPanel, setShowProgressPanel] = useState(true);
 
@@ -178,7 +184,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
       <div style={{ padding: 40 }}>
         <h1>🎯 ETAPA 2</h1>
         <p>Stage 2 todavía no fue iniciado.</p>
-        <button 
+        <button
           onClick={() => startStage2Round(gameId)}
           style={{
             padding: "12px 24px",
@@ -250,13 +256,15 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
 
       {/* PANEL PRIORITARIO: AYUDA DOCENTE (solo en responding) */}
       {safePhase === "responding" && responding && respondingHelpHasState && (
-        <div style={{ 
-          marginBottom: 16, 
-          padding: 16, 
-          border: "2px solid #FF5722",
-          borderRadius: 8,
-          backgroundColor: "#fff3e0",
-        }}>
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 16,
+            border: "2px solid #FF5722",
+            borderRadius: 8,
+            backgroundColor: "#fff3e0",
+          }}
+        >
           <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 18 }}>
             🤝 AYUDA (control docente)
           </div>
@@ -266,23 +274,37 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
               🆘 <b>{responding.playerName}</b> pidió ayuda y se reúne con su equipo.
             </div>
           ) : (
-            <div style={{ marginBottom: 8, opacity: 0.8 }}>
-              (No hay pedido activo)
-            </div>
+            <div style={{ marginBottom: 8, opacity: 0.8 }}>(No hay pedido activo)</div>
           )}
 
           <div style={{ marginBottom: 12, fontSize: 18 }}>
             ⏱️ Tiempo restante:{" "}
             <b style={{ fontSize: 24 }}>{respondingHelpRemaining ?? "—"}</b> s{" "}
             {respondingHelpRemaining === 0 && (
-              <span style={{ marginLeft: 10, fontWeight: 700, color: "#F44336" }}>⏰ TERMINÓ</span>
+              <span style={{ marginLeft: 10, fontWeight: 700, color: "#F44336" }}>
+                ⏰ TERMINÓ
+              </span>
             )}
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
-              disabled={!respondingHelpRequested && !((responding as any)?.helpRemainingSec > 0)}
-              onClick={() => teacherStartRespondingHelp(gameId)}
+              disabled={
+                !respondingHelpRequested && !((responding as any)?.helpRemainingSec > 0)
+              }
+              onClick={async () => {
+                await teacherStartRespondingHelp(gameId);
+
+                await startCountdownMusic(
+                  (responding as any)?.helpDuration ?? 60,
+                  () =>
+                    respondingHelpRemaining ??
+                    (responding as any)?.helpRemainingSec ??
+                    (responding as any)?.helpDuration ??
+                    60
+                );
+              }}
+
               style={{
                 padding: "10px 20px",
                 backgroundColor: "#4CAF50",
@@ -298,7 +320,10 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
 
             <button
               disabled={!respondingHelpRunning}
-              onClick={() => teacherPauseRespondingHelp(gameId)}
+              onClick={async () => {
+                await teacherPauseRespondingHelp(gameId);
+                pauseCountdownMusic();
+              }}
               style={{
                 padding: "10px 20px",
                 backgroundColor: "#FF9800",
@@ -313,8 +338,14 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
             </button>
 
             <button
-              disabled={!respondingHelpRunning && !(((responding as any)?.helpRemainingSec ?? null) != null)}
-              onClick={() => teacherEndRespondingHelp(gameId)}
+              disabled={
+                !respondingHelpRunning &&
+                !(((responding as any)?.helpRemainingSec ?? null) != null)
+              }
+              onClick={async () => {
+                await teacherEndRespondingHelp(gameId);
+                stopCountdownMusic();
+              }}
               style={{
                 padding: "10px 20px",
                 backgroundColor: "#F44336",
@@ -332,24 +363,31 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
       )}
 
       {/* HINT / PREGUNTA */}
-      <div style={{ 
-        padding: 20, 
-        border: "1px solid #ddd", 
-        borderRadius: 8,
-        marginBottom: 20,
-        backgroundColor: "white",
-      }}>
+      <div
+        style={{
+          padding: 20,
+          border: "1px solid #ddd",
+          borderRadius: 8,
+          marginBottom: 20,
+          backgroundColor: "white",
+        }}
+      >
         {safePhase === "hint" ? (
           <>
             <h3 style={{ margin: "0 0 12px 0" }}>💡 Pista</h3>
-            <p style={{ fontSize: 20, marginBottom: 16 }}>{currentQuestion?.hint ?? "⚠️ Pista no encontrada"}</p>
-            <div style={{
-              padding: 12,
-              backgroundColor: "#e3f2fd",
-              borderRadius: 8,
-              fontSize: 14,
-            }}>
-              📚 Los alumnos pueden repasar el tema basándose en la pista.<br />
+            <p style={{ fontSize: 20, marginBottom: 16 }}>
+              {currentQuestion?.hint ?? "⚠️ Pista no encontrada"}
+            </p>
+            <div
+              style={{
+                padding: 12,
+                backgroundColor: "#e3f2fd",
+                borderRadius: 8,
+                fontSize: 14,
+              }}
+            >
+              📚 Los alumnos pueden repasar el tema basándose en la pista.
+              <br />
               Presioná <strong>"Designar Representantes"</strong> cuando estén listos.
             </div>
           </>
@@ -357,22 +395,26 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
           <>
             <h3 style={{ margin: "0 0 12px 0" }}>👥 Representantes Designados</h3>
             <p style={{ fontSize: 16, opacity: 0.8 }}>
-              Los representantes deben pasar al frente. La pregunta se revelará cuando lo indiques.
+              Los representantes deben pasar al frente. La pregunta se revelará cuando lo
+              indiques.
             </p>
           </>
         ) : (
           <>
             <h3 style={{ margin: "0 0 12px 0" }}>📝 Pregunta</h3>
-            <p style={{ fontSize: 20 }}>{currentQuestion?.text ?? "⚠️ Pregunta no encontrada"}</p>
+            <p style={{ fontSize: 20 }}>
+              {currentQuestion?.text ?? "⚠️ Pregunta no encontrada"}
+            </p>
           </>
         )}
       </div>
 
+
       {/* PANEL: CALIFICACIÓN SIMULTÁNEA */}
       {safePhase === "rating" && (
-        <div style={{ 
-          marginBottom: 16, 
-          padding: 16, 
+        <div style={{
+          marginBottom: 16,
+          padding: 16,
           border: "2px solid #4CAF50",
           borderRadius: 8,
           backgroundColor: "#e8f5e9",
@@ -393,7 +435,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {!round.ratingTimerActive ? (
-              <button 
+              <button
                 onClick={() => teacherStartRatingTimer(gameId)}
                 style={{
                   padding: "10px 20px",
@@ -415,10 +457,10 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
 
             <button
               onClick={() => finalizeRatings(gameId)}
-              style={{ 
+              style={{
                 padding: "10px 20px",
-                backgroundColor: "#4CAF50", 
-                color: "white", 
+                backgroundColor: "#4CAF50",
+                color: "white",
                 fontWeight: 700,
                 border: "none",
                 borderRadius: 6,
@@ -433,9 +475,9 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
 
       {/* PANEL: REVELACIÓN DE CALIFICACIONES */}
       {safePhase === "rating_reveal" && (
-        <div style={{ 
-          marginBottom: 16, 
-          padding: 16, 
+        <div style={{
+          marginBottom: 16,
+          padding: 16,
           border: "2px solid #2196F3",
           borderRadius: 8,
         }}>
@@ -443,17 +485,17 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
             📊 CALIFICACIONES REVELADAS
           </div>
 
-          <div style={{ 
-            display: "grid", 
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", 
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
             gap: 12,
             marginBottom: 16,
           }}>
             {Object.entries(round.ratingTeams || {}).map(([teamId, rater]: [string, any]) => {
               const colorEmoji =
                 rater.rating === "green" ? "🟩" :
-                rater.rating === "yellow" ? "🟨" :
-                rater.rating === "red" ? "🟥" : "⬜";
+                  rater.rating === "yellow" ? "🟨" :
+                    rater.rating === "red" ? "🟥" : "⬜";
 
               return (
                 <div
@@ -476,10 +518,10 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
 
           <button
             onClick={() => startJustificationPhase(gameId)}
-            style={{ 
+            style={{
               padding: "12px 24px",
-              backgroundColor: "#2196F3", 
-              color: "white", 
+              backgroundColor: "#2196F3",
+              color: "white",
               fontWeight: 700,
               border: "none",
               borderRadius: 6,
@@ -493,9 +535,9 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
 
       {/* PANEL: JUSTIFICACIÓN SECUENCIAL */}
       {safePhase === "justification" && currentJustifyingTeamId && (
-        <div style={{ 
-          marginBottom: 16, 
-          padding: 16, 
+        <div style={{
+          marginBottom: 16,
+          padding: 16,
           border: "2px solid #FF9800",
           borderRadius: 8,
           backgroundColor: "#fff3e0",
@@ -513,7 +555,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
 
             const colorEmoji =
               currentRater.rating === "yellow" ? "🟨 AMARILLO" :
-              currentRater.rating === "red" ? "🟥 ROJO" : "—";
+                currentRater.rating === "red" ? "🟥 ROJO" : "—";
 
             return (
               <div>
@@ -572,9 +614,9 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
 
       {/* PANEL: VALIDACIÓN DE RESPUESTA */}
       {safePhase === "validation_response" && (
-        <div style={{ 
-          marginBottom: 16, 
-          padding: 16, 
+        <div style={{
+          marginBottom: 16,
+          padding: 16,
           border: "2px solid #FF5722",
           borderRadius: 8,
         }}>
@@ -637,9 +679,9 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
 
       {/* PANEL: VALIDACIÓN DE CALIFICACIONES */}
       {safePhase === "validation_ratings" && (
-        <div style={{ 
-          marginBottom: 16, 
-          padding: 16, 
+        <div style={{
+          marginBottom: 16,
+          padding: 16,
           border: "2px solid #9C27B0",
           borderRadius: 8,
         }}>
@@ -677,8 +719,8 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
               return sortedRaters.map(([teamId, rater]: [string, any]) => {
                 const colorEmoji =
                   rater.rating === "green" ? "🟩" :
-                  rater.rating === "yellow" ? "🟨" :
-                  rater.rating === "red" ? "🟥" : "⬜";
+                    rater.rating === "yellow" ? "🟨" :
+                      rater.rating === "red" ? "🟥" : "⬜";
 
                 const isValidated = rater.validated !== null && rater.validated !== undefined;
                 const pts = rater.rating === "red" ? "12" : rater.rating === "yellow" ? "10" : "5";
@@ -781,19 +823,19 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
       )}
 
       {/* CONTROLES DOCENTE */}
-      <div style={{ 
-        marginTop: 20, 
+      <div style={{
+        marginTop: 20,
         padding: 16,
         backgroundColor: "#f5f5f5",
         borderRadius: 8,
-        display: "flex", 
-        gap: 12, 
-        flexWrap: "wrap" 
+        display: "flex",
+        gap: 12,
+        flexWrap: "wrap"
       }}>
         <span style={{ fontWeight: 700, alignSelf: "center" }}>🎮 Controles:</span>
 
         {safePhase === "hint" && (
-          <button 
+          <button
             onClick={() => designateRepresentatives(gameId)}
             style={{
               padding: "10px 20px",
@@ -810,7 +852,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
         )}
 
         {safePhase === "designated" && (
-          <button 
+          <button
             onClick={async () => {
               await setStage2Phase(gameId, "question_revealed");
               setTimeout(() => setStage2Phase(gameId, "responding"), 2000);
@@ -830,7 +872,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
         )}
 
         {safePhase === "responding" && (
-          <button 
+          <button
             onClick={async () => {
               await setRespondingResponseGiven(gameId, true);
               await startRatingPhase(gameId);
@@ -849,7 +891,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
           </button>
         )}
 
-        <button 
+        <button
           onClick={() => setStage2Phase(gameId, "hint")}
           style={{
             padding: "10px 20px",
@@ -866,9 +908,9 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
 
       {/* RESULTADOS */}
       {safePhase === "results" && (
-        <div style={{ 
-          marginTop: 20, 
-          padding: 20, 
+        <div style={{
+          marginTop: 20,
+          padding: 20,
           border: "2px solid #FFD700",
           borderRadius: 12,
           backgroundColor: "#fffde7",
@@ -919,9 +961,9 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                 }}
               >
                 <span style={{ fontWeight: 700 }}>{r.teamName}</span>
-                <span style={{ 
-                  fontWeight: 700, 
-                  color: r.roundPoints > 0 ? "#4CAF50" : "#999" 
+                <span style={{
+                  fontWeight: 700,
+                  color: r.roundPoints > 0 ? "#4CAF50" : "#999"
                 }}>
                   +{r.roundPoints} pts
                 </span>
@@ -962,9 +1004,9 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
 
       {/* Representantes info */}
       {responding && safePhase !== "results" && (
-        <div style={{ 
-          marginTop: 20, 
-          padding: 16, 
+        <div style={{
+          marginTop: 20,
+          padding: 16,
           border: "1px solid #ddd",
           borderRadius: 8,
           backgroundColor: "white",

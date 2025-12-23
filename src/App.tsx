@@ -5,6 +5,8 @@ import { ref, onValue } from 'firebase/database';
 import { database } from './firebase.config';
 import { SetupScreen } from './components/SetupScreen';
 import { GameController } from './components/GameController';
+import { SoundToggle } from './components/SoundToggle';
+import { AudioControls } from "./components/AudioControls";
 import './App.css';
 
 type AppView = 'setup' | 'game';
@@ -12,7 +14,7 @@ type AppView = 'setup' | 'game';
 function App() {
   const [currentView, setCurrentView] = useState<AppView>('setup');
   const [gameId, setGameId] = useState<string | null>(null);
-  const [teamId, setTeamId] = useState('teamA'); // ← Ahora con setState
+  const [teamId, setTeamId] = useState('teamA');
   const [availableTeams, setAvailableTeams] = useState<string[]>([]);
 
   // ✅ Cargar equipos disponibles cuando hay gameId
@@ -25,7 +27,7 @@ function App() {
       if (teams) {
         const teamIds = Object.keys(teams);
         setAvailableTeams(teamIds);
-        
+
         // Si el equipo actual no existe, seleccionar el primero
         if (teamIds.length > 0 && !teamIds.includes(teamId)) {
           setTeamId(teamIds[0]);
@@ -45,9 +47,17 @@ function App() {
     if (gameId) setCurrentView('game');
   };
 
+  // ======================
+  // SETUP VIEW
+  // ======================
   if (currentView === 'setup') {
     return (
       <div className="App">
+        {/* 🔊 TOGGLE DE SONIDO */}
+        <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 1000 }}>
+          <SoundToggle />
+        </div>
+
         <SetupScreen onGameCreated={handleGameCreated} />
 
         {gameId && (
@@ -73,9 +83,17 @@ function App() {
     );
   }
 
+  // ======================
+  // GAME VIEW
+  // ======================
   if (currentView === 'game' && gameId) {
     return (
       <div className="App">
+        {/* 🔊 TOGGLE DE SONIDO */}
+        <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 1000 }}>
+          <SoundToggle />
+        </div>
+
         {/* ✅ SELECTOR DE EQUIPOS - ARRIBA A LA IZQUIERDA */}
         <div
           style={{
@@ -95,7 +113,7 @@ function App() {
           <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#666' }}>
             🎮 CONSOLA DEL PROFESOR
           </div>
-          
+
           <select
             value={teamId}
             onChange={(e) => setTeamId(e.target.value)}
@@ -126,14 +144,14 @@ function App() {
           </div>
         </div>
 
-        {/* ✅ GAME CONTROLLER CON TEAM ID DINÁMICO */}
-        <GameController 
-          key={teamId} // ← Fuerza remount al cambiar equipo
-          gameId={gameId} 
-          teamId={teamId} 
+        {/* ✅ GAME CONTROLLER */}
+        <GameController
+          key={teamId}
+          gameId={gameId}
+          teamId={teamId}
         />
 
-        {/* Botón volver */}
+        {/* 🔙 VOLVER A SETUP */}
         <button
           style={{
             position: 'fixed',
