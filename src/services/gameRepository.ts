@@ -11,7 +11,10 @@ import {
   push,
   remove,
 } from "firebase/database";
-import { database } from "../firebase.config";
+import {
+  database,
+  auth
+} from "../firebase.config";
 import type {
   Game,
   GameConfig,
@@ -22,6 +25,8 @@ import type {
   Rating,
   GameStatus,
 } from "../types/game";
+
+
 
 const GAMES_ROOT = "games";
 
@@ -73,38 +78,69 @@ export function subscribeToGame(gameId: string, cb: (game: Game | null) => void)
   CREATE / SETUP GAME
 ============================================================ */
 
+import { markGameCreated } from "./metricsService"; // ✅ NUEVO (métricas docentes, RTDB)
+
+/**
+ * Crea un juego en RTDB y devuelve gameId.
+ * No cambia la lógica del juego: solo agrega un registro de métrica si hay usuario logueado.
+ */
 export async function createGame(
-  config: Omit<GameConfig, "createdAt" | "updatedAt">
+  config: Omit<GameConfig, "id">
 ): Promise<string> {
-  const gamesRef = ref(database, GAMES_ROOT);
-  const newGameRef = push(gamesRef);
-  const gameId = newGameRef.key!;
-  const now = nowMs();
+  const now = Date.now();
 
-  const status: GameStatus = {
-    status: "setup",
-    currentStage: 1,
-    currentRound: 0,
-    currentQuestionIndex: 0,
-    updatedAt: now,
-  };
+  // ✅ Compatibilidad: juegos sin login / sin usuario
+  const u = auth.currentUser;
+  const createdBy =
+    u && u.uid
+      ? {
+        uid: u.uid,
+        email: u.email ?? null,
+        createdAt: now,
+      }
+      : null;
 
-  const game: Game = {
+  // Creamos el nodo del juego
+  const gameRef = push(ref(database, `${GAMES_ROOT}`));
+  const gameId = gameRef.key;
+  if (!gameId) throw new Error("No se pudo generar gameId");
+
+  const gameData: Game = {
     id: gameId,
-    config: {
-      ...config,
-      createdAt: now,
-      updatedAt: now,
+
+    // ✅ Tu config
+    config: config as any,
+
+    // ✅ Estado inicial (ajustalo si tu Game tiene defaults específicos)
+    status: {
+      status: "setup",
+      currentStage: 1,
+      currentRound: 0,
+      currentQuestionIndex: 0,
     } as any,
-    status,
-    teams: {},
-    players: {},
-    questions: {},
-    stage1Rounds: {},
+
+    teams: {} as any,
+    players: {} as any,
+    questions: {} as any,
+    rounds: {} as any,
+
+    createdAt: now,
     updatedAt: now,
+
+    // ✅ NUEVO (no rompe juegos viejos)
+    createdBy,
   } as any;
 
-  await set(newGameRef, game);
+  await set(ref(database, `${GAMES_ROOT}/${gameId}`), gameData);
+
+  // ✅ MÉTRICAS (no afecta el juego, solo registra "game creado" si hay docente logueado)
+  // Importante: no rompe modo sin-auth (createdBy null), y si falla NO frena la creación.
+  if (createdBy?.uid) {
+    markGameCreated(createdBy.uid, gameId).catch((e) => {
+      console.warn("⚠️ metrics markGameCreated failed:", e);
+    });
+  }
+
   return gameId;
 }
 

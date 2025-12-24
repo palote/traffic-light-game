@@ -9,6 +9,7 @@ import {
   getRoundRanking,
   getRoundSummary,
 } from "../../services/stage2ResultsHelpers";
+import { useAuth } from "../../hooks/useAuth";
 import type { Game, Team, Question } from "../../types/game";
 import {
   startStage2Round,
@@ -34,8 +35,8 @@ import {
 } from "../../services/stage2Repository";
 
 import { useSound } from "../../hooks/useSound";
-import { 
-  startCountdownMusic, 
+import {
+  startCountdownMusic,
   stopCountdownMusic,
   pauseCountdownMusic,
   resumeCountdownMusic,
@@ -241,14 +242,14 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
   const [ratingProgress, setRatingProgress] = useState<{ rated: number; total: number } | null>(null);
   const [currentJustifyingTeamId, setCurrentJustifyingTeamId] = useState<string | null>(null);
   const [showProgressPanel, setShowProgressPanel] = useState(true);
-  
+
   // 🎵 Estados de audio
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [musicEnabled, setMusicEnabled] = useState(isCountdownMusicEnabled());
-  
+  const { logout, authRequired, user } = useAuth();
   const prevPhaseRef = useRef<string | null>(null);
   const musicStartedForPhaseRef = useRef<string | null>(null);
-  
+
   const { play } = useSound();
 
   // Suscripción al juego
@@ -294,26 +295,26 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
   // 🎵 Música automática por fase
   useEffect(() => {
     if (!musicEnabled || !safePhase) return;
-    
+
     // Solo iniciar música en fases específicas
     const musicPhases = ["hint", "rating"];
-    
+
     if (safePhase !== prevPhaseRef.current) {
       // Cambió la fase
-      
+
       // Parar música de fase anterior
       if (isCountdownMusicPlaying()) {
         stopCountdownMusic();
       }
-      
+
       // Iniciar música si corresponde
       if (musicPhases.includes(safePhase) && musicStartedForPhaseRef.current !== safePhase) {
         const duration = safePhase === "hint" ? 60 : 120;
         let remaining = duration;
-        
+
         startCountdownMusic(duration, () => remaining);
         musicStartedForPhaseRef.current = safePhase;
-        
+
         // Auto-decrementar (simulado, el real viene del timer)
         const interval = setInterval(() => {
           remaining -= 1;
@@ -322,7 +323,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
           }
         }, 1000);
       }
-      
+
       // 🔊 Sonidos por cambio de fase
       if (safePhase === "results") {
         play("roundComplete");
@@ -332,7 +333,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
         play("transition");
       }
     }
-    
+
     prevPhaseRef.current = safePhase;
   }, [safePhase, musicEnabled, play]);
 
@@ -408,7 +409,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
   const handleStartHelp = async () => {
     play("click");
     await teacherStartRespondingHelp(gameId);
-    
+
     if (musicEnabled) {
       const duration = (responding as any)?.helpDuration ?? 60;
       startCountdownMusic(duration, () => respondingHelpRemaining ?? 0);
@@ -430,7 +431,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
   const handleStartRatingTimer = async () => {
     play("click");
     await teacherStartRatingTimer(gameId);
-    
+
     if (musicEnabled) {
       const duration = (game as any)?.stage2Config?.ratingDuration ?? 120;
       startCountdownMusic(duration, () => ratingTimeRemaining ?? 0);
@@ -465,7 +466,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
           <p style={styles.headerSubtitle}>Stage 2 todavía no fue iniciado</p>
         </div>
         <div style={{ textAlign: "center", padding: 40 }}>
-          <button 
+          <button
             style={styles.primaryBtn("#22c55e")}
             onClick={() => startStage2Round(gameId)}
           >
@@ -505,7 +506,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
               Ronda {game.stage2.currentRound + 1} • Fase: {safePhase}
             </p>
           </div>
-          
+
           {/* 🎵 Controles de audio */}
           <div style={styles.audioControls}>
             <button
@@ -526,6 +527,23 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
             >
               📊 Panel
             </button>
+            {authRequired && user && (
+              <button
+                onClick={async () => {
+                  try {
+                    await logout(); // ✅ usa AuthContext (incluye métricas + signOut)
+                  } catch (e) {
+                    console.error("❌ Logout failed:", e);
+                    alert("No se pudo cerrar sesión.");
+                  }
+                }}
+                style={styles.audioBtn(false, "#ef4444")}
+                title="Cerrar sesión"
+              >
+                🚪 Logout
+              </button>
+            )}
+
           </div>
         </div>
       </div>
@@ -541,7 +559,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
               <span style={styles.phaseBadge(phaseColor)}>💡 PISTA</span>
             </h2>
           </div>
-          
+
           <div style={{
             ...styles.questionBox,
             background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)",
@@ -549,7 +567,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
           }}>
             <p style={styles.hintText}>{currentQuestion?.hint ?? "⚠️ Pista no encontrada"}</p>
           </div>
-          
+
           <div style={{
             padding: 16,
             backgroundColor: "#eff6ff",
@@ -562,8 +580,8 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
               Presioná <strong>"Designar Representantes"</strong> cuando estén listos.
             </p>
           </div>
-          
-          <button 
+
+          <button
             style={styles.primaryBtn("#3b82f6")}
             onClick={() => {
               play("transition");
@@ -582,14 +600,14 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
           <h2 style={styles.cardTitle}>
             <span style={styles.phaseBadge(phaseColor)}>👥 REPRESENTANTES DESIGNADOS</span>
           </h2>
-          
+
           <div style={{ padding: 20, backgroundColor: "#f8fafc", borderRadius: 12, marginBottom: 20 }}>
             <p style={{ fontSize: 18, margin: 0, color: "#475569" }}>
               Los representantes deben pasar al frente. La pregunta se revelará cuando lo indiques.
             </p>
           </div>
-          
-          <button 
+
+          <button
             style={styles.primaryBtn("#6366f1")}
             onClick={async () => {
               play("reveal");
@@ -621,7 +639,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
           <h2 style={styles.cardTitle}>
             <span style={styles.phaseBadge(phaseColor)}>🎤 RESPONDIENDO</span>
           </h2>
-          
+
           <div style={styles.questionBox}>
             <p style={styles.questionText}>{currentQuestion?.text ?? "—"}</p>
           </div>
@@ -638,18 +656,18 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
               <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 12 }}>
                 🤝 Control de Ayuda
               </div>
-              
+
               {respondingHelpRemaining !== null && (
-                <div style={{ 
-                  fontSize: 32, 
-                  fontWeight: 800, 
+                <div style={{
+                  fontSize: 32,
+                  fontWeight: 800,
                   marginBottom: 16,
                   color: respondingHelpRemaining <= 10 ? "#dc2626" : "#1e293b",
                 }}>
                   ⏱️ {respondingHelpRemaining}s
                 </div>
               )}
-              
+
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <button
                   onClick={handleStartHelp}
@@ -673,8 +691,8 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
               </div>
             </div>
           )}
-          
-          <button 
+
+          <button
             style={styles.primaryBtn("#22c55e")}
             onClick={async () => {
               play("correct");
@@ -694,15 +712,15 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
           <h2 style={styles.cardTitle}>
             <span style={styles.phaseBadge(phaseColor)}>🎨 CALIFICACIÓN EN CURSO</span>
           </h2>
-          
+
           <div style={{ marginBottom: 20 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <span style={{ fontSize: 16, fontWeight: 600 }}>
                 📊 Progreso: {ratingProgress?.rated ?? 0} de {ratingProgress?.total ?? 0}
               </span>
               {ratingTimeRemaining !== null && (
-                <span style={{ 
-                  fontSize: 24, 
+                <span style={{
+                  fontSize: 24,
                   fontWeight: 800,
                   color: ratingTimeRemaining <= 10 ? "#dc2626" : "#1e293b",
                 }}>
@@ -717,7 +735,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
               )} />
             </div>
           </div>
-          
+
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
             {!round.ratingTimerActive ? (
               <button onClick={handleStartRatingTimer} style={styles.primaryBtn("#3b82f6")}>
@@ -725,13 +743,13 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
               </button>
             ) : (
               <>
-                <button 
+                <button
                   onClick={() => { teacherPauseRatingTimer(gameId); pauseCountdownMusic(); }}
                   style={styles.secondaryBtn}
                 >
                   ⏸️ PAUSAR
                 </button>
-                <button 
+                <button
                   onClick={() => { teacherStopRatingTimer(gameId); stopCountdownMusic(); }}
                   style={{ ...styles.secondaryBtn, backgroundColor: "#ef4444" }}
                 >
@@ -739,7 +757,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
                 </button>
               </>
             )}
-            
+
             <button
               onClick={() => {
                 play("reveal");
@@ -760,10 +778,10 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
           <h2 style={styles.cardTitle}>
             <span style={styles.phaseBadge(phaseColor)}>📊 CALIFICACIONES REVELADAS</span>
           </h2>
-          
-          <div style={{ 
-            display: "grid", 
-            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", 
+
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
             gap: 16,
             marginBottom: 24,
           }}>
@@ -778,7 +796,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
                 yellow: "🟨",
                 red: "🟥",
               };
-              
+
               return (
                 <div
                   key={teamId}
@@ -797,7 +815,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
               );
             })}
           </div>
-          
+
           <button
             onClick={() => {
               play("transition");
@@ -816,14 +834,14 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
           <h2 style={styles.cardTitle}>
             <span style={styles.phaseBadge(phaseColor)}>📝 JUSTIFICACIONES</span>
           </h2>
-          
+
           {(() => {
             const currentRater = round.ratingTeams?.[currentJustifyingTeamId];
             const order = (round as any).justificationOrder || [];
             const currentIndex = (round as any).currentJustificationIndex ?? 0;
-            
+
             if (!currentRater) return <div>⚠️ Error</div>;
-            
+
             return (
               <div>
                 <div style={{
@@ -846,7 +864,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
                     {currentRater.rating === "yellow" ? "🟨" : "🟥"}
                   </div>
                 </div>
-                
+
                 {currentRater.justification && (
                   <div style={{
                     padding: 16,
@@ -858,7 +876,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
                     "{currentRater.justification}"
                   </div>
                 )}
-                
+
                 <button
                   onClick={() => {
                     play("click");
@@ -880,7 +898,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
           <h2 style={styles.cardTitle}>
             <span style={styles.phaseBadge(phaseColor)}>⚖️ VALIDAR RESPUESTA</span>
           </h2>
-          
+
           <div style={{
             padding: 24,
             backgroundColor: "#fef3c7",
@@ -892,11 +910,11 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
               ¿La respuesta fue correcta?
             </p>
             <p style={{ fontSize: 14, color: "#78716c", margin: 0 }}>
-              Equipo: {teamsSorted.find((t) => t.id === responding?.teamId)?.name} • 
+              Equipo: {teamsSorted.find((t) => t.id === responding?.teamId)?.name} •
               Ayuda: {responding?.helpStartedAt ? "Sí (9 pts)" : "No (12 pts)"}
             </p>
           </div>
-          
+
           <div style={{ display: "flex", gap: 16, justifyContent: "center" }}>
             <button
               onClick={() => {
@@ -926,7 +944,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
           <h2 style={styles.cardTitle}>
             <span style={styles.phaseBadge(phaseColor)}>⚖️ VALIDAR CALIFICACIONES</span>
           </h2>
-          
+
           {/* Warning si hay rojo */}
           {Object.values(round.ratingTeams || {}).some((rt: any) => rt.rating === "red") && (
             <div style={{
@@ -944,7 +962,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
               </div>
             </div>
           )}
-          
+
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {Object.entries(round.ratingTeams || {})
               .sort(([, a], [, b]) => {
@@ -956,7 +974,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
                 const color = colorMap[rater.rating] ?? "#94a3b8";
                 const isValidated = rater.validated !== null && rater.validated !== undefined;
                 const pts = rater.rating === "red" ? "12" : rater.rating === "yellow" ? "10" : "5";
-                
+
                 return (
                   <div key={teamId} style={styles.ratingCard(color, rater.validated)}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -973,7 +991,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
                         {rater.rating === "green" ? "🟩" : rater.rating === "yellow" ? "🟨" : "🟥"}
                       </div>
                     </div>
-                    
+
                     {!isValidated ? (
                       <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
                         <button
@@ -1005,7 +1023,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
                 );
               })}
           </div>
-          
+
           {isValidationComplete(round) && (
             <button
               onClick={() => {
@@ -1027,7 +1045,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
           {(() => {
             const maxPoints = Math.max(...roundRanking.map(r => r.roundPoints), 0);
             const winners = roundRanking.filter(r => r.roundPoints === maxPoints);
-            
+
             return (
               <div style={styles.winnerCard}>
                 <div style={{ fontSize: 64, marginBottom: 8 }}>🏆</div>
@@ -1042,7 +1060,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
               </div>
             );
           })()}
-          
+
           {/* Puntos de la ronda */}
           <div style={styles.card}>
             <h3 style={styles.cardTitle}>📊 Puntos de la Ronda</h3>
@@ -1060,30 +1078,30 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
                 }}
               >
                 <span style={{ fontWeight: 600 }}>{r.teamName}</span>
-                <span style={{ 
-                  fontWeight: 800, 
+                <span style={{
+                  fontWeight: 800,
                   fontSize: 20,
-                  color: r.roundPoints > 0 ? "#22c55e" : "#94a3b8" 
+                  color: r.roundPoints > 0 ? "#22c55e" : "#94a3b8"
                 }}>
                   +{r.roundPoints}
                 </span>
               </div>
             ))}
           </div>
-          
+
           {/* Siguiente ronda */}
           <button
             onClick={async () => {
               play("transition");
               const nextQIndex = (game.stage2?.currentQuestionIndex ?? 0) + 1;
               const nextRound = (game.stage2?.currentRound ?? 0) + 1;
-              
+
               await update(ref(database), {
                 [`games/${gameId}/stage2/currentQuestionIndex`]: nextQIndex,
                 [`games/${gameId}/stage2/currentRound`]: nextRound,
                 [`games/${gameId}/updatedAt`]: Date.now(),
               });
-              
+
               await startStage2Round(gameId);
             }}
             style={{ ...styles.primaryBtn("#3b82f6"), width: "100%", justifyContent: "center" }}
@@ -1108,7 +1126,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
 
       {/* Botón de emergencia */}
       <div style={{ marginTop: 24, textAlign: "center" }}>
-        <button 
+        <button
           onClick={() => setStage2Phase(gameId, "hint")}
           style={{ ...styles.secondaryBtn, fontSize: 12 }}
         >

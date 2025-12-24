@@ -24,46 +24,68 @@ function normalize(s: unknown): string {
     .trim();
 }
 
+// Normaliza claves/headers: saca espacios y TODA puntuación (comas, comillas, etc.)
 function normalizeKey(k: string): string {
   return normalize(k)
     .toLowerCase()
     .replace(/\s+/g, "")
-    .replace(/[_-]+/g, "");
+    .replace(/[^a-z0-9]/g, "");
 }
 
+// Stage robusto: acepta "Stage 1", "etapa-2", "S1", etc.
 function parseStage(v: unknown): SuggestedStage | null {
-  const s = normalize(v).toLowerCase().replace(/\s+/g, "");
+  const s = normalize(v)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, ""); // quita espacios y signos
+
   if (!s) return null;
 
-  // Acepta varios formatos comunes
   if (s === "1" || s === "stage1" || s === "s1" || s === "etapa1") return 1;
   if (s === "2" || s === "stage2" || s === "s2" || s === "etapa2") return 2;
 
   return null;
 }
 
-// Detecta filas que son “encabezado repetido”
+// Detecta filas que son “encabezado repetido” (estricto, sin falsos positivos)
 function looksLikeRepeatedHeader(row: Record<string, unknown>): boolean {
-  const values = Object.values(row).map((v) => normalize(v).toLowerCase());
+  // miramos valores como tokens normalizados (no "includes")
+  const values = Object.values(row).map((v) => normalizeKey(String(v ?? "")));
   if (values.length === 0) return false;
 
-  const joined = values.join("|");
-  // Si aparece "text|hint|stage" etc, suele ser header repetido
-  const headerHints = ["id", "text", "question", "hint", "suggestedstage", "stage", "etapa"];
-  let hits = 0;
-  for (const h of headerHints) {
-    if (joined.includes(h)) hits++;
-  }
+  const headerTokens = new Set([
+    "id",
+    "qid",
+    "questionid",
+    "text",
+    "question",
+    "pregunta",
+    "hint",
+    "pista",
+    "ayuda",
+    "suggestedstage",
+    "suggested",
+    "stage",
+    "etapa",
+  ]);
+
+  const hits = values.filter((v) => headerTokens.has(v)).length;
+
+  // Estricto: debe haber al menos 2 tokens típicos de header en esa fila
   return hits >= 2;
 }
 
+// Toma un campo de una fila tolerando keys "sucias" (id, "id", ID, etc.)
 function pickField(row: Record<string, unknown>, keys: string[]): string {
+  // mapa normalizado por fila (evita buscar keys repetidamente)
+  const map: Record<string, unknown> = {};
+  for (const rk of Object.keys(row)) {
+    map[normalizeKey(rk)] = row[rk];
+  }
+
   for (const k of keys) {
-    const foundKey = Object.keys(row).find((rk) => normalizeKey(rk) === normalizeKey(k));
-    if (foundKey) {
-      const val = normalize(row[foundKey]);
-      if (val) return val;
-    }
+    const val = map[normalizeKey(k)];
+    const s = normalize(val);
+    if (s) return s;
   }
   return "";
 }
@@ -71,6 +93,7 @@ function pickField(row: Record<string, unknown>, keys: string[]): string {
 export function parseCSV(text: string): Promise<ParseResult> {
   return new Promise((resolve) => {
     const trimmed = normalize(text);
+
     if (!trimmed) {
       resolve({
         questions: [],
@@ -85,8 +108,8 @@ export function parseCSV(text: string): Promise<ParseResult> {
       header: true,
       skipEmptyLines: "greedy",
       dynamicTyping: false,
-      worker: true, 
- // limpia BOM/espacios
+      worker: true, // clave para no congelar la UI
+
       complete: (results) => {
         const errors: string[] = [];
         const warnings: string[] = [];
@@ -116,12 +139,18 @@ export function parseCSV(text: string): Promise<ParseResult> {
           const textField = pickField(row, ["text", "question", "pregunta"]);
           const hintField = pickField(row, ["hint", "ayuda", "pista"]);
           const idField = pickField(row, ["id", "qid", "questionid"]);
-          const stageFieldRaw =
-            pickField(row, ["suggestedStage", "suggested_stage", "stage", "etapa", "suggested"]);
+
+          const stageFieldRaw = pickField(row, [
+            "suggestedstage",
+            "suggested_stage",
+            "suggestedStage",
+            "stage",
+            "etapa",
+            "suggested",
+          ]);
 
           // 3) Filas vacías (o sin pregunta) afuera
           if (!textField) {
-            // si hay contenido raro, lo avisamos suave
             const anyContent = Object.values(row).some((v) => normalize(v));
             if (anyContent) warnings.push(`Fila ${rowNumber}: sin texto de pregunta (se ignoró).`);
             continue;
@@ -130,10 +159,13 @@ export function parseCSV(text: string): Promise<ParseResult> {
           // 4) Stage robusto (default 1 si no se entiende)
           const parsed = parseStage(stageFieldRaw);
           let suggestedStage: SuggestedStage = 1;
+
           if (parsed === null) {
             if (stageFieldRaw) {
               warnings.push(
-                `Fila ${rowNumber}: suggestedStage inválido (“${normalize(stageFieldRaw)}”). Se usó Stage 1.`
+                `Fila ${rowNumber}: suggestedStage inválido (“${normalize(
+                  stageFieldRaw
+                )}”). Se usó Stage 1.`
               );
             }
             suggestedStage = 1;
@@ -160,9 +192,9 @@ export function parseCSV(text: string): Promise<ParseResult> {
 
         resolve({ questions, errors, warnings, rawRowCount });
       },
+
       error: (err: unknown) => {
-        const message =
-          err instanceof Error ? err.message : "Error desconocido al leer el CSV";
+        const message = err instanceof Error ? err.message : "Error desconocido al leer el CSV";
 
         resolve({
           questions: [],
@@ -171,7 +203,6 @@ export function parseCSV(text: string): Promise<ParseResult> {
           rawRowCount: 0,
         });
       },
-
     });
   });
 }

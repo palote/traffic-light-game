@@ -4,12 +4,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { ref, onValue, update } from "firebase/database";
 import { database } from "../../firebase.config";
+import { auth } from "../../firebase.config";
+import { markGameAccess } from "../../services/metricsService";
 import { Stage2ProgressPanel } from "./Stage2ProgressPanel";
 import {
   getRoundRanking,
   getRoundWinner,
   getRoundSummary,
 } from "../../services/stage2ResultsHelpers";
+import { useAuth } from "../../hooks/useAuth";
 import type { Game, Team, Question } from "../../types/game";
 import {
   startStage2Round,
@@ -52,6 +55,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
 
   // 🆕 Toggle para mostrar/ocultar panel de progreso
   const [showProgressPanel, setShowProgressPanel] = useState(true);
+  const { logout, authRequired } = useAuth();
 
   // 1) Suscripción al juego
   useEffect(() => {
@@ -60,6 +64,15 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
       setGame(snap.val() ?? null);
     });
     return () => unsub();
+  }, [gameId]);
+  // ✅ MÉTRICA: último acceso del docente a este juego (1 sola vez por carga)
+  useEffect(() => {
+    const u = auth.currentUser;
+    if (!u?.uid) return;
+
+    markGameAccess(u.uid, gameId).catch((e) => {
+      console.warn("⚠️ metrics markGameAccess failed:", e);
+    });
   }, [gameId]);
 
   // 2) Round actual
@@ -226,28 +239,55 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
   return (
     <div style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }}>
       {/* Header */}
-      <div style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 20,
-      }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 20,
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
         <h1 style={{ margin: 0, fontSize: 28 }}>🎯 ETAPA 2 - Vista del Aula</h1>
-        <button
-          onClick={() => setShowProgressPanel(!showProgressPanel)}
-          style={{
-            padding: "8px 16px",
-            backgroundColor: showProgressPanel ? "#1976d2" : "#e0e0e0",
-            color: showProgressPanel ? "white" : "#333",
-            border: "none",
-            borderRadius: 6,
-            cursor: "pointer",
-            fontSize: 14,
-          }}
-        >
-          {showProgressPanel ? "📊 Ocultar Progreso" : "📊 Mostrar Progreso"}
-        </button>
+
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <button
+            onClick={() => setShowProgressPanel(!showProgressPanel)}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: showProgressPanel ? "#1976d2" : "#e0e0e0",
+              color: showProgressPanel ? "white" : "#333",
+              border: "none",
+              borderRadius: 6,
+              cursor: "pointer",
+              fontSize: 14,
+            }}
+          >
+            {showProgressPanel ? "📊 Ocultar Progreso" : "📊 Mostrar Progreso"}
+          </button>
+
+          {authRequired && (
+            <button
+              onClick={logout}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#ef4444",
+                color: "white",
+                border: "none",
+                borderRadius: 6,
+                cursor: "pointer",
+                fontSize: 14,
+                fontWeight: 800,
+              }}
+              title="Cerrar sesión del docente"
+            >
+              🚪 Salir
+            </button>
+          )}
+        </div>
       </div>
+
 
       {/* 🆕 PANEL DE PROGRESO DE EQUIPOS */}
       {showProgressPanel && (

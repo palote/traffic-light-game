@@ -5,6 +5,9 @@ import { ref, update } from "firebase/database";
 import { database } from "../../firebase.config";
 import type { Game, Team } from "../../types/game";
 
+// ✅ Auth (solo docente) — no toca lógica del juego
+import { useAuth } from "../../hooks/useAuth";
+
 interface Stage1ClassroomViewProps {
   game: Game;
   gameId: string;
@@ -12,6 +15,9 @@ interface Stage1ClassroomViewProps {
 
 export function Stage1ClassroomView({ game, gameId }: Stage1ClassroomViewProps) {
   const [resetting, setResetting] = useState<string | null>(null);
+
+  // ✅ Auth: logout docente (métricas cierran sesión desde AuthContext)
+  const { logout, authRequired } = useAuth();
 
   // Normalizar equipos
   const teams: Team[] = (() => {
@@ -59,28 +65,62 @@ export function Stage1ClassroomView({ game, gameId }: Stage1ClassroomViewProps) 
 
   return (
     <div style={{ padding: 40 }}>
-      <h1>📊 STAGE 1 - Vista del Aula</h1>
+      {/* Header con Logout (sin tocar lógica del juego) */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 12,
+          marginBottom: 12,
+        }}
+      >
+        <h1 style={{ margin: 0 }}>📊 STAGE 1 - Vista del Aula</h1>
 
-      <div style={{
-        marginBottom: 24,
-        padding: 16,
-        backgroundColor: "#e3f2fd",
-        borderRadius: 8,
-      }}>
+        {authRequired && (
+          <button
+            onClick={logout}
+            style={{
+              padding: "10px 16px",
+              backgroundColor: "#ef4444",
+              color: "white",
+              border: "none",
+              borderRadius: 8,
+              cursor: "pointer",
+              fontSize: 14,
+              fontWeight: 800,
+            }}
+            title="Cerrar sesión del docente"
+          >
+            🚪 Salir
+          </button>
+        )}
+      </div>
+
+      <div
+        style={{
+          marginBottom: 24,
+          padding: 16,
+          backgroundColor: "#e3f2fd",
+          borderRadius: 8,
+        }}
+      >
         <p style={{ margin: 0, fontSize: 16 }}>
           💡 <strong>Vista del profesor:</strong> Monitoreo del progreso de todos los equipos en Stage 1
         </p>
       </div>
 
       {/* Tabla de equipos */}
-      <table style={{
-        width: "100%",
-        borderCollapse: "collapse",
-        backgroundColor: "white",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        borderRadius: 8,
-        overflow: "hidden",
-      }}>
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          backgroundColor: "white",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          borderRadius: 8,
+          overflow: "hidden",
+        }}
+      >
         <thead>
           <tr style={{ backgroundColor: "#1976d2", color: "white" }}>
             <th style={{ padding: 16, textAlign: "left", fontSize: 16 }}>Equipo</th>
@@ -100,8 +140,8 @@ export function Stage1ClassroomView({ game, gameId }: Stage1ClassroomViewProps) 
             const players = Array.isArray(team.players)
               ? team.players
               : team.players && typeof team.players === "object"
-                ? Object.values(team.players)
-                : [];
+              ? Object.values(team.players)
+              : [];
 
             const totalScore = players.reduce((sum: number, p: any) => sum + (p.score ?? 0), 0);
 
@@ -114,9 +154,7 @@ export function Stage1ClassroomView({ game, gameId }: Stage1ClassroomViewProps) 
                 }}
               >
                 {/* Equipo */}
-                <td style={{ padding: 16, fontWeight: 700, fontSize: 16 }}>
-                  {team.name}
-                </td>
+                <td style={{ padding: 16, fontWeight: 700, fontSize: 16 }}>{team.name}</td>
 
                 {/* Ronda */}
                 <td style={{ padding: 16, textAlign: "center", fontSize: 16 }}>
@@ -131,25 +169,29 @@ export function Stage1ClassroomView({ game, gameId }: Stage1ClassroomViewProps) 
                 {/* Estado */}
                 <td style={{ padding: 16, textAlign: "center" }}>
                   {isCompleted ? (
-                    <span style={{
-                      padding: "6px 12px",
-                      backgroundColor: "#4caf50",
-                      color: "white",
-                      borderRadius: 4,
-                      fontSize: 14,
-                      fontWeight: 700,
-                    }}>
+                    <span
+                      style={{
+                        padding: "6px 12px",
+                        backgroundColor: "#4caf50",
+                        color: "white",
+                        borderRadius: 4,
+                        fontSize: 14,
+                        fontWeight: 700,
+                      }}
+                    >
                       ✅ Completado
                     </span>
                   ) : (
-                    <span style={{
-                      padding: "6px 12px",
-                      backgroundColor: "#2196f3",
-                      color: "white",
-                      borderRadius: 4,
-                      fontSize: 14,
-                      fontWeight: 700,
-                    }}>
+                    <span
+                      style={{
+                        padding: "6px 12px",
+                        backgroundColor: "#2196f3",
+                        color: "white",
+                        borderRadius: 4,
+                        fontSize: 14,
+                        fontWeight: 700,
+                      }}
+                    >
                       🏃 En progreso
                     </span>
                   )}
@@ -181,16 +223,16 @@ export function Stage1ClassroomView({ game, gameId }: Stage1ClassroomViewProps) 
       </table>
 
       {teams.length === 0 && (
-        <div style={{
-          padding: 40,
-          textAlign: "center",
-          backgroundColor: "#fff3cd",
-          borderRadius: 8,
-          marginTop: 24,
-        }}>
-          <p style={{ margin: 0, fontSize: 16 }}>
-            ⚠️ No hay equipos creados todavía
-          </p>
+        <div
+          style={{
+            padding: 40,
+            textAlign: "center",
+            backgroundColor: "#fff3cd",
+            borderRadius: 8,
+            marginTop: 24,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 16 }}>⚠️ No hay equipos creados todavía</p>
         </div>
       )}
     </div>

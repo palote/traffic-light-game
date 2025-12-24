@@ -1,9 +1,9 @@
 // src/firebase.config.ts
-
 import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
+import { getAuth } from "firebase/auth";
 
-// Tu configuración real de Firebase:
+// Config Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyC8YgUCS8A6FeHXPocKIQCKzrl1zzMkGB4",
   authDomain: "traffic-ligths-game.firebaseapp.com",
@@ -15,8 +15,7 @@ const firebaseConfig = {
   measurementId: "G-73PXXPXK71",
 };
 
-// Inicializamos Firebase
 const app = initializeApp(firebaseConfig);
 
-// Exportamos la base de datos en tiempo real (Realtime Database)
 export const database = getDatabase(app);
+export const auth = getAuth(app);
