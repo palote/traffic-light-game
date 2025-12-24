@@ -1,6 +1,7 @@
 // src/components/SetupScreen.tsx
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import "./SetupScreen.css";
 
 import type {
@@ -45,6 +46,9 @@ interface SetupScreenProps {
 }
 
 export function SetupScreen({ onGameCreated }: SetupScreenProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   // Estado del formulario
   const [level] = useState<GameLevel>('primary'); // ← Fijo, no se cambia
   const [ratingMode] = useState<'devices' | 'physical-cards'>('devices'); // ← Fijo
@@ -79,6 +83,74 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [roomCode, setRoomCode] = useState('');
   const [createdGameId, setCreatedGameId] = useState<string>('');
+
+  // ✅ NUEVO: Estado para CSV de biblioteca
+  const [libraryCSVLoaded, setLibraryCSVLoaded] = useState(false);
+  const [libraryCSVTitle, setLibraryCSVTitle] = useState<string | null>(null);
+
+  // ✅ NUEVO: Detectar si viene de la biblioteca
+  useEffect(() => {
+    const fromLibrary = location.state?.fromLibrary;
+    
+    if (fromLibrary) {
+      const csvContent = sessionStorage.getItem('library_csv_content');
+      const csvFilename = sessionStorage.getItem('library_csv_filename');
+      const csvTitle = sessionStorage.getItem('library_csv_title');
+      const csvSubject = sessionStorage.getItem('library_csv_subject');
+      
+      if (csvContent && csvFilename) {
+        // Auto-rellenar materia si viene de biblioteca
+        if (csvSubject && !subject) {
+          setSubject(csvSubject);
+        }
+        
+        setLibraryCSVTitle(csvTitle || csvFilename);
+        
+        // Ir directamente al Step 2 y abrir el preview
+        setCurrentStep(2);
+        
+        // Parsear el CSV automáticamente
+        processLibraryCSV(csvContent, csvFilename);
+        
+        // Limpiar sessionStorage
+        sessionStorage.removeItem('library_csv_content');
+        sessionStorage.removeItem('library_csv_filename');
+        sessionStorage.removeItem('library_csv_title');
+        sessionStorage.removeItem('library_csv_subject');
+        sessionStorage.removeItem('library_csv_grade');
+      }
+      
+      // Limpiar el state de navegación
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
+  // ✅ NUEVO: Procesar CSV de biblioteca
+  const processLibraryCSV = async (content: string, filename: string) => {
+    setIsParsing(true);
+    setCsvError(null);
+
+    try {
+      const result = await parseCSV(content);
+      setParseResult(result);
+      setShowPreview(true);
+      setLibraryCSVLoaded(true);
+      
+      // Crear un File object para mantener consistencia
+      const blob = new Blob([content], { type: "text/csv" });
+      const file = new File([blob], filename, { type: "text/csv" });
+      setCsvFile(file);
+      
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Error inesperado al parsear CSV";
+      setParseResult(null);
+      setShowPreview(false);
+      setCsvError(message);
+    } finally {
+      setIsParsing(false);
+    }
+  };
 
   // -----------------------------
   // ✅ Parsing de nombres + duplicados
@@ -150,6 +222,9 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         uniqueStudents: 'Únicos:',
         duplicates: 'Duplicados:',
         duplicatesNote: 'Se ignoran duplicados al armar los equipos.',
+        chooseFromLibrary: 'Elegir de la biblioteca',
+        orUploadFile: 'O subir archivo propio:',
+        loadedFromLibrary: 'Cargado desde biblioteca:',
       }
       : {
         title: 'Setup New Game',
@@ -183,6 +258,9 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         uniqueStudents: 'Unique:',
         duplicates: 'Duplicates:',
         duplicatesNote: 'Duplicates are ignored when building teams.',
+        chooseFromLibrary: 'Choose from library',
+        orUploadFile: 'Or upload your own file:',
+        loadedFromLibrary: 'Loaded from library:',
       };
 
   const handleCSVUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -190,6 +268,8 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
     if (!file) return;
 
     setCsvFile(file);
+    setLibraryCSVLoaded(false);
+    setLibraryCSVTitle(null);
 
     const reader = new FileReader();
 
@@ -457,6 +537,53 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         <div className="step-content">
           <h2>{t.step2}</h2>
 
+          {/* ✅ NUEVO: Botón para elegir de biblioteca */}
+          <div className="form-group" style={{ marginBottom: 24 }}>
+            <button
+              className="btn-library"
+              onClick={() => navigate('/library')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                width: '100%',
+                padding: '14px 20px',
+                fontSize: 15,
+                fontWeight: 600,
+                borderRadius: 10,
+                border: '2px solid #8b5cf6',
+                background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+                color: '#7c3aed',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
+                e.currentTarget.style.color = 'white';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)';
+                e.currentTarget.style.color = '#7c3aed';
+              }}
+            >
+              📚 {t.chooseFromLibrary}
+            </button>
+          </div>
+
+          {/* Divider */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 16,
+            margin: '20px 0',
+            color: '#94a3b8',
+          }}>
+            <div style={{ flex: 1, height: 1, backgroundColor: '#e2e8f0' }} />
+            <span style={{ fontSize: 13, fontWeight: 500 }}>{t.orUploadFile}</span>
+            <div style={{ flex: 1, height: 1, backgroundColor: '#e2e8f0' }} />
+          </div>
+
           <div className="form-group">
             <label>{t.uploadCSV}</label>
             <input type="file" accept=".csv" onChange={handleCSVUpload} />
@@ -466,6 +593,30 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
           {csvError && (
             <div style={{ marginTop: 10, color: "#c0392b" }}>
               <strong>Error CSV:</strong> {csvError}
+            </div>
+          )}
+
+          {/* ✅ NUEVO: Indicador de CSV de biblioteca */}
+          {libraryCSVLoaded && libraryCSVTitle && (
+            <div style={{
+              marginTop: 12,
+              padding: '12px 16px',
+              backgroundColor: '#f5f3ff',
+              borderRadius: 10,
+              border: '2px solid #8b5cf6',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+            }}>
+              <span style={{ fontSize: 20 }}>📚</span>
+              <div>
+                <div style={{ fontSize: 12, color: '#7c3aed', fontWeight: 600 }}>
+                  {t.loadedFromLibrary}
+                </div>
+                <div style={{ fontSize: 14, color: '#1e293b', fontWeight: 500 }}>
+                  {libraryCSVTitle}
+                </div>
+              </div>
             </div>
           )}
 
@@ -630,7 +781,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
               suggestedStage: q.suggestedStage,
             }));
 
-            setQuestions(converted);     // ✅ ahora sí “acepta” el CSV
+            setQuestions(converted);     // ✅ ahora sí "acepta" el CSV
             setShowPreview(false);       // ✅ cierra el modal
             setParseResult(null);        // limpia
           }}

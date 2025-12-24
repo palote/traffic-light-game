@@ -9,6 +9,12 @@ import { GameController } from "./components/GameController";
 import { SoundToggle } from "./components/SoundToggle";
 import { AdminRoute } from "./components/admin/AdminRoute";
 import { AdminMetricsPage } from "./pages/admin/AdminMetricsPage";
+import { AdminLibraryUploadPage } from "./pages/admin/AdminLibraryUploadPage"; // ✅ NUEVO
+
+// ✅ PÁGINAS
+import { DashboardPage } from "./pages/DashboardPage";
+import { AboutPage } from "./pages/AboutPage";
+import { LibraryPage } from "./pages/LibraryPage"; // ✅ NUEVO
 
 import "./App.css";
 
@@ -221,6 +227,36 @@ function App() {
           {/* ✅ Login */}
           <Route path="/login" element={<LoginPage />} />
 
+          {/* ✅ DASHBOARD (nueva home protegida) */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ✅ ABOUT / FAQ (protegido) */}
+          <Route
+            path="/about"
+            element={
+              <ProtectedRoute>
+                <AboutPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ✅ BIBLIOTECA (NUEVO - página real) */}
+          <Route
+            path="/library"
+            element={
+              <ProtectedRoute>
+                <LibraryPage />
+              </ProtectedRoute>
+            }
+          />
+
           {/* ✅ ADMIN: métricas (solo admin) */}
           <Route
             path="/admin/metrics"
@@ -231,7 +267,17 @@ function App() {
             }
           />
 
-          {/* ✅ DOCENTE (protegido) */}
+          {/* ✅ ADMIN: subir CSVs a biblioteca (solo admin) */}
+          <Route
+            path="/admin/library/upload"
+            element={
+              <AdminRoute>
+                <AdminLibraryUploadPage />
+              </AdminRoute>
+            }
+          />
+
+          {/* ✅ DOCENTE: Setup (protegido) */}
           <Route
             path="/setup"
             element={
@@ -265,11 +311,8 @@ function App() {
           <Route path="/team/:gameId/:teamId" element={<TeamRouteWrapper />} />
           <Route path="/stage2/team/:gameId/:teamId" element={<TeamRouteWrapper />} />
 
-          {/* ✅ Root: manda a /setup */}
-          <Route path="/" element={<Navigate to="/setup" replace />} />
-
-          {/* ✅ Fallback */}
-          <Route path="*" element={<Navigate to="/setup" replace />} />
+          {/* ✅ Fallback: manda a dashboard */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
