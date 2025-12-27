@@ -4,7 +4,15 @@
 import { ref, get, set, push, remove, query, orderByChild } from "firebase/database";
 import { ref as storageRef, uploadString, getBlob, deleteObject } from "firebase/storage";
 import { database, storage } from "../firebase.config";
-import type { CSVLibraryItem, NewCSVLibraryItem, Grade, Subject } from "../types/library";
+import type { 
+  CSVLibraryItem, 
+  NewCSVLibraryItem, 
+  PrimaryGrade, 
+  Area, 
+  Subject,
+  LibraryLanguage,
+  LibraryGameMode 
+} from "../types/library";
 
 const LIBRARY_PATH = "csvLibrary";
 
@@ -27,23 +35,29 @@ export async function getAllLibraryItems(): Promise<CSVLibraryItem[]> {
     });
   });
 
-  // Ordenar por fecha descendente (más recientes primero)
   return items.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 /**
- * Obtener items filtrados por grado y/o materia
+ * Obtener items filtrados
  */
-export async function getFilteredLibraryItems(
-  grade?: Grade | 'all',
-  subject?: Subject | 'all'
-): Promise<CSVLibraryItem[]> {
+export async function getFilteredLibraryItems(filters: {
+  gameMode?: LibraryGameMode | 'all';
+  grade?: PrimaryGrade | 'all';
+  area?: Area | 'all';
+  subject?: Subject | 'all';
+  language?: LibraryLanguage | 'all';
+}): Promise<CSVLibraryItem[]> {
   const allItems = await getAllLibraryItems();
   
   return allItems.filter((item) => {
-    const gradeMatch = !grade || grade === 'all' || item.grade === grade;
-    const subjectMatch = !subject || subject === 'all' || item.subject === subject;
-    return gradeMatch && subjectMatch;
+    const gameModeMatch = !filters.gameMode || filters.gameMode === 'all' || item.gameMode === filters.gameMode;
+    const gradeMatch = !filters.grade || filters.grade === 'all' || item.grade === filters.grade;
+    const areaMatch = !filters.area || filters.area === 'all' || item.area === filters.area;
+    const subjectMatch = !filters.subject || filters.subject === 'all' || item.subject === filters.subject;
+    const langMatch = !filters.language || filters.language === 'all' || item.language === filters.language;
+    
+    return gameModeMatch && gradeMatch && areaMatch && subjectMatch && langMatch;
   });
 }
 
@@ -65,97 +79,172 @@ export async function getLibraryItemById(itemId: string): Promise<CSVLibraryItem
 }
 
 /**
- * ✅ Descargar el contenido CSV de un item usando getBlob (evita CORS)
+ * Descargar CSV usando getBlob (evita CORS)
  */
 export async function downloadCSVContent(storagePath: string): Promise<string> {
+  if (!storagePath) {
+    throw new Error("No hay archivo CSV vinculado");
+  }
   const fileRef = storageRef(storage, storagePath);
-  
-  // ✅ Usar getBlob en lugar de getDownloadURL + fetch
-  // Esto evita el problema de CORS porque el SDK maneja la descarga internamente
   const blob = await getBlob(fileRef);
-  
-  // Convertir Blob a texto
-  const text = await blob.text();
-  return text;
+  return await blob.text();
 }
 
 /**
- * Crear un File object desde el contenido descargado
- * (para simular un archivo subido y usar con CSVPreview)
+ * Crear File object desde contenido descargado
  */
 export async function getCSVAsFile(item: CSVLibraryItem): Promise<File> {
   const content = await downloadCSVContent(item.storagePath);
   const blob = new Blob([content], { type: "text/csv" });
-  const fileName = `${item.title.replace(/\s+/g, "_")}.csv`;
+  const fileName = item.fileName || `${item.title.replace(/\s+/g, "_")}.csv`;
   return new File([blob], fileName, { type: "text/csv" });
 }
 
 // ============================================
-// FUNCIONES ADMIN (para subir nuevos CSVs)
+// FUNCIONES ADMIN
 // ============================================
 
 /**
- * Subir un nuevo CSV a la biblioteca
+ * Subir nuevo CSV a biblioteca
  */
 export async function uploadLibraryItem(
   item: NewCSVLibraryItem,
-  csvContent: string
+  csvContent: string,
+  sourceTextContent?: string
 ): Promise<string> {
-  // 1. Subir archivo a Storage
-  const fileName = `${Date.now()}_${item.title.replace(/\s+/g, "_")}.csv`;
-  const filePath = `csv-library/${item.grade}/${item.subject}/${fileName}`;
-  const fileRef = storageRef(storage, filePath);
+  const timestamp = Date.now();
+  const safeTitle = (item.title || 'untitled').replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_-]/g, "");
   
-  await uploadString(fileRef, csvContent, "raw", {
-    contentType: "text/csv",
-  });
+  // Determinar carpeta según gameMode
+  const folder = item.gameMode === 'coopetition' ? 'coopetition' : 'traffic-light';
+  const subFolder = item.grade || item.level || 'general';
+  
+  // Subir CSV
+  const csvFileName = `${timestamp}_${safeTitle}.csv`;
+  const csvPath = `csv-library/${folder}/${subFolder}/${item.area}/${csvFileName}`;
+  const csvRef = storageRef(storage, csvPath);
+  
+  await uploadString(csvRef, csvContent, "raw", { contentType: "text/csv" });
 
-  // 2. Crear metadata en Realtime DB
+  // Subir texto fuente si existe
+  let sourceTextPath: string | undefined;
+  if (sourceTextContent) {
+    const txtFileName = `${timestamp}_${safeTitle}_source.txt`;
+    const txtPath = `csv-library/${folder}/${subFolder}/${item.area}/${txtFileName}`;
+    const txtRef = storageRef(storage, txtPath);
+    await uploadString(txtRef, sourceTextContent, "raw", { contentType: "text/plain" });
+    sourceTextPath = txtPath;
+  }
+
+  // Crear metadata en DB
   const libraryRef = ref(database, LIBRARY_PATH);
   const newItemRef = push(libraryRef);
   
   const now = Date.now();
-  const itemData: Omit<CSVLibraryItem, "id"> = {
-    ...item,
-    storagePath: filePath,
+  
+  // Limpiar item de valores undefined
+  const cleanItem: Record<string, any> = {};
+  Object.entries(item).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      cleanItem[key] = value;
+    }
+  });
+  
+  const itemData = {
+    ...cleanItem,
+    storagePath: csvPath,
+    ...(sourceTextPath ? { sourceTextPath } : {}),
     createdAt: now,
     updatedAt: now,
   };
 
   await set(newItemRef, itemData);
-  
   return newItemRef.key!;
 }
 
 /**
- * Eliminar un item de la biblioteca
+ * Subir solo metadata (para bulk upload)
+ */
+export async function uploadLibraryMetadataOnly(
+  item: NewCSVLibraryItem
+): Promise<string> {
+  const libraryRef = ref(database, LIBRARY_PATH);
+  const newItemRef = push(libraryRef);
+  
+  const now = Date.now();
+  
+  // Limpiar item de valores undefined
+  const cleanItem: Record<string, any> = {};
+  Object.entries(item).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      cleanItem[key] = value;
+    }
+  });
+  
+  const itemData = {
+    ...cleanItem,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await set(newItemRef, itemData);
+  return newItemRef.key!;
+}
+
+/**
+ * Bulk upload de metadata
+ */
+export async function bulkUploadMetadata(
+  items: NewCSVLibraryItem[]
+): Promise<string[]> {
+  const ids: string[] = [];
+  for (const item of items) {
+    const id = await uploadLibraryMetadataOnly(item);
+    ids.push(id);
+  }
+  return ids;
+}
+
+/**
+ * Eliminar item de biblioteca
  */
 export async function deleteLibraryItem(itemId: string): Promise<void> {
-  // 1. Obtener el item para saber el storagePath
   const item = await getLibraryItemById(itemId);
   if (!item) {
     throw new Error("Item no encontrado");
   }
 
-  // 2. Eliminar archivo de Storage
-  try {
-    const fileRef = storageRef(storage, item.storagePath);
-    await deleteObject(fileRef);
-  } catch (e) {
-    console.warn("No se pudo eliminar archivo de Storage:", e);
+  // Eliminar CSV
+  if (item.storagePath) {
+    try {
+      const fileRef = storageRef(storage, item.storagePath);
+      await deleteObject(fileRef);
+    } catch (e) {
+      console.warn("No se pudo eliminar CSV:", e);
+    }
   }
 
-  // 3. Eliminar metadata de Realtime DB
+  // Eliminar texto fuente
+  if (item.sourceTextPath) {
+    try {
+      const txtRef = storageRef(storage, item.sourceTextPath);
+      await deleteObject(txtRef);
+    } catch (e) {
+      console.warn("No se pudo eliminar texto fuente:", e);
+    }
+  }
+
+  // Eliminar metadata
   const itemRef = ref(database, `${LIBRARY_PATH}/${itemId}`);
   await remove(itemRef);
 }
 
 /**
- * Actualizar metadata de un item (sin cambiar el archivo)
+ * Actualizar metadata de un item
  */
 export async function updateLibraryItemMetadata(
   itemId: string,
-  updates: Partial<Pick<CSVLibraryItem, "title" | "content" | "grade" | "subject">>
+  updates: Partial<Omit<CSVLibraryItem, 'id' | 'createdAt' | 'updatedAt'>>
 ): Promise<void> {
   const itemRef = ref(database, `${LIBRARY_PATH}/${itemId}`);
   const snapshot = await get(itemRef);
@@ -165,9 +254,45 @@ export async function updateLibraryItemMetadata(
   }
 
   const currentData = snapshot.val();
+  
+  // Limpiar updates de valores undefined
+  const cleanUpdates: Record<string, any> = {};
+  Object.entries(updates).forEach(([key, value]) => {
+    if (value !== undefined) {
+      cleanUpdates[key] = value;
+    }
+  });
+  
   await set(itemRef, {
     ...currentData,
-    ...updates,
+    ...cleanUpdates,
     updatedAt: Date.now(),
   });
+}
+
+/**
+ * Vincular archivo CSV a un item existente
+ */
+export async function linkCSVFile(
+  itemId: string,
+  csvContent: string
+): Promise<void> {
+  const item = await getLibraryItemById(itemId);
+  if (!item) {
+    throw new Error("Item no encontrado");
+  }
+  
+  const timestamp = Date.now();
+  const safeTitle = (item.title || 'untitled').replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_-]/g, "");
+  
+  const folder = item.gameMode === 'coopetition' ? 'coopetition' : 'traffic-light';
+  const subFolder = item.grade || item.level || 'general';
+  
+  const csvFileName = `${timestamp}_${safeTitle}.csv`;
+  const csvPath = `csv-library/${folder}/${subFolder}/${item.area}/${csvFileName}`;
+  const csvRef = storageRef(storage, csvPath);
+  
+  await uploadString(csvRef, csvContent, "raw", { contentType: "text/csv" });
+  
+  await updateLibraryItemMetadata(itemId, { storagePath: csvPath });
 }

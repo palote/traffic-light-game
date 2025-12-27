@@ -9,22 +9,24 @@ import { GameController } from "./components/GameController";
 import { SoundToggle } from "./components/SoundToggle";
 import { AdminRoute } from "./components/admin/AdminRoute";
 import { AdminMetricsPage } from "./pages/admin/AdminMetricsPage";
-import { AdminLibraryUploadPage } from "./pages/admin/AdminLibraryUploadPage"; // ✅ NUEVO
+import { AdminLibraryUploadPage } from "./pages/admin/AdminLibraryUploadPage";
+import { AdminBulkUploadPage } from "./pages/admin/AdminBulkUploadPage"; // ✅ NUEVO
 
 // ✅ PÁGINAS
 import { DashboardPage } from "./pages/DashboardPage";
 import { AboutPage } from "./pages/AboutPage";
-import { LibraryPage } from "./pages/LibraryPage"; // ✅ NUEVO
+import { LibraryPage } from "./pages/LibraryPage";
 
 import "./App.css";
 
-// ✅ AUTH + ROUTER
+// ✅ AUTH + ROUTER + GAME MODE
 import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import { GameModeProvider } from "./contexts/GameModeContext"; // ✅ NUEVO
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
 
-// Placeholders para ClassroomView (reemplazar con los reales)
+// Placeholders para ClassroomView
 function ClassroomRouteWrapper() {
   const { gameId } = useParams();
   return (
@@ -222,99 +224,111 @@ function TeacherAppLegacy() {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* ✅ Login */}
-          <Route path="/login" element={<LoginPage />} />
+      <GameModeProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Login */}
+            <Route path="/login" element={<LoginPage />} />
 
-          {/* ✅ DASHBOARD (nueva home protegida) */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
-          />
+            {/* DASHBOARD */}
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* ✅ ABOUT / FAQ (protegido) */}
-          <Route
-            path="/about"
-            element={
-              <ProtectedRoute>
-                <AboutPage />
-              </ProtectedRoute>
-            }
-          />
+            {/* ABOUT / FAQ */}
+            <Route
+              path="/about"
+              element={
+                <ProtectedRoute>
+                  <AboutPage />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* ✅ BIBLIOTECA (NUEVO - página real) */}
-          <Route
-            path="/library"
-            element={
-              <ProtectedRoute>
-                <LibraryPage />
-              </ProtectedRoute>
-            }
-          />
+            {/* BIBLIOTECA */}
+            <Route
+              path="/library"
+              element={
+                <ProtectedRoute>
+                  <LibraryPage />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* ✅ ADMIN: métricas (solo admin) */}
-          <Route
-            path="/admin/metrics"
-            element={
-              <AdminRoute>
-                <AdminMetricsPage />
-              </AdminRoute>
-            }
-          />
+            {/* ADMIN: métricas */}
+            <Route
+              path="/admin/metrics"
+              element={
+                <AdminRoute>
+                  <AdminMetricsPage />
+                </AdminRoute>
+              }
+            />
 
-          {/* ✅ ADMIN: subir CSVs a biblioteca (solo admin) */}
-          <Route
-            path="/admin/library/upload"
-            element={
-              <AdminRoute>
-                <AdminLibraryUploadPage />
-              </AdminRoute>
-            }
-          />
+            {/* ADMIN: subir CSVs */}
+            <Route
+              path="/admin/library/upload"
+              element={
+                <AdminRoute>
+                  <AdminLibraryUploadPage />
+                </AdminRoute>
+              }
+            />
 
-          {/* ✅ DOCENTE: Setup (protegido) */}
-          <Route
-            path="/setup"
-            element={
-              <ProtectedRoute>
-                <TeacherAppLegacy />
-              </ProtectedRoute>
-            }
-          />
+            {/* ✅ ADMIN: bulk upload */}
+            <Route
+              path="/admin/library/bulk"
+              element={
+                <AdminRoute>
+                  <AdminBulkUploadPage />
+                </AdminRoute>
+              }
+            />
 
-          {/* ✅ DOCENTE: Classroom (protegido) */}
-          <Route
-            path="/classroom/:gameId"
-            element={
-              <ProtectedRoute>
-                <ClassroomRouteWrapper />
-              </ProtectedRoute>
-            }
-          />
+            {/* DOCENTE: Setup */}
+            <Route
+              path="/setup"
+              element={
+                <ProtectedRoute>
+                  <TeacherAppLegacy />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* ✅ DOCENTE: Stage 2 Classroom (protegido) */}
-          <Route
-            path="/stage2/classroom/:gameId"
-            element={
-              <ProtectedRoute>
-                <Stage2ClassroomRouteWrapper />
-              </ProtectedRoute>
-            }
-          />
+            {/* DOCENTE: Classroom */}
+            <Route
+              path="/classroom/:gameId"
+              element={
+                <ProtectedRoute>
+                  <ClassroomRouteWrapper />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* ✅ ALUMNOS / EQUIPOS: SIN LOGIN */}
-          <Route path="/team/:gameId/:teamId" element={<TeamRouteWrapper />} />
-          <Route path="/stage2/team/:gameId/:teamId" element={<TeamRouteWrapper />} />
+            {/* DOCENTE: Stage 2 Classroom */}
+            <Route
+              path="/stage2/classroom/:gameId"
+              element={
+                <ProtectedRoute>
+                  <Stage2ClassroomRouteWrapper />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* ✅ Fallback: manda a dashboard */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+            {/* ALUMNOS / EQUIPOS: SIN LOGIN */}
+            <Route path="/team/:gameId/:teamId" element={<TeamRouteWrapper />} />
+            <Route path="/stage2/team/:gameId/:teamId" element={<TeamRouteWrapper />} />
+
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </GameModeProvider>
     </AuthProvider>
   );
 }

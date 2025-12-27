@@ -8,15 +8,19 @@ export type GameLevel = "primary" | "secondary";
 export type Language = "en" | "es";
 export type RatingColor = "green" | "yellow" | "red";
 
+// ✅ NUEVO: Modo de juego
+export type GameMode = "traffic-light" | "coopetition";
+
 export interface GameStatus {
   status:
   | "setup"
+  | "stage0"        // ✅ NUEVO: Etapa de preparación
   | "stage1"
   | "stage1-complete"
   | "transition"
   | "stage2"
   | "finished";
-  currentStage: 1 | 2;
+  currentStage: 0 | 1 | 2;  // ✅ MODIFICADO: incluye 0
   currentRound: number;
   currentQuestionIndex: number;
   updatedAt: number;
@@ -101,6 +105,22 @@ export interface Round {
 }
 
 // ============================================
+// STAGE 0 CONFIG (NUEVO)
+// ============================================
+
+export interface Stage0Config {
+  enabled: boolean;
+  material?: {
+    type: 'text' | 'link' | 'file';
+    content: string;              // texto, URL, o path en Storage
+    title?: string;               // título opcional del material
+  };
+  // Para v1.1:
+  // timerMinutes?: number;
+  // maxQuestionsPerTeam?: number;
+}
+
+// ============================================
 // CONFIGURACIÓN DEL JUEGO
 // ============================================
 
@@ -108,6 +128,9 @@ export interface GameConfig {
   id: string;
   level: GameLevel;
   language: Language;
+  
+  // ✅ NUEVO: Modo de juego
+  gameMode: GameMode;
 
   className: string;
   subject: string;
@@ -118,6 +141,9 @@ export interface GameConfig {
   csvFileName?: string;
 
   ratingMode: "devices" | "physical-cards";
+
+  // ✅ NUEVO: Configuración Stage 0
+  stage0Config?: Stage0Config;
 
   timers: {
     stage1Rating: number;
@@ -134,7 +160,6 @@ export interface GameConfig {
 // STAGE 2 CONFIG + TYPES (DEFINITIVO)
 // ============================================
 
-// 🆕 CALIFICACIÓN SIMULTÁNEA - Fases simplificadas
 export type Stage2Phase =
   | "hint"
   | "designated"
@@ -144,20 +169,16 @@ export type Stage2Phase =
   | "rating"
   | "rating_reveal"
   | "justification"
-  | "validation_response"    // ← AGREGAR
-  | "validation_ratings"     // ← AGREGAR
+  | "validation_response"
+  | "validation_ratings"
   | "validation"
   | "results";
 
 export interface Stage2Config {
-  hintDuration: number; // default 60
-  helpDuration: number; // default 60
-  ratingDuration: number; // default 120 (🆕)
+  hintDuration: number;
+  helpDuration: number;
+  ratingDuration: number;
 }
-
-// ================================
-// RESPOND
-// ================================
 
 export interface Stage2RespondingTeam {
   teamId: string;
@@ -168,15 +189,10 @@ export interface Stage2RespondingTeam {
   helpStartedAt: number | null;
   helpDuration: number;
 
-  // 🆕 para pausa/reanudar (docente)
   helpRemainingSec: number | null;
 
   responseGiven: boolean;
 }
-
-// ================================
-// CALIFICA (🆕 SIMPLIFICADO)
-// ================================
 
 export interface Stage2RatingTeam {
   teamId: string;
@@ -185,18 +201,11 @@ export interface Stage2RatingTeam {
   playerId: string;
   playerName: string;
 
-  // ❌ ELIMINADO: order, helpRequested, helpStartedAt, helpDuration
-
-  // ✅ Solo lo esencial para calificación simultánea:
   rating: RatingColor | null;
-  ratedAt: number | null;     // 🆕 Timestamp cuando calificó
+  ratedAt: number | null;
   justification: string | null;
   validated: boolean | null;
 }
-
-// ================================
-// RONDA STAGE 2 (🆕 CALIFICACIÓN SIMULTÁNEA)
-// ================================
 
 export interface Stage2Round {
   roundNumber: number;
@@ -218,7 +227,7 @@ export interface Stage2Round {
   justificationOrder?: string[];
   currentJustificationIndex?: number;
 
-  responseValidated?: boolean | null;  // ← AGREGAR ESTA LÍNEA
+  responseValidated?: boolean | null;
 
   pointsAwarded: Record<string, number>;
 
@@ -232,9 +241,6 @@ export interface Stage2Round {
     };
   };
 }
-// ================================
-// ESTADO STAGE 2
-// ================================
 
 export interface Stage2State {
   currentRound: number;
@@ -243,45 +249,26 @@ export interface Stage2State {
 }
 
 // ============================================
-// GAME (EXPORT FALTANTE - FIX PRINCIPAL)
+// GAME
 // ============================================
 
 export interface Game {
   id: string;
 
-  // ============================
-  // CONFIGURACIÓN Y ESTADO
-  // ============================
   config: GameConfig;
   status: GameStatus;
 
-  // ============================
-  // DATOS PRINCIPALES (RTDB)
-  // ============================
-  // Usamos Collection<> para soportar array u objeto en Realtime DB
   teams: Collection<Team>;
   questions: Collection<Question>;
   rounds: Collection<Round>;
 
-  // ============================
-  // STAGE 1
-  // ============================
   stage1Rounds?: Record<number, Round>;
 
-  // ============================
-  // STAGE 2
-  // ============================
   stage2Config?: Stage2Config;
   stage2?: Stage2State;
 
-  // ============================
-  // FLAGS DE TRANSICIÓN
-  // ============================
   stage0BonusApplied?: boolean;
 
-  // ============================
-  // METADATA
-  // ============================
   createdAt: number;
   updatedAt: number;
 }
