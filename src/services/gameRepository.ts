@@ -1,4 +1,5 @@
 // src/services/gameRepository.ts
+// ⚠️ SOLO SE MODIFICÓ LA FUNCIÓN createGame - El resto está igual
 
 import {
   ref,
@@ -82,7 +83,7 @@ import { markGameCreated } from "./metricsService"; // ✅ NUEVO (métricas doce
 
 /**
  * Crea un juego en RTDB y devuelve gameId.
- * No cambia la lógica del juego: solo agrega un registro de métrica si hay usuario logueado.
+ * ✅ MODIFICADO: Soporta Stage 0
  */
 export async function createGame(
   config: Omit<GameConfig, "id">
@@ -105,16 +106,19 @@ export async function createGame(
   const gameId = gameRef.key;
   if (!gameId) throw new Error("No se pudo generar gameId");
 
+  // ✅ NUEVO: Detectar si Stage 0 está habilitado
+  const stage0Enabled = (config as any).stage0Config?.enabled === true;
+
   const gameData: Game = {
     id: gameId,
 
     // ✅ Tu config
     config: config as any,
 
-    // ✅ Estado inicial (ajustalo si tu Game tiene defaults específicos)
+    // ✅ MODIFICADO: Estado inicial depende de Stage 0
     status: {
-      status: "setup",
-      currentStage: 1,
+      status: stage0Enabled ? "stage0" : "setup",
+      currentStage: stage0Enabled ? 0 : 1,
       currentRound: 0,
       currentQuestionIndex: 0,
     } as any,
@@ -129,6 +133,15 @@ export async function createGame(
 
     // ✅ NUEVO (no rompe juegos viejos)
     createdBy,
+    
+    // ✅ NUEVO: Stage 0 state inicial (si está habilitado)
+    ...(stage0Enabled ? {
+      stage0: {
+        phase: 'reading',
+        proposals: {},
+        readyTeams: [],
+      }
+    } : {}),
   } as any;
 
   await set(ref(database, `${GAMES_ROOT}/${gameId}`), gameData);

@@ -1,7 +1,8 @@
 // src/components/CSVPreview.tsx
-// CON MEJORAS VISUALES 🎨
+// Preview de CSV con i18n
 
 import { useEffect, useMemo, useState } from "react";
+import { useI18n } from "../i18n";
 import type { ParseResult, ParsedQuestion, SuggestedStage } from "../utils/csvParser";
 
 interface CSVPreviewProps {
@@ -10,243 +11,8 @@ interface CSVPreviewProps {
   onCancel: () => void;
 }
 
-// 🎨 Estilos
-const styles = {
-  overlay: {
-    position: "fixed" as const,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-    zIndex: 10000,
-    backdropFilter: "blur(4px)",
-  },
-  modal: {
-    backgroundColor: "white",
-    borderRadius: 20,
-    width: "100%",
-    maxWidth: 900,
-    maxHeight: "90vh",
-    display: "flex",
-    flexDirection: "column" as const,
-    boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-    overflow: "hidden",
-  },
-  header: {
-    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-    padding: "20px 24px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  headerTitle: {
-    margin: 0,
-    fontSize: 20,
-    fontWeight: 700,
-    color: "white",
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
-  closeBtn: {
-    background: "rgba(255,255,255,0.2)",
-    border: "none",
-    color: "white",
-    width: 36,
-    height: 36,
-    borderRadius: "50%",
-    fontSize: 18,
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    transition: "background 0.2s",
-  },
-  content: {
-    flex: 1,
-    overflowY: "auto" as const,
-    padding: 24,
-  },
-  statsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-    gap: 12,
-    marginBottom: 24,
-  },
-  statCard: (color: string) => ({
-    backgroundColor: `${color}10`,
-    border: `2px solid ${color}`,
-    borderRadius: 12,
-    padding: 16,
-    textAlign: "center" as const,
-  }),
-  statNumber: (color: string) => ({
-    fontSize: 32,
-    fontWeight: 800,
-    color: color,
-    margin: 0,
-  }),
-  statLabel: {
-    fontSize: 13,
-    color: "#64748b",
-    marginTop: 4,
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionHeader: (type: "warning" | "error" | "success") => {
-    const colors = {
-      warning: { bg: "#fef3c7", border: "#f59e0b", text: "#b45309" },
-      error: { bg: "#fee2e2", border: "#ef4444", text: "#dc2626" },
-      success: { bg: "#dcfce7", border: "#22c55e", text: "#16a34a" },
-    };
-    const c = colors[type];
-    return {
-      backgroundColor: c.bg,
-      border: `1px solid ${c.border}`,
-      borderRadius: 10,
-      padding: "12px 16px",
-      cursor: "pointer",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      color: c.text,
-      fontWeight: 600,
-      fontSize: 14,
-    };
-  },
-  messageList: {
-    backgroundColor: "#f8fafc",
-    borderRadius: "0 0 10px 10px",
-    padding: 12,
-    marginTop: -1,
-    border: "1px solid #e2e8f0",
-    borderTop: "none",
-  },
-  messageItem: (type: "warning" | "error") => ({
-    padding: "8px 12px",
-    borderRadius: 6,
-    marginBottom: 6,
-    fontSize: 13,
-    backgroundColor: type === "error" ? "#fef2f2" : "#fffbeb",
-    color: type === "error" ? "#dc2626" : "#b45309",
-  }),
-  tableWrapper: {
-    overflowX: "auto" as const,
-    border: "1px solid #e2e8f0",
-    borderRadius: 12,
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse" as const,
-    fontSize: 14,
-  },
-  th: {
-    backgroundColor: "#f8fafc",
-    padding: "12px 16px",
-    textAlign: "left" as const,
-    fontWeight: 600,
-    color: "#475569",
-    fontSize: 12,
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.5px",
-    borderBottom: "2px solid #e2e8f0",
-    position: "sticky" as const,
-    top: 0,
-  },
-  td: {
-    padding: "12px 16px",
-    borderBottom: "1px solid #f1f5f9",
-    verticalAlign: "top" as const,
-  },
-  input: {
-    width: "100%",
-    padding: "8px 12px",
-    fontSize: 14,
-    border: "1px solid #e2e8f0",
-    borderRadius: 8,
-    transition: "border-color 0.2s",
-  },
-  textarea: {
-    width: "100%",
-    padding: "8px 12px",
-    fontSize: 14,
-    border: "1px solid #e2e8f0",
-    borderRadius: 8,
-    resize: "vertical" as const,
-    fontFamily: "inherit",
-    minHeight: 60,
-  },
-  select: {
-    padding: "8px 12px",
-    fontSize: 14,
-    border: "1px solid #e2e8f0",
-    borderRadius: 8,
-    backgroundColor: "white",
-    cursor: "pointer",
-  },
-  footer: {
-    padding: "16px 24px",
-    borderTop: "1px solid #e2e8f0",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap" as const,
-  },
-  cancelBtn: {
-    padding: "12px 24px",
-    fontSize: 15,
-    fontWeight: 600,
-    backgroundColor: "#f1f5f9",
-    color: "#475569",
-    border: "none",
-    borderRadius: 10,
-    cursor: "pointer",
-    transition: "all 0.2s",
-  },
-  confirmBtn: (enabled: boolean) => ({
-    padding: "12px 24px",
-    fontSize: 15,
-    fontWeight: 700,
-    background: enabled 
-      ? "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)" 
-      : "#e2e8f0",
-    color: enabled ? "white" : "#94a3b8",
-    border: "none",
-    borderRadius: 10,
-    cursor: enabled ? "pointer" : "not-allowed",
-    boxShadow: enabled ? "0 4px 12px rgba(34, 197, 94, 0.3)" : "none",
-    transition: "all 0.2s",
-  }),
-  note: {
-    backgroundColor: "#eff6ff",
-    border: "1px solid #bfdbfe",
-    borderRadius: 8,
-    padding: "10px 14px",
-    fontSize: 13,
-    color: "#1e40af",
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-  },
-  stageBadge: (stage: number) => ({
-    display: "inline-block",
-    padding: "4px 10px",
-    borderRadius: 6,
-    fontSize: 12,
-    fontWeight: 600,
-    backgroundColor: stage === 1 ? "#dbeafe" : "#f3e8ff",
-    color: stage === 1 ? "#1d4ed8" : "#7c3aed",
-  }),
-};
-
 export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps) {
+  const { t } = useI18n();
   const [showErrors, setShowErrors] = useState(true);
   const [showWarnings, setShowWarnings] = useState(true);
   const [editableQuestions, setEditableQuestions] = useState<ParsedQuestion[]>([]);
@@ -272,7 +38,6 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
   const hasWarnings = (parseResult.warnings?.length ?? 0) > 0;
   const canImport = editableQuestions.length > 0;
 
-  // Handlers de edición
   const updateText = (index: number, value: string) => {
     setEditableQuestions((prev) => {
       const next = [...prev];
@@ -302,138 +67,160 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
   };
 
   return (
-    <div style={styles.overlay}>
-      <div style={styles.modal}>
+    <div style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0, 0, 0, 0.6)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 20,
+      zIndex: 10000,
+      backdropFilter: "blur(4px)",
+    }}>
+      <div style={{
+        backgroundColor: "white",
+        borderRadius: 20,
+        width: "100%",
+        maxWidth: 900,
+        maxHeight: "90vh",
+        display: "flex",
+        flexDirection: "column",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+        overflow: "hidden",
+      }}>
         {/* Header */}
-        <div style={styles.header}>
-          <h2 style={styles.headerTitle}>
+        <div style={{
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          padding: "20px 24px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}>
+          <h2 style={{
+            margin: 0,
+            fontSize: 20,
+            fontWeight: 700,
+            color: "white",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}>
             <span>📊</span>
-            Vista Previa de Importación
+            {t.csvPreview.title}
           </h2>
           <button 
-            style={styles.closeBtn} 
             onClick={onCancel}
-            onMouseOver={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.3)"}
-            onMouseOut={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.2)"}
+            style={{
+              background: "rgba(255,255,255,0.2)",
+              border: "none",
+              color: "white",
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              fontSize: 18,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
           >
             ✕
           </button>
         </div>
 
         {/* Content */}
-        <div style={styles.content}>
+        <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
           {/* Stats */}
-          <div style={styles.statsGrid}>
-            <div style={styles.statCard("#64748b")}>
-              <div style={styles.statNumber("#64748b")}>{totalRows}</div>
-              <div style={styles.statLabel}>Filas totales</div>
-            </div>
-            <div style={styles.statCard("#22c55e")}>
-              <div style={styles.statNumber("#22c55e")}>{validRows}</div>
-              <div style={styles.statLabel}>Preguntas válidas</div>
-            </div>
-            <div style={styles.statCard("#3b82f6")}>
-              <div style={styles.statNumber("#3b82f6")}>{stage1Count}</div>
-              <div style={styles.statLabel}>Stage 1</div>
-            </div>
-            <div style={styles.statCard("#a855f7")}>
-              <div style={styles.statNumber("#a855f7")}>{stage2Count}</div>
-              <div style={styles.statLabel}>Stage 2</div>
-            </div>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+            gap: 12,
+            marginBottom: 24,
+          }}>
+            <StatCard value={totalRows} label={t.csvPreview.totalRows} color="#64748b" />
+            <StatCard value={validRows} label={t.csvPreview.validQuestions} color="#22c55e" />
+            <StatCard value={stage1Count} label="Stage 1" color="#3b82f6" />
+            <StatCard value={stage2Count} label="Stage 2" color="#a855f7" />
           </div>
 
           {/* Warnings */}
           {hasWarnings && (
-            <div style={styles.section}>
-              <div
-                style={styles.sectionHeader("warning")}
-                onClick={() => setShowWarnings(!showWarnings)}
-              >
-                <span>⚠️ Advertencias ({parseResult.warnings?.length})</span>
-                <span>{showWarnings ? "▼" : "▶"}</span>
-              </div>
-              {showWarnings && (
-                <div style={styles.messageList}>
-                  {parseResult.warnings?.map((warning, i) => (
-                    <div key={i} style={styles.messageItem("warning")}>
-                      {warning}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <Section
+              type="warning"
+              title={`⚠️ ${t.csvPreview.warnings} (${parseResult.warnings?.length})`}
+              isOpen={showWarnings}
+              onToggle={() => setShowWarnings(!showWarnings)}
+              items={parseResult.warnings || []}
+            />
           )}
 
           {/* Errors */}
           {hasErrors && (
-            <div style={styles.section}>
-              <div
-                style={styles.sectionHeader("error")}
-                onClick={() => setShowErrors(!showErrors)}
-              >
-                <span>❌ Errores ({parseResult.errors?.length})</span>
-                <span>{showErrors ? "▼" : "▶"}</span>
-              </div>
-              {showErrors && (
-                <div style={styles.messageList}>
-                  {parseResult.errors?.map((err, i) => (
-                    <div key={i} style={styles.messageItem("error")}>
-                      {err}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <Section
+              type="error"
+              title={`❌ ${t.csvPreview.errors} (${parseResult.errors?.length})`}
+              isOpen={showErrors}
+              onToggle={() => setShowErrors(!showErrors)}
+              items={parseResult.errors || []}
+            />
           )}
 
           {/* Questions Table */}
           {editableQuestions.length > 0 && (
-            <div style={styles.section}>
+            <div style={{ marginBottom: 20 }}>
               <div style={{ marginBottom: 12 }}>
                 <span style={{ fontWeight: 600, fontSize: 15 }}>
-                  ✅ Preguntas Válidas ({editableQuestions.length})
+                  ✅ {t.csvPreview.validQuestionsTitle} ({editableQuestions.length})
                 </span>
                 <span style={{ fontSize: 13, color: "#64748b", marginLeft: 8 }}>
-                  — Podés editar antes de importar
+                  — {t.csvPreview.editBeforeImport}
                 </span>
               </div>
 
-              <div style={styles.tableWrapper}>
-                <table style={styles.table}>
+              <div style={{
+                overflowX: "auto",
+                border: "1px solid #e2e8f0",
+                borderRadius: 12,
+              }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead>
                     <tr>
-                      <th style={{ ...styles.th, width: 50 }}>#</th>
-                      <th style={styles.th}>Pregunta</th>
-                      <th style={{ ...styles.th, width: 180 }}>Pista</th>
-                      <th style={{ ...styles.th, width: 100 }}>Etapa</th>
+                      <th style={thStyle}>#</th>
+                      <th style={thStyle}>{t.csvPreview.question}</th>
+                      <th style={{ ...thStyle, width: 180 }}>{t.csvPreview.hint}</th>
+                      <th style={{ ...thStyle, width: 100 }}>{t.csvPreview.stage}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {editableQuestions.map((q, i) => (
                       <tr key={`${q.id}_${i}`}>
-                        <td style={{ ...styles.td, color: "#94a3b8", fontSize: 13 }}>
+                        <td style={{ ...tdStyle, color: "#94a3b8", fontSize: 13 }}>
                           {q.rowNumber}
                         </td>
-                        <td style={styles.td}>
+                        <td style={tdStyle}>
                           <textarea
-                            style={styles.textarea}
+                            style={textareaStyle}
                             value={q.text}
                             onChange={(e) => updateText(i, e.target.value)}
                             rows={2}
                           />
                         </td>
-                        <td style={styles.td}>
+                        <td style={tdStyle}>
                           <input
                             type="text"
-                            style={styles.input}
+                            style={inputStyle}
                             value={q.hint ?? ""}
                             onChange={(e) => updateHint(i, e.target.value)}
-                            placeholder="Sin pista"
+                            placeholder={t.csvPreview.noHint}
                           />
                         </td>
-                        <td style={styles.td}>
+                        <td style={tdStyle}>
                           <select
-                            style={styles.select}
+                            style={selectStyle}
                             value={String(q.suggestedStage)}
                             onChange={(e) => updateStage(i, e.target.value)}
                           >
@@ -451,35 +238,197 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
 
           {/* Note */}
           {hasErrors && canImport && (
-            <div style={styles.note}>
+            <div style={{
+              backgroundColor: "#eff6ff",
+              border: "1px solid #bfdbfe",
+              borderRadius: 8,
+              padding: "10px 14px",
+              fontSize: 13,
+              color: "#1e40af",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}>
               <span>ℹ️</span>
-              <span>Se importarán solo las preguntas válidas. Las filas con errores serán ignoradas.</span>
+              <span>{t.csvPreview.note}</span>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div style={styles.footer}>
+        <div style={{
+          padding: "16px 24px",
+          borderTop: "1px solid #e2e8f0",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 12,
+        }}>
           <button
-            style={styles.cancelBtn}
             onClick={onCancel}
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#e2e8f0"}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#f1f5f9"}
+            style={{
+              padding: "12px 24px",
+              fontSize: 15,
+              fontWeight: 600,
+              backgroundColor: "#f1f5f9",
+              color: "#475569",
+              border: "none",
+              borderRadius: 10,
+              cursor: "pointer",
+            }}
           >
-            Cancelar
+            {t.csvPreview.cancel}
           </button>
 
           <button
-            style={styles.confirmBtn(canImport)}
             onClick={() => canImport && onConfirm(editableQuestions)}
             disabled={!canImport}
+            style={{
+              padding: "12px 24px",
+              fontSize: 15,
+              fontWeight: 700,
+              background: canImport 
+                ? "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)" 
+                : "#e2e8f0",
+              color: canImport ? "white" : "#94a3b8",
+              border: "none",
+              borderRadius: 10,
+              cursor: canImport ? "pointer" : "not-allowed",
+              boxShadow: canImport ? "0 4px 12px rgba(34, 197, 94, 0.3)" : "none",
+            }}
           >
             {canImport
-              ? `✅ Importar ${editableQuestions.length} pregunta${editableQuestions.length !== 1 ? "s" : ""}`
-              : "❌ No hay preguntas válidas"}
+              ? `✅ ${t.csvPreview.import} ${editableQuestions.length} ${t.csvPreview.questions}`
+              : `❌ ${t.csvPreview.noValidQuestions}`}
           </button>
         </div>
       </div>
     </div>
   );
 }
+
+// Helper components
+function StatCard({ value, label, color }: { value: number; label: string; color: string }) {
+  return (
+    <div style={{
+      backgroundColor: `${color}10`,
+      border: `2px solid ${color}`,
+      borderRadius: 12,
+      padding: 16,
+      textAlign: "center",
+    }}>
+      <div style={{ fontSize: 32, fontWeight: 800, color, margin: 0 }}>{value}</div>
+      <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>{label}</div>
+    </div>
+  );
+}
+
+function Section({ type, title, isOpen, onToggle, items }: {
+  type: "warning" | "error";
+  title: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  items: string[];
+}) {
+  const colors = {
+    warning: { bg: "#fef3c7", border: "#f59e0b", text: "#b45309", itemBg: "#fffbeb" },
+    error: { bg: "#fee2e2", border: "#ef4444", text: "#dc2626", itemBg: "#fef2f2" },
+  };
+  const c = colors[type];
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div
+        onClick={onToggle}
+        style={{
+          backgroundColor: c.bg,
+          border: `1px solid ${c.border}`,
+          borderRadius: 10,
+          padding: "12px 16px",
+          cursor: "pointer",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          color: c.text,
+          fontWeight: 600,
+          fontSize: 14,
+        }}
+      >
+        <span>{title}</span>
+        <span>{isOpen ? "▼" : "▶"}</span>
+      </div>
+      {isOpen && (
+        <div style={{
+          backgroundColor: "#f8fafc",
+          borderRadius: "0 0 10px 10px",
+          padding: 12,
+          marginTop: -1,
+          border: "1px solid #e2e8f0",
+          borderTop: "none",
+        }}>
+          {items.map((item, i) => (
+            <div key={i} style={{
+              padding: "8px 12px",
+              borderRadius: 6,
+              marginBottom: 6,
+              fontSize: 13,
+              backgroundColor: c.itemBg,
+              color: c.text,
+            }}>
+              {item}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Styles
+const thStyle: React.CSSProperties = {
+  backgroundColor: "#f8fafc",
+  padding: "12px 16px",
+  textAlign: "left",
+  fontWeight: 600,
+  color: "#475569",
+  fontSize: 12,
+  textTransform: "uppercase",
+  letterSpacing: "0.5px",
+  borderBottom: "2px solid #e2e8f0",
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "12px 16px",
+  borderBottom: "1px solid #f1f5f9",
+  verticalAlign: "top",
+};
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "8px 12px",
+  fontSize: 14,
+  border: "1px solid #e2e8f0",
+  borderRadius: 8,
+  boxSizing: "border-box",
+};
+
+const textareaStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "8px 12px",
+  fontSize: 14,
+  border: "1px solid #e2e8f0",
+  borderRadius: 8,
+  resize: "vertical",
+  fontFamily: "inherit",
+  minHeight: 60,
+  boxSizing: "border-box",
+};
+
+const selectStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  fontSize: 14,
+  border: "1px solid #e2e8f0",
+  borderRadius: 8,
+  backgroundColor: "white",
+  cursor: "pointer",
+};

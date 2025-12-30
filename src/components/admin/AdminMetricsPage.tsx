@@ -1,8 +1,10 @@
 // src/pages/admin/AdminMetricsPage.tsx
 
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ref, get } from "firebase/database";
 import { database } from "../../firebase.config";
+import { useI18n } from "../../i18n";
 
 type TeacherMetrics = {
   profile?: { uid?: string; email?: string };
@@ -12,6 +14,8 @@ type TeacherMetrics = {
 };
 
 export function AdminMetricsPage() {
+  const { t, language } = useI18n();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [teachers, setTeachers] = useState<Record<string, TeacherMetrics>>({});
 
@@ -26,20 +30,20 @@ export function AdminMetricsPage() {
   }, []);
 
   const rows = useMemo(() => {
-    return Object.entries(teachers).map(([uid, t]) => {
-      const email = t.profile?.email ?? "(sin email)";
-      const sessionCount = t.sessions ? Object.keys(t.sessions).length : 0;
-      const gamesCreatedCount = t.gamesCreated ? Object.keys(t.gamesCreated).length : 0;
+    return Object.entries(teachers).map(([uid, data]) => {
+      const email = data.profile?.email ?? "(no email)";
+      const sessionCount = data.sessions ? Object.keys(data.sessions).length : 0;
+      const gamesCreatedCount = data.gamesCreated ? Object.keys(data.gamesCreated).length : 0;
 
       let lastLoginAt = 0;
-      if (t.sessions) {
-        for (const s of Object.values(t.sessions)) {
+      if (data.sessions) {
+        for (const s of Object.values(data.sessions)) {
           if ((s.loginAt ?? 0) > lastLoginAt) lastLoginAt = s.loginAt ?? 0;
         }
       }
 
       let lastAccessAt = 0;
-      const la = t.lastAccessByGame ?? {};
+      const la = data.lastAccessByGame ?? {};
       for (const v of Object.values(la)) {
         const ts = typeof v === "number" ? v : ((v as any)?.lastAccessAt ?? 0);
         if (ts > lastAccessAt) lastAccessAt = ts;
@@ -56,9 +60,8 @@ export function AdminMetricsPage() {
     return { totalTeachers, totalSessions, totalGamesCreated };
   }, [rows]);
 
-  // ✅ NUEVO: Descargar como CSV (compatible con Excel)
   const handleDownloadCSV = () => {
-    const headers = ["Email", "UID", "Sesiones", "Juegos Creados", "Último Login", "Último Acceso"];
+    const headers = [t.admin.email, t.admin.uid, t.admin.sessions, t.admin.gamesCreated, t.admin.lastLogin, t.admin.lastAccess];
     
     const csvRows = rows
       .sort((a, b) => (b.lastAccessAt ?? 0) - (a.lastAccessAt ?? 0))
@@ -71,32 +74,40 @@ export function AdminMetricsPage() {
         r.lastAccessAt ? new Date(r.lastAccessAt).toLocaleString() : "-",
       ]);
 
-    // Crear contenido CSV
     const csvContent = [
       headers.join(","),
       ...csvRows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
     ].join("\n");
 
-    // Agregar BOM para que Excel reconozca UTF-8
     const BOM = "\uFEFF";
     const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
 
-    // Descargar
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `metricas_docentes_${new Date().toISOString().split("T")[0]}.csv`;
+    link.download = `metrics_${new Date().toISOString().split("T")[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
+  const formatTs = (ts?: number) => {
+    if (!ts) return "-";
+    return new Date(ts).toLocaleString(language === 'es' ? "es-AR" : "en-US", {
+      day: "2-digit",
+      month: "2-digit", 
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   if (loading) {
     return (
       <div style={{ padding: 40, textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
-        <div style={{ fontSize: 18 }}>Cargando métricas…</div>
+        <div style={{ fontSize: 18 }}>{t.common.loading}</div>
       </div>
     );
   }
@@ -104,36 +115,53 @@ export function AdminMetricsPage() {
   return (
     <div style={{ padding: 24, maxWidth: 1100, margin: "0 auto" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>
-          📊 Admin Metrics
+          📊 {t.admin.title}
         </h1>
         
-        <button
-          onClick={handleDownloadCSV}
-          style={{
-            padding: "10px 20px",
-            fontSize: 14,
-            fontWeight: 600,
-            backgroundColor: "#22c55e",
-            color: "white",
-            border: "none",
-            borderRadius: 8,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          📥 Descargar Excel
-        </button>
+        <div style={{ display: "flex", gap: 12 }}>
+          <button
+            onClick={() => navigate("/admin/library/bulk")}
+            style={{
+              padding: "10px 20px",
+              fontSize: 14,
+              fontWeight: 600,
+              backgroundColor: "#8b5cf6",
+              color: "white",
+              border: "none",
+              borderRadius: 8,
+              cursor: "pointer",
+            }}
+          >
+            📦 Bulk Upload
+          </button>
+          <button
+            onClick={handleDownloadCSV}
+            style={{
+              padding: "10px 20px",
+              fontSize: 14,
+              fontWeight: 600,
+              backgroundColor: "#22c55e",
+              color: "white",
+              border: "none",
+              borderRadius: 8,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            📥 {t.admin.downloadExcel}
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 24 }}>
-        <StatCard label="Docentes" value={totals.totalTeachers} icon="👨‍🏫" color="#3b82f6" />
-        <StatCard label="Sesiones totales" value={totals.totalSessions} icon="🔐" color="#8b5cf6" />
-        <StatCard label="Juegos creados" value={totals.totalGamesCreated} icon="🎮" color="#22c55e" />
+        <StatCard label={t.admin.teachers} value={totals.totalTeachers} icon="👨‍🏫" color="#3b82f6" />
+        <StatCard label={t.admin.totalSessions} value={totals.totalSessions} icon="🔐" color="#8b5cf6" />
+        <StatCard label={t.admin.gamesCreated} value={totals.totalGamesCreated} icon="🎮" color="#22c55e" />
       </div>
 
       {/* Table */}
@@ -147,19 +175,19 @@ export function AdminMetricsPage() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ backgroundColor: "#f8fafc" }}>
-                <Th>Email</Th>
-                <Th>UID</Th>
-                <Th>Sesiones</Th>
-                <Th>Juegos</Th>
-                <Th>Último login</Th>
-                <Th>Último acceso</Th>
+                <Th>{t.admin.email}</Th>
+                <Th>{t.admin.uid}</Th>
+                <Th>{t.admin.sessions}</Th>
+                <Th>{t.admin.games}</Th>
+                <Th>{t.admin.lastLogin}</Th>
+                <Th>{t.admin.lastAccess}</Th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>
-                    No hay datos de docentes todavía
+                    {t.admin.noData}
                   </td>
                 </tr>
               ) : (
@@ -185,12 +213,18 @@ export function AdminMetricsPage() {
 
       {/* Footer */}
       <div style={{ marginTop: 24, textAlign: "center" }}>
-        <a 
-          href="/setup" 
-          style={{ color: "#3b82f6", textDecoration: "none", fontSize: 14 }}
+        <button 
+          onClick={() => navigate("/")}
+          style={{ 
+            color: "#3b82f6", 
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontSize: 14,
+          }}
         >
-          ← Volver a Setup
-        </a>
+          ← {t.admin.backToSetup}
+        </button>
       </div>
     </div>
   );
@@ -241,15 +275,4 @@ function Td({ children, style }: { children: React.ReactNode; style?: React.CSSP
       {children}
     </td>
   );
-}
-
-function formatTs(ts?: number) {
-  if (!ts) return "-";
-  return new Date(ts).toLocaleString("es-AR", {
-    day: "2-digit",
-    month: "2-digit", 
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }

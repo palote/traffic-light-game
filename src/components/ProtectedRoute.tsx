@@ -1,27 +1,46 @@
-import React from "react";
-import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "../hooks/useAuth";
-import "./ProtectedRoute.css";
+// src/components/ProtectedRoute.tsx
+// Protege rutas que requieren autenticación
 
-export function ProtectedRoute({ children }: { children: React.ReactNode }) {
+import { Navigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import { useI18n } from "../i18n";
+
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+
+export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading, authRequired } = useAuth();
-  const location = useLocation();
+  const { t } = useI18n();
 
-  // ✅ En dev sin auth: nunca bloquea
-  if (!authRequired) return <>{children}</>;
+  // Si auth no es requerido, mostrar directamente
+  if (!authRequired) {
+    return <>{children}</>;
+  }
 
+  // Mientras carga, mostrar spinner
   if (loading) {
     return (
-      <div className="protected-loading">
-        <div className="spinner" />
-        <div>Cargando sesión...</div>
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        color: "white",
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+        <p style={{ fontSize: 16 }}>{t.protectedRoute.verifyingSession}</p>
       </div>
     );
   }
 
+  // Si no hay usuario, redirigir a login
   if (!user) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/login" replace />;
   }
 
+  // Usuario autenticado, mostrar contenido
   return <>{children}</>;
 }

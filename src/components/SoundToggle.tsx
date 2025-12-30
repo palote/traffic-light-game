@@ -2,6 +2,7 @@
 // Botón para activar/desactivar sonidos del juego
 
 import { useState } from 'react';
+import { useI18n } from '../i18n';
 import { toggleSound, isSoundEnabled, playSound } from '../hooks/useSound';
 
 interface SoundToggleProps {
@@ -9,13 +10,13 @@ interface SoundToggleProps {
 }
 
 export function SoundToggle({ style }: SoundToggleProps) {
+  const { t } = useI18n();
   const [enabled, setEnabled] = useState(isSoundEnabled());
 
   const handleToggle = () => {
     const newState = toggleSound();
     setEnabled(newState);
     
-    // Feedback sonoro si se activa
     if (newState) {
       playSound('click');
     }
@@ -24,7 +25,7 @@ export function SoundToggle({ style }: SoundToggleProps) {
   return (
     <button
       onClick={handleToggle}
-      title={enabled ? 'Desactivar sonidos' : 'Activar sonidos'}
+      title={enabled ? t.sound.disable : t.sound.enable}
       style={{
         padding: '8px 12px',
         fontSize: 20,
@@ -42,7 +43,7 @@ export function SoundToggle({ style }: SoundToggleProps) {
     >
       {enabled ? '🔊' : '🔇'}
       <span style={{ fontSize: 14 }}>
-        {enabled ? 'ON' : 'OFF'}
+        {enabled ? t.sound.on : t.sound.off}
       </span>
     </button>
   );

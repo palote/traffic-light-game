@@ -1,4 +1,5 @@
 // src/components/GameController.tsx
+// ✅ MODIFICADO: Agregado soporte para Stage 0
 
 import { useEffect, useRef, useState } from "react";
 import { ref, update } from "firebase/database";
@@ -14,10 +15,13 @@ import {
 
 import { TeamView } from "./TeamView";
 import { Stage1CompleteScreen } from "./Stage1CompleteScreen";
-import { Stage1ClassroomView } from "./Stage1/Stage1ClassroomView";  // ← AGREGAR
+import { Stage1ClassroomView } from "./Stage1/Stage1ClassroomView";
 import { TransitionScreen } from "./TransitionScreen";
 import { Stage2Controller } from "./Stage2/Stage2Controller";
 import { DevConsole } from "./DevConsole";
+
+// ✅ NUEVO: Importar componentes de Stage 0
+import { Stage0TeamView, Stage0TeacherPanel } from "./Stage0";
 
 import "./GameController.css";
 
@@ -81,6 +85,7 @@ function normalizeTeams(teamsObj: unknown): Team[] {
 interface GameControllerProps {
   gameId: string;
   teamId: string;
+  isTeacher?: boolean; // ✅ NUEVO: para diferenciar vista docente
 }
 
 /* =========================
@@ -93,12 +98,15 @@ type DevStage2ViewMode = "auto" | "classroom" | "team";
    Componente
 ========================= */
 
-export function GameController({ gameId, teamId }: GameControllerProps) {
+export function GameController({ gameId, teamId, isTeacher = false }: GameControllerProps) {
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [showStage1Classroom, setShowStage1Classroom] = useState(false);
+  
+  // ✅ NUEVO: Toggle para vista Stage 0
+  const [showStage0TeacherPanel, setShowStage0TeacherPanel] = useState(false);
 
   const transitionRequestedRef = useRef(false);
   const devForceCooldownRef = useRef<number>(0);
@@ -265,7 +273,25 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
     const teamsNormalized = normalizeTeams(game.teams);
     const team = teamsNormalized.find((t: any) => t?.id === teamId);
 
-    if (game.status?.status === "stage2") {
+    // ✅ NUEVO: STAGE 0
+    if (game.status?.status === "stage0") {
+      // Si es docente o se activa el toggle, mostrar panel docente
+      if (isTeacher || showStage0TeacherPanel) {
+        screen = <Stage0TeacherPanel game={game} />;
+      } else if (team) {
+        // Vista del equipo
+        screen = <Stage0TeamView game={game} team={team} />;
+      } else {
+        screen = (
+          <div className="game-controller error">
+            <h2>❌ Error</h2>
+            <p>Equipo no encontrado: {teamId}</p>
+          </div>
+        );
+      }
+    }
+    // STAGE 2
+    else if (game.status?.status === "stage2") {
       const effectiveStage2TeamId =
         devStage2ViewMode === "classroom"
           ? undefined
@@ -357,32 +383,57 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
   return (
     <div className="game-controller" style={{ position: "relative", minHeight: "100vh" }}>
       {screen}
-{/* Botón toggle ClassroomView Stage 1 */}
-{game?.status?.status === "stage1" && (
-  <button
-    onClick={() => setShowStage1Classroom(!showStage1Classroom)}
-    style={{
-      position: "fixed",
-      top: 20,
-      right: 20,
-      zIndex: 10000,
-      padding: "12px 20px",
-      backgroundColor: showStage1Classroom ? "#4caf50" : "#2196f3",
-      color: "white",
-      border: "none",
-      borderRadius: 8,
-      cursor: "pointer",
-      fontSize: 14,
-      fontWeight: 700,
-      boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-    }}
-  >
-    {showStage1Classroom ? "👥 Ver Equipo" : "📊 Vista Aula"}
-  </button>
-)}
 
-<div style={{ position: "fixed", bottom: 12, right: 12, zIndex: 999999 }}>
-  <DevConsole
+      {/* ✅ NUEVO: Botón toggle Panel Docente Stage 0 */}
+      {game?.status?.status === "stage0" && (
+        <button
+          onClick={() => setShowStage0TeacherPanel(!showStage0TeacherPanel)}
+          style={{
+            position: "fixed",
+            top: 20,
+            right: 20,
+            zIndex: 10000,
+            padding: "12px 20px",
+            backgroundColor: showStage0TeacherPanel ? "#8b5cf6" : "#f59e0b",
+            color: "white",
+            border: "none",
+            borderRadius: 8,
+            cursor: "pointer",
+            fontSize: 14,
+            fontWeight: 700,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+          }}
+        >
+          {showStage0TeacherPanel ? "👥 Ver Equipo" : "🎓 Panel Docente"}
+        </button>
+      )}
+
+      {/* Botón toggle ClassroomView Stage 1 */}
+      {game?.status?.status === "stage1" && (
+        <button
+          onClick={() => setShowStage1Classroom(!showStage1Classroom)}
+          style={{
+            position: "fixed",
+            top: 20,
+            right: 20,
+            zIndex: 10000,
+            padding: "12px 20px",
+            backgroundColor: showStage1Classroom ? "#4caf50" : "#2196f3",
+            color: "white",
+            border: "none",
+            borderRadius: 8,
+            cursor: "pointer",
+            fontSize: 14,
+            fontWeight: 700,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+          }}
+        >
+          {showStage1Classroom ? "👥 Ver Equipo" : "📊 Vista Aula"}
+        </button>
+      )}
+
+      <div style={{ position: "fixed", bottom: 12, right: 12, zIndex: 999999 }}>
+        <DevConsole
           onSetStage1={forceStage1}
           onSetStage2={forceStage2}
           onResetGame={resetGameToRound1}
@@ -392,6 +443,6 @@ export function GameController({ gameId, teamId }: GameControllerProps) {
           setStage2TeamId={setDevStage2TeamId}
         />
       </div>
-</div>
+    </div>
   );
 }

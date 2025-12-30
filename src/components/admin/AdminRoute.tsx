@@ -3,6 +3,7 @@
 
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { useI18n } from "../../i18n";
 
 interface AdminRouteProps {
   children: React.ReactNode;
@@ -10,14 +11,15 @@ interface AdminRouteProps {
 
 export function AdminRoute({ children }: AdminRouteProps) {
   const { user, loading, authRequired, isAdmin, adminLoading } = useAuth();
+  const { t } = useI18n();
 
   // 1. Si auth está desactivado, no hay acceso admin
   if (!authRequired) {
     return (
       <div style={{ padding: 40, textAlign: "center" }}>
-        <h2>⚠️ Acceso denegado</h2>
-        <p>El sistema de autenticación está desactivado.</p>
-        <p>Activá <code>VITE_AUTH_REQUIRED=true</code> para acceder a métricas.</p>
+        <h2>⚠️ {t.admin.accessDenied}</h2>
+        <p>{t.admin.authDisabled}</p>
+        <p>{t.admin.enableAuth}</p>
       </div>
     );
   }
@@ -27,7 +29,7 @@ export function AdminRoute({ children }: AdminRouteProps) {
     return (
       <div style={{ padding: 40, textAlign: "center" }}>
         <div style={{ fontSize: 48 }}>⏳</div>
-        <p>Verificando sesión...</p>
+        <p>{t.admin.verifyingSession}</p>
       </div>
     );
   }
@@ -42,7 +44,7 @@ export function AdminRoute({ children }: AdminRouteProps) {
     return (
       <div style={{ padding: 40, textAlign: "center" }}>
         <div style={{ fontSize: 48 }}>🔐</div>
-        <p>Verificando permisos de administrador...</p>
+        <p>{t.admin.verifyingPermissions}</p>
       </div>
     );
   }
@@ -51,13 +53,13 @@ export function AdminRoute({ children }: AdminRouteProps) {
   if (!isAdmin) {
     return (
       <div style={{ padding: 40, textAlign: "center" }}>
-        <h2>🚫 Acceso restringido</h2>
-        <p>Esta página es solo para administradores.</p>
+        <h2>🚫 {t.admin.restrictedAccess}</h2>
+        <p>{t.admin.adminsOnly}</p>
         <p style={{ fontSize: 12, color: "#999", marginTop: 16 }}>
           UID: {user.uid}
         </p>
         <button
-          onClick={() => window.location.href = "/setup"}
+          onClick={() => window.location.href = "/"}
           style={{
             marginTop: 20,
             padding: "12px 24px",
@@ -69,7 +71,7 @@ export function AdminRoute({ children }: AdminRouteProps) {
             cursor: "pointer",
           }}
         >
-          ← Volver a Setup
+          ← {t.admin.backToSetup}
         </button>
       </div>
     );

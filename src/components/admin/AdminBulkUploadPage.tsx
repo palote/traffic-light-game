@@ -1,543 +1,447 @@
-// src/pages/admin/AdminBulkUploadPage.tsx
-// Página para subir múltiples items a la biblioteca desde una tabla
+// src/pages/admin/AdminLibraryUploadPage.tsx
+// Página para que admins suban nuevos CSVs a la biblioteca
 
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import type { 
-  NewCSVLibraryItem, 
-  LibraryGameMode, 
-  PrimaryGrade, 
-  Area, 
-  Subject, 
-  LibraryLanguage,
-  SecondaryLevel 
-} from '../../types/library';
-import { SUBJECT_TO_AREA } from '../../types/library';
-import { uploadLibraryMetadataOnly } from '../../services/libraryService';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
+import { useI18n } from "../../i18n";
+import { uploadLibraryItem } from "../../services/libraryService";
+import { parseCSV } from "../../utils/csvParser";
+import type { PrimaryGrade, Area, Subject, LibraryGameMode, NewCSVLibraryItem } from "../../types/library";
+import { PRIMARY_GRADES, AREAS_ES, SUBJECTS_ES } from "../../types/library";
 
-// ============================================
-// PARSER DE TABLA
-// ============================================
-
-interface ParsedRow {
-  nivel: string;
-  materia: string;
-  idioma: string;
-  nombreArchivo: string;
-  tema: string;
-  contenidos: string;
-  habilidades: string;
-  isValid: boolean;
-  error?: string;
-}
-
-function parseTableData(text: string, gameMode: LibraryGameMode): ParsedRow[] {
-  const lines = text.trim().split('\n');
-  const rows: ParsedRow[] = [];
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    
-    // Saltar líneas vacías o encabezados
-    if (!line || line.startsWith('Nivel') || line.startsWith('nivel')) {
-      continue;
-    }
-    
-    // Separar por tabs
-    const parts = line.split('\t');
-    
-    // Necesitamos al menos 7 columnas
-    if (parts.length < 7) {
-      // Podría ser una línea vacía con solo tabs
-      if (parts.every(p => !p.trim())) continue;
-      
-      rows.push({
-        nivel: parts[0] || '',
-        materia: parts[1] || '',
-        idioma: parts[2] || '',
-        nombreArchivo: parts[3] || '',
-        tema: parts[4] || '',
-        contenidos: parts[5] || '',
-        habilidades: parts[6] || '',
-        isValid: false,
-        error: `Fila incompleta (${parts.length} columnas, se necesitan 7)`,
-      });
-      continue;
-    }
-    
-    const [nivel, materia, idioma, nombreArchivo, tema, contenidos, habilidades] = parts;
-    
-    // Validar que tenga los campos principales
-    if (!nombreArchivo?.trim() || !tema?.trim()) {
-      continue; // Saltar filas sin nombre de archivo o tema
-    }
-    
-    rows.push({
-      nivel: nivel?.trim() || '',
-      materia: materia?.trim() || '',
-      idioma: idioma?.trim() || '',
-      nombreArchivo: nombreArchivo?.trim() || '',
-      tema: tema?.trim() || '',
-      contenidos: contenidos?.trim() || '',
-      habilidades: habilidades?.trim() || '',
-      isValid: true,
-    });
-  }
-  
-  return rows;
-}
-
-function convertToLibraryItem(row: ParsedRow, gameMode: LibraryGameMode): NewCSVLibraryItem | null {
-  if (!row.isValid || !row.nombreArchivo) return null;
-  
-  // Determinar idioma
-  const language: LibraryLanguage = 
-    row.idioma.toLowerCase().includes('inglés') || row.idioma.toLowerCase().includes('english') || row.idioma.toLowerCase() === 'en'
-      ? 'en' 
-      : 'es';
-  
-  // Determinar materia/área
-  let area: Area;
-  let subject: Subject | undefined;
-  
-  const materiaLower = row.materia.toLowerCase();
-  
-  if (gameMode === 'coopetition') {
-    // Para Coopetition, mapear materia específica
-    if (materiaLower.includes('biología') || materiaLower.includes('biology')) {
-      subject = language === 'es' ? 'Biología' : 'Biology';
-    } else if (materiaLower.includes('química') || materiaLower.includes('chemistry')) {
-      subject = language === 'es' ? 'Química' : 'Chemistry';
-    } else if (materiaLower.includes('física') || materiaLower.includes('physics')) {
-      subject = language === 'es' ? 'Física' : 'Physics';
-    } else if (materiaLower.includes('historia') || materiaLower.includes('history')) {
-      subject = language === 'es' ? 'Historia' : 'History';
-    } else if (materiaLower.includes('geografía') || materiaLower.includes('geography')) {
-      subject = language === 'es' ? 'Geografía' : 'Geography';
-    } else if (materiaLower.includes('economía') || materiaLower.includes('economics')) {
-      subject = language === 'es' ? 'Economía' : 'Economics';
-    } else if (materiaLower.includes('lengua') || materiaLower.includes('language')) {
-      subject = language === 'es' ? 'Lengua' : 'Language Arts';
-    } else if (materiaLower.includes('matemática') || materiaLower.includes('math')) {
-      subject = language === 'es' ? 'Matemática' : 'Mathematics';
-    }
-    
-    area = subject ? SUBJECT_TO_AREA[subject] : (language === 'es' ? 'Lengua' : 'Language Arts');
-  } else {
-    // Para Traffic Light, solo área
-    if (materiaLower.includes('ciencias naturales') || materiaLower.includes('science') || materiaLower.includes('natural')) {
-      area = language === 'es' ? 'Ciencias Naturales' : 'Natural Sciences';
-    } else if (materiaLower.includes('ciencias sociales') || materiaLower.includes('social')) {
-      area = language === 'es' ? 'Ciencias Sociales' : 'Social Studies';
-    } else if (materiaLower.includes('matemática') || materiaLower.includes('math')) {
-      area = language === 'es' ? 'Matemática' : 'Mathematics';
-    } else {
-      area = language === 'es' ? 'Lengua' : 'Language Arts';
-    }
-  }
-  
-  // Determinar grado (solo para Traffic Light)
-  let grade: PrimaryGrade | undefined;
-  if (gameMode === 'traffic-light') {
-    const nivelLower = row.nivel.toLowerCase();
-    if (nivelLower.includes('3')) grade = '3°';
-    else if (nivelLower.includes('4')) grade = '4°';
-    else if (nivelLower.includes('5')) grade = '5°';
-    else if (nivelLower.includes('6')) grade = '6°';
-    else if (nivelLower.includes('7')) grade = '7°';
-  }
-  
-  // Crear título desde nombre de archivo
-  const title = row.nombreArchivo.replace('.csv', '').replace(/_/g, ' ');
-  
-  const item: NewCSVLibraryItem = {
-    gameMode,
-    language,
-    area,
-    title,
-    fileName: row.nombreArchivo,
-    topic: row.tema,
-    mainContents: row.contenidos,
-    mainSkills: row.habilidades,
-    storagePath: '', // Se llenará cuando se suba el archivo
-  };
-  
-  if (gameMode === 'traffic-light' && grade) {
-    item.grade = grade;
-  }
-  
-  if (gameMode === 'coopetition') {
-    item.level = 'secondary' as SecondaryLevel;
-    if (subject) {
-      item.subject = subject;
-    }
-  }
-  
-  return item;
-}
-
-// ============================================
-// COMPONENTE PRINCIPAL
-// ============================================
-
-export function AdminBulkUploadPage() {
+export function AdminLibraryUploadPage() {
   const navigate = useNavigate();
-  
-  const [gameMode, setGameMode] = useState<LibraryGameMode>('traffic-light');
-  const [tableText, setTableText] = useState('');
-  const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
-  const [convertedItems, setConvertedItems] = useState<NewCSVLibraryItem[]>([]);
+  const { user } = useAuth();
+  const { t } = useI18n();
+
+  // Form state
+  const [title, setTitle] = useState("");
+  const [gameMode, setGameMode] = useState<LibraryGameMode>("traffic-light");
+  const [grade, setGrade] = useState<PrimaryGrade>("3°");
+  const [area, setArea] = useState<Area>("Lengua");
+  const [subject, setSubject] = useState<Subject>("Lengua");
+  const [topic, setTopic] = useState("");
+  const [mainContents, setMainContents] = useState("");
+  const [mainSkills, setMainSkills] = useState("");
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvContent, setCsvContent] = useState<string | null>(null);
+  const [questionCount, setQuestionCount] = useState<number>(0);
+
+  // UI state
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadResult, setUploadResult] = useState<{ success: number; failed: number } | null>(null);
-  
-  const handleParse = () => {
-    const rows = parseTableData(tableText, gameMode);
-    setParsedRows(rows);
-    
-    const items = rows
-      .map(row => convertToLibraryItem(row, gameMode))
-      .filter((item): item is NewCSVLibraryItem => item !== null);
-    
-    setConvertedItems(items);
-    setUploadResult(null);
-  };
-  
-  const handleUpload = async () => {
-    if (convertedItems.length === 0) return;
-    
-    setIsUploading(true);
-    setUploadProgress(0);
-    
-    let success = 0;
-    let failed = 0;
-    
-    for (let i = 0; i < convertedItems.length; i++) {
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setCsvFile(file);
+    setError(null);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target?.result as string;
+      setCsvContent(text);
+
       try {
-        await uploadLibraryMetadataOnly(convertedItems[i]);
-        success++;
-      } catch (e) {
-        console.error('Error uploading item:', convertedItems[i].title, e);
-        failed++;
+        const result = await parseCSV(text);
+        setQuestionCount(result.questions.length);
+        
+        if (!title && file.name) {
+          const autoTitle = file.name
+            .replace(".csv", "")
+            .replace(/_/g, " ")
+            .replace(/-/g, " ");
+          setTitle(autoTitle);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Error parsing CSV");
+        setQuestionCount(0);
       }
-      
-      setUploadProgress(Math.round(((i + 1) / convertedItems.length) * 100));
+    };
+    reader.readAsText(file);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!title || !topic || !csvContent) {
+      setError(t.admin.completeAllFields);
+      return;
     }
-    
-    setUploadResult({ success, failed });
-    setIsUploading(false);
+
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      const item: NewCSVLibraryItem = {
+        gameMode,
+        title,
+        fileName: csvFile?.name || `${title}.csv`,
+        topic,
+        mainContents,
+        mainSkills,
+        area,
+        language: "es",
+        storagePath: "",
+        questionCount,
+        createdBy: user?.uid,
+        ...(gameMode === 'traffic-light' ? { grade } : { level: 'secondary', subject }),
+      };
+
+      await uploadLibraryItem(item, csvContent);
+      setSuccess(true);
+
+      setTimeout(() => {
+        navigate("/library");
+      }, 2000);
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error uploading");
+    } finally {
+      setIsUploading(false);
+    }
   };
-  
-  const styles = {
-    page: {
-      minHeight: '100vh',
-      background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)',
-      padding: 24,
-    },
-    container: {
-      maxWidth: 1200,
-      margin: '0 auto',
-    },
-    header: {
-      marginBottom: 32,
-    },
-    backBtn: {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 8,
-      padding: '8px 16px',
-      backgroundColor: '#f1f5f9',
-      border: 'none',
-      borderRadius: 8,
-      cursor: 'pointer',
-      fontSize: 14,
-      color: '#64748b',
-      marginBottom: 16,
-    },
-    title: {
-      margin: 0,
-      fontSize: 28,
-      fontWeight: 800,
-      color: '#1e293b',
-    },
-    card: {
-      backgroundColor: 'white',
-      borderRadius: 16,
-      padding: 24,
-      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-      marginBottom: 24,
-    },
-    label: {
-      display: 'block',
-      marginBottom: 8,
-      fontSize: 14,
-      fontWeight: 600,
-      color: '#475569',
-    },
-    select: {
-      width: '100%',
-      padding: '12px 16px',
-      fontSize: 14,
-      borderRadius: 8,
-      border: '2px solid #e2e8f0',
-      marginBottom: 16,
-    },
-    textarea: {
-      width: '100%',
-      minHeight: 200,
-      padding: 16,
-      fontSize: 13,
-      fontFamily: 'monospace',
-      borderRadius: 8,
-      border: '2px solid #e2e8f0',
-      resize: 'vertical' as const,
-      boxSizing: 'border-box' as const,
-    },
-    btn: {
-      padding: '12px 24px',
-      fontSize: 14,
-      fontWeight: 600,
-      borderRadius: 8,
-      border: 'none',
-      cursor: 'pointer',
-      marginRight: 12,
-    },
-    btnPrimary: {
-      backgroundColor: '#6366f1',
-      color: 'white',
-    },
-    btnSuccess: {
-      backgroundColor: '#22c55e',
-      color: 'white',
-    },
-    btnDisabled: {
-      backgroundColor: '#cbd5e1',
-      color: '#94a3b8',
-      cursor: 'not-allowed',
-    },
-    table: {
-      width: '100%',
-      borderCollapse: 'collapse' as const,
-      fontSize: 13,
-    },
-    th: {
-      textAlign: 'left' as const,
-      padding: '12px 8px',
-      borderBottom: '2px solid #e2e8f0',
-      backgroundColor: '#f8fafc',
-      fontWeight: 600,
-      color: '#475569',
-    },
-    td: {
-      padding: '10px 8px',
-      borderBottom: '1px solid #f1f5f9',
-      color: '#334155',
-    },
-    badge: {
-      display: 'inline-block',
-      padding: '4px 8px',
-      borderRadius: 6,
-      fontSize: 11,
-      fontWeight: 600,
-    },
-    progress: {
-      width: '100%',
-      height: 8,
-      backgroundColor: '#e2e8f0',
-      borderRadius: 4,
-      overflow: 'hidden',
-      marginTop: 16,
-    },
-    progressBar: {
-      height: '100%',
-      backgroundColor: '#22c55e',
-      transition: 'width 0.3s',
-    },
-  };
-  
+
+  if (success) {
+    return (
+      <div style={styles.page}>
+        <header style={styles.header}>
+          <div style={styles.headerContent}>
+            <h1 style={styles.title}>📤 {t.admin.uploadTitle}</h1>
+          </div>
+        </header>
+        <main style={styles.content}>
+          <div style={styles.successMessage}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+            <h2 style={{ margin: "0 0 8px 0", color: "#16a34a" }}>
+              {t.admin.uploadSuccess}
+            </h2>
+            <p style={{ margin: 0, color: "#166534" }}>
+              {t.admin.redirecting}
+            </p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.page}>
-      <div style={styles.container}>
-        <div style={styles.header}>
-          <button style={styles.backBtn} onClick={() => navigate('/admin/metrics')}>
-            ← Volver al panel
-          </button>
-          <h1 style={styles.title}>📦 Bulk Upload - Biblioteca</h1>
+      <header style={styles.header}>
+        <div style={styles.headerContent}>
+          <div style={styles.headerLeft}>
+            <button style={styles.backBtn} onClick={() => navigate("/library")}>
+              ← {t.common.back}
+            </button>
+            <h1 style={styles.title}>📤 {t.admin.uploadTitle}</h1>
+          </div>
         </div>
-        
-        {/* Paso 1: Seleccionar modo y pegar tabla */}
-        <div style={styles.card}>
-          <h2 style={{ margin: '0 0 16px', fontSize: 18, color: '#1e293b' }}>
-            1. Seleccionar juego y pegar tabla
-          </h2>
-          
-          <label style={styles.label}>Juego destino:</label>
-          <select 
-            style={styles.select} 
-            value={gameMode}
-            onChange={(e) => setGameMode(e.target.value as LibraryGameMode)}
-          >
-            <option value="traffic-light">🚦 Traffic Light Game (Primaria)</option>
-            <option value="coopetition">🎯 Coopetition Game (Secundario)</option>
-          </select>
-          
-          <label style={styles.label}>
-            Pegá la tabla (formato: Nivel | Materia | Idioma | Archivo | Tema | Contenidos | Habilidades):
-          </label>
-          <textarea
-            style={styles.textarea}
-            value={tableText}
-            onChange={(e) => setTableText(e.target.value)}
-            placeholder="3° Primaria&#9;Lengua&#9;Español&#9;Lengua_3ro_Comprension.csv&#9;Comprensión de textos&#9;Lectura literal&#9;Localizar información"
-          />
-          
-          <button 
-            style={{ ...styles.btn, ...styles.btnPrimary }}
-            onClick={handleParse}
-            disabled={!tableText.trim()}
-          >
-            🔍 Parsear tabla
-          </button>
-        </div>
-        
-        {/* Paso 2: Preview */}
-        {parsedRows.length > 0 && (
-          <div style={styles.card}>
-            <h2 style={{ margin: '0 0 16px', fontSize: 18, color: '#1e293b' }}>
-              2. Preview ({convertedItems.length} items válidos de {parsedRows.length} filas)
-            </h2>
-            
-            <div style={{ overflowX: 'auto' }}>
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th style={styles.th}>#</th>
-                    <th style={styles.th}>Archivo</th>
-                    <th style={styles.th}>Tema</th>
-                    <th style={styles.th}>Área</th>
-                    {gameMode === 'coopetition' && <th style={styles.th}>Materia</th>}
-                    {gameMode === 'traffic-light' && <th style={styles.th}>Grado</th>}
-                    <th style={styles.th}>Idioma</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {convertedItems.slice(0, 50).map((item, i) => (
-                    <tr key={i}>
-                      <td style={styles.td}>{i + 1}</td>
-                      <td style={styles.td}>{item.fileName}</td>
-                      <td style={styles.td}>{item.topic}</td>
-                      <td style={styles.td}>
-                        <span style={{ 
-                          ...styles.badge, 
-                          backgroundColor: '#dbeafe', 
-                          color: '#1d4ed8' 
-                        }}>
-                          {item.area}
-                        </span>
-                      </td>
-                      {gameMode === 'coopetition' && (
-                        <td style={styles.td}>
-                          <span style={{ 
-                            ...styles.badge, 
-                            backgroundColor: '#f3e8ff', 
-                            color: '#7c3aed' 
-                          }}>
-                            {item.subject || '-'}
-                          </span>
-                        </td>
-                      )}
-                      {gameMode === 'traffic-light' && (
-                        <td style={styles.td}>
-                          <span style={{ 
-                            ...styles.badge, 
-                            backgroundColor: '#dcfce7', 
-                            color: '#16a34a' 
-                          }}>
-                            {item.grade || '-'}
-                          </span>
-                        </td>
-                      )}
-                      <td style={styles.td}>
-                        <span style={{ 
-                          ...styles.badge, 
-                          backgroundColor: item.language === 'es' ? '#fef3c7' : '#cffafe', 
-                          color: item.language === 'es' ? '#b45309' : '#0891b2' 
-                        }}>
-                          {item.language === 'es' ? '🇪🇸 ES' : '🇺🇸 EN'}
-                        </span>
-                      </td>
-                    </tr>
+      </header>
+
+      <main style={styles.content}>
+        <form style={styles.form} onSubmit={handleSubmit}>
+          {/* Game Mode */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>{t.library.game}</label>
+            <select
+              style={styles.select}
+              value={gameMode}
+              onChange={(e) => setGameMode(e.target.value as LibraryGameMode)}
+            >
+              <option value="traffic-light">🚦 Traffic Light</option>
+              <option value="coopetition">🎯 Coopetition</option>
+            </select>
+          </div>
+
+          {/* Título */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>{t.admin.bankTitle}</label>
+            <input
+              type="text"
+              style={styles.input}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={t.admin.bankTitlePlaceholder}
+            />
+          </div>
+
+          {/* Grado/Area/Subject */}
+          <div style={{ ...styles.formGroup, ...styles.row }}>
+            {gameMode === 'traffic-light' ? (
+              <div>
+                <label style={styles.label}>{t.admin.grade}</label>
+                <select
+                  style={styles.select}
+                  value={grade}
+                  onChange={(e) => setGrade(e.target.value as PrimaryGrade)}
+                >
+                  {PRIMARY_GRADES.map((g) => (
+                    <option key={g} value={g}>{g}</option>
                   ))}
-                </tbody>
-              </table>
-              {convertedItems.length > 50 && (
-                <p style={{ marginTop: 16, color: '#64748b', fontSize: 13 }}>
-                  ... y {convertedItems.length - 50} items más
-                </p>
-              )}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label style={styles.label}>{t.library.subject}</label>
+                <select
+                  style={styles.select}
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value as Subject)}
+                >
+                  {SUBJECTS_ES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div>
+              <label style={styles.label}>{t.library.area}</label>
+              <select
+                style={styles.select}
+                value={area}
+                onChange={(e) => setArea(e.target.value as Area)}
+              >
+                {AREAS_ES.map((a) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
             </div>
           </div>
-        )}
-        
-        {/* Paso 3: Subir */}
-        {convertedItems.length > 0 && (
-          <div style={styles.card}>
-            <h2 style={{ margin: '0 0 16px', fontSize: 18, color: '#1e293b' }}>
-              3. Subir metadata a Firebase
-            </h2>
-            
-            <p style={{ marginBottom: 16, color: '#64748b', fontSize: 14 }}>
-              Esto subirá solo la <strong>metadata</strong> (info de las tarjetas). 
-              Los archivos CSV se pueden vincular después desde el panel de administración.
-            </p>
-            
-            <button 
-              style={{ 
-                ...styles.btn, 
-                ...(isUploading || convertedItems.length === 0 ? styles.btnDisabled : styles.btnSuccess)
-              }}
-              onClick={handleUpload}
-              disabled={isUploading || convertedItems.length === 0}
-            >
-              {isUploading ? `Subiendo... ${uploadProgress}%` : `🚀 Subir ${convertedItems.length} items`}
-            </button>
-            
-            {isUploading && (
-              <div style={styles.progress}>
-                <div style={{ ...styles.progressBar, width: `${uploadProgress}%` }} />
-              </div>
-            )}
-            
-            {uploadResult && (
-              <div style={{ 
-                marginTop: 16, 
-                padding: 16, 
-                borderRadius: 8,
-                backgroundColor: uploadResult.failed === 0 ? '#dcfce7' : '#fef3c7',
-                color: uploadResult.failed === 0 ? '#16a34a' : '#b45309',
-              }}>
-                ✅ Subidos: {uploadResult.success} | ❌ Fallidos: {uploadResult.failed}
-              </div>
-            )}
+
+          {/* Topic */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Topic</label>
+            <input
+              type="text"
+              style={styles.input}
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="E.g.: Fractions and decimals"
+            />
           </div>
-        )}
-        
-        {/* Instrucciones */}
-        <div style={{ ...styles.card, backgroundColor: '#f8fafc' }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#475569' }}>
-            📋 Instrucciones
-          </h3>
-          <ol style={{ margin: 0, paddingLeft: 20, color: '#64748b', fontSize: 14, lineHeight: 1.8 }}>
-            <li>Copiá la tabla desde Excel/Google Sheets (debe tener 7 columnas separadas por TAB)</li>
-            <li>Seleccioná el juego destino (Traffic Light o Coopetition)</li>
-            <li>Pegá la tabla en el área de texto</li>
-            <li>Hacé clic en "Parsear tabla" para ver el preview</li>
-            <li>Verificá que los datos se parsearon correctamente</li>
-            <li>Hacé clic en "Subir" para guardar en Firebase</li>
-            <li>Después podés vincular los archivos CSV desde el panel de administración</li>
-          </ol>
-        </div>
-      </div>
+
+          {/* Contents & Skills */}
+          <div style={{ ...styles.formGroup, ...styles.row }}>
+            <div>
+              <label style={styles.label}>{t.library.contents}</label>
+              <textarea
+                style={styles.textarea}
+                value={mainContents}
+                onChange={(e) => setMainContents(e.target.value)}
+                placeholder="Main contents..."
+              />
+            </div>
+            <div>
+              <label style={styles.label}>{t.library.skills}</label>
+              <textarea
+                style={styles.textarea}
+                value={mainSkills}
+                onChange={(e) => setMainSkills(e.target.value)}
+                placeholder="Main skills..."
+              />
+            </div>
+          </div>
+
+          {/* CSV File */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>{t.admin.csvFile}</label>
+            <input
+              type="file"
+              accept=".csv"
+              style={styles.fileInput}
+              onChange={handleFileChange}
+            />
+          </div>
+
+          {/* Preview */}
+          {csvFile && questionCount > 0 && (
+            <div style={styles.preview}>
+              <h4 style={styles.previewTitle}>✅ {t.admin.csvValid}</h4>
+              <p style={styles.previewText}>
+                {t.admin.file}: {csvFile.name}<br />
+                {t.admin.questionsDetected}: {questionCount}
+              </p>
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div style={styles.error}>
+              <strong>{t.common.error}:</strong> {error}
+            </div>
+          )}
+
+          {/* Submit */}
+          <button
+            type="submit"
+            style={{
+              ...styles.submitBtn,
+              opacity: isUploading ? 0.7 : 1,
+            }}
+            disabled={isUploading || !csvContent || questionCount === 0}
+          >
+            {isUploading ? t.admin.uploading : `📤 ${t.admin.uploadToLibrary}`}
+          </button>
+        </form>
+      </main>
     </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background: "linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%)",
+    fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
+  },
+  header: {
+    background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+    padding: "24px 32px",
+    color: "white",
+    boxShadow: "0 4px 20px rgba(245, 158, 11, 0.3)",
+  },
+  headerContent: {
+    maxWidth: 800,
+    margin: "0 auto",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 16,
+  },
+  headerLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+  },
+  backBtn: {
+    padding: "8px 12px",
+    fontSize: 14,
+    fontWeight: 600,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    color: "white",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+  },
+  title: {
+    margin: 0,
+    fontSize: 22,
+    fontWeight: 800,
+  },
+  content: {
+    maxWidth: 800,
+    margin: "0 auto",
+    padding: "32px 24px",
+  },
+  form: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    padding: 32,
+    boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+  },
+  formGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    display: "block",
+    marginBottom: 6,
+    fontSize: 14,
+    fontWeight: 600,
+    color: "#475569",
+  },
+  input: {
+    width: "100%",
+    padding: "12px 14px",
+    fontSize: 14,
+    borderRadius: 10,
+    border: "2px solid #e2e8f0",
+    backgroundColor: "#f8fafc",
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  textarea: {
+    width: "100%",
+    padding: "12px 14px",
+    fontSize: 14,
+    borderRadius: 10,
+    border: "2px solid #e2e8f0",
+    backgroundColor: "#f8fafc",
+    outline: "none",
+    boxSizing: "border-box",
+    resize: "vertical",
+    minHeight: 80,
+  },
+  select: {
+    width: "100%",
+    padding: "12px 14px",
+    fontSize: 14,
+    borderRadius: 10,
+    border: "2px solid #e2e8f0",
+    backgroundColor: "#f8fafc",
+    cursor: "pointer",
+  },
+  row: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 16,
+  },
+  fileInput: {
+    padding: 12,
+    border: "2px dashed #e2e8f0",
+    borderRadius: 10,
+    backgroundColor: "#f8fafc",
+    cursor: "pointer",
+    width: "100%",
+    boxSizing: "border-box",
+  },
+  preview: {
+    marginTop: 12,
+    padding: 16,
+    backgroundColor: "#f0fdf4",
+    borderRadius: 10,
+    border: "2px solid #22c55e",
+  },
+  previewTitle: {
+    margin: "0 0 8px 0",
+    fontSize: 14,
+    fontWeight: 600,
+    color: "#16a34a",
+  },
+  previewText: {
+    margin: 0,
+    fontSize: 13,
+    color: "#166534",
+  },
+  error: {
+    marginTop: 12,
+    padding: 16,
+    backgroundColor: "#fef2f2",
+    borderRadius: 10,
+    border: "2px solid #ef4444",
+    color: "#dc2626",
+    fontSize: 13,
+  },
+  submitBtn: {
+    width: "100%",
+    padding: "14px 20px",
+    fontSize: 16,
+    fontWeight: 700,
+    borderRadius: 10,
+    border: "none",
+    background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+    color: "white",
+    cursor: "pointer",
+    marginTop: 24,
+  },
+  successMessage: {
+    marginTop: 24,
+    padding: 40,
+    backgroundColor: "#f0fdf4",
+    borderRadius: 12,
+    border: "2px solid #22c55e",
+    textAlign: "center",
+  },
+};

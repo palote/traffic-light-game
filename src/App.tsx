@@ -10,19 +10,26 @@ import { SoundToggle } from "./components/SoundToggle";
 import { AdminRoute } from "./components/admin/AdminRoute";
 import { AdminMetricsPage } from "./pages/admin/AdminMetricsPage";
 import { AdminLibraryUploadPage } from "./pages/admin/AdminLibraryUploadPage";
-import { AdminBulkUploadPage } from "./pages/admin/AdminBulkUploadPage"; // ✅ NUEVO
+import { AdminBulkUploadPage } from "./pages/admin/AdminBulkUploadPage";
+import { AdminLibraryFixPage } from "./pages/admin/AdminLibraryFixPage"; // ✅ NUEVO
 
 // ✅ PÁGINAS
 import { DashboardPage } from "./pages/DashboardPage";
 import { AboutPage } from "./pages/AboutPage";
 import { LibraryPage } from "./pages/LibraryPage";
+import { JoinGamePage } from "./pages/JoinGamePage";
+
+// ✅ NUEVO: Componentes de propuestas
+import { SetupFlowManager } from "./components/setup/SetupFlowManager";
+import { ProposalStudentView } from "./components/Stage0/ProposalStudentView";
 
 import "./App.css";
 
-// ✅ AUTH + ROUTER + GAME MODE
-import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+// ✅ AUTH + ROUTER + GAME MODE + I18N
+import { BrowserRouter, Routes, Route, Navigate, useParams, useNavigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
-import { GameModeProvider } from "./contexts/GameModeContext"; // ✅ NUEVO
+import { GameModeProvider } from "./contexts/GameModeContext";
+import { I18nProvider } from "./i18n";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
 
@@ -64,10 +71,80 @@ function TeamRouteWrapper() {
   );
 }
 
+// ✅ NUEVO: Wrapper para vista de propuestas del alumno
+function ProposalRouteWrapper() {
+  const { gameId, teamId } = useParams();
+  const [teamData, setTeamData] = useState<{ name: string; emoji: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    if (!gameId || !teamId) return;
+    
+    const teamRef = ref(database, `games/${gameId}/teams/${teamId}`);
+    const unsubscribe = onValue(teamRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        setTeamData({ name: data.name, emoji: data.emoji });
+      }
+      setLoading(false);
+    });
+    
+    return () => unsubscribe();
+  }, [gameId, teamId]);
+  
+  if (!gameId || !teamId) return <div>Ruta inválida</div>;
+  if (loading) {
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        backgroundColor: '#f8fafc',
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+          <div style={{ fontSize: 18, color: '#64748b' }}>Cargando...</div>
+        </div>
+      </div>
+    );
+  }
+  if (!teamData) return <div>Equipo no encontrado</div>;
+  
+  return (
+    <ProposalStudentView
+      gameId={gameId}
+      teamId={teamId}
+      teamName={teamData.name}
+      teamEmoji={teamData.emoji}
+    />
+  );
+}
+
+// ✅ NUEVO: Wrapper para SetupFlowManager
+function SetupFlowManagerWrapper() {
+  const navigate = useNavigate();
+  
+  const handleGameCreated = (newGameId: string) => {
+    console.log("Game created with ID:", newGameId);
+    // Navegar al classroom o al juego
+    navigate(`/classroom/${newGameId}`);
+  };
+  
+  return (
+    <div className="App">
+      <div style={{ position: "fixed", top: 16, right: 16, zIndex: 1000 }}>
+        <SoundToggle />
+      </div>
+      <SetupFlowManager onGameCreated={handleGameCreated} />
+    </div>
+  );
+}
+
 type AppView = "setup" | "game";
 
 /**
- * ✅ App original del docente (setup/game)
+ * ✅ App original del docente (setup/game) - Flujo tradicional
  */
 function TeacherAppLegacy() {
   const [currentView, setCurrentView] = useState<AppView>("setup");
@@ -224,111 +301,138 @@ function TeacherAppLegacy() {
 function App() {
   return (
     <AuthProvider>
-      <GameModeProvider>
-        <BrowserRouter>
-          <Routes>
-            {/* Login */}
-            <Route path="/login" element={<LoginPage />} />
+      <I18nProvider>
+        <GameModeProvider>
+          <BrowserRouter>
+            <Routes>
+              {/* Login */}
+              <Route path="/login" element={<LoginPage />} />
 
-            {/* DASHBOARD */}
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <DashboardPage />
-                </ProtectedRoute>
-              }
-            />
+              {/* DASHBOARD */}
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <DashboardPage />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* ABOUT / FAQ */}
-            <Route
-              path="/about"
-              element={
-                <ProtectedRoute>
-                  <AboutPage />
-                </ProtectedRoute>
-              }
-            />
+              {/* ABOUT / FAQ */}
+              <Route
+                path="/about"
+                element={
+                  <ProtectedRoute>
+                    <AboutPage />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* BIBLIOTECA */}
-            <Route
-              path="/library"
-              element={
-                <ProtectedRoute>
-                  <LibraryPage />
-                </ProtectedRoute>
-              }
-            />
+              {/* BIBLIOTECA */}
+              <Route
+                path="/library"
+                element={
+                  <ProtectedRoute>
+                    <LibraryPage />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* ADMIN: métricas */}
-            <Route
-              path="/admin/metrics"
-              element={
-                <AdminRoute>
-                  <AdminMetricsPage />
-                </AdminRoute>
-              }
-            />
+              {/* ADMIN: métricas */}
+              <Route
+                path="/admin/metrics"
+                element={
+                  <AdminRoute>
+                    <AdminMetricsPage />
+                  </AdminRoute>
+                }
+              />
 
-            {/* ADMIN: subir CSVs */}
-            <Route
-              path="/admin/library/upload"
-              element={
-                <AdminRoute>
-                  <AdminLibraryUploadPage />
-                </AdminRoute>
-              }
-            />
+              {/* ADMIN: subir CSVs */}
+              <Route
+                path="/admin/library/upload"
+                element={
+                  <AdminRoute>
+                    <AdminLibraryUploadPage />
+                  </AdminRoute>
+                }
+              />
 
-            {/* ✅ ADMIN: bulk upload */}
-            <Route
-              path="/admin/library/bulk"
-              element={
-                <AdminRoute>
-                  <AdminBulkUploadPage />
-                </AdminRoute>
-              }
-            />
+              {/* ADMIN: bulk upload */}
+              <Route
+                path="/admin/library/bulk"
+                element={
+                  <AdminRoute>
+                    <AdminBulkUploadPage />
+                  </AdminRoute>
+                }
+              />
 
-            {/* DOCENTE: Setup */}
-            <Route
-              path="/setup"
-              element={
-                <ProtectedRoute>
-                  <TeacherAppLegacy />
-                </ProtectedRoute>
-              }
-            />
+              {/* ✅ ADMIN: corregir biblioteca */}
+              <Route
+                path="/admin/library/fix"
+                element={
+                  <AdminRoute>
+                    <AdminLibraryFixPage />
+                  </AdminRoute>
+                }
+              />
 
-            {/* DOCENTE: Classroom */}
-            <Route
-              path="/classroom/:gameId"
-              element={
-                <ProtectedRoute>
-                  <ClassroomRouteWrapper />
-                </ProtectedRoute>
-              }
-            />
+              {/* ✅ DOCENTE: Setup - Selector de modalidad (NUEVO) */}
+              <Route
+                path="/setup"
+                element={
+                  <ProtectedRoute>
+                    <SetupFlowManagerWrapper />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* DOCENTE: Stage 2 Classroom */}
-            <Route
-              path="/stage2/classroom/:gameId"
-              element={
-                <ProtectedRoute>
-                  <Stage2ClassroomRouteWrapper />
-                </ProtectedRoute>
-              }
-            />
+              {/* ✅ DOCENTE: Setup tradicional (profesor crea las preguntas) */}
+              <Route
+                path="/setup-traditional"
+                element={
+                  <ProtectedRoute>
+                    <TeacherAppLegacy />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* ALUMNOS / EQUIPOS: SIN LOGIN */}
-            <Route path="/team/:gameId/:teamId" element={<TeamRouteWrapper />} />
-            <Route path="/stage2/team/:gameId/:teamId" element={<TeamRouteWrapper />} />
+              {/* DOCENTE: Classroom */}
+              <Route
+                path="/classroom/:gameId"
+                element={
+                  <ProtectedRoute>
+                    <ClassroomRouteWrapper />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
-      </GameModeProvider>
+              {/* DOCENTE: Stage 2 Classroom */}
+              <Route
+                path="/stage2/classroom/:gameId"
+                element={
+                  <ProtectedRoute>
+                    <Stage2ClassroomRouteWrapper />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* ALUMNOS / EQUIPOS: SIN LOGIN */}
+              <Route path="/join" element={<JoinGamePage />} />
+              
+              {/* ✅ ALUMNOS: Vista de propuestas (NUEVO) */}
+              <Route path="/propose/:gameId/:teamId" element={<ProposalRouteWrapper />} />
+              
+              <Route path="/team/:gameId/:teamId" element={<TeamRouteWrapper />} />
+              <Route path="/stage2/team/:gameId/:teamId" element={<TeamRouteWrapper />} />
+
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </GameModeProvider>
+      </I18nProvider>
     </AuthProvider>
   );
 }

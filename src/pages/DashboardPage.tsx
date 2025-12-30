@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useGameMode, type GameMode } from "../contexts/GameModeContext";
+import { useI18n, LanguageSelector } from "../i18n";
 
 // ============================================
 // COMPONENTE: Selector de Modo (Modal)
@@ -18,26 +19,28 @@ interface ModeSelectorModalProps {
 }
 
 function ModeSelectorModal({ isOpen, onClose, onSelect, currentMode }: ModeSelectorModalProps) {
+  const { t } = useI18n();
+  
   if (!isOpen) return null;
 
   const modes = [
     {
       id: 'traffic-light' as GameMode,
       icon: '🚦',
-      title: 'Traffic Light Game',
-      subtitle: 'El Juego del Semáforo',
-      description: 'Ideal for elementary and middle school students. Colorful and friendly interface.',
-      ageRange: 'Under 13',
+      title: t.gameModes.trafficLight.title,
+      subtitle: t.gameModes.trafficLight.subtitle,
+      description: t.gameModes.trafficLight.description,
+      ageRange: t.gameModes.trafficLight.ageRange,
       color: '#22c55e',
       bg: '#f0fdf4',
     },
     {
       id: 'coopetition' as GameMode,
       icon: '🎯',
-      title: 'The Coopetition Game',
-      subtitle: 'Where competition meets collaboration',
-      description: 'For teenagers and adults. More professional and sober design.',
-      ageRange: '13+ years',
+      title: t.gameModes.coopetition.title,
+      subtitle: t.gameModes.coopetition.subtitle,
+      description: t.gameModes.coopetition.description,
+      ageRange: t.gameModes.coopetition.ageRange,
       color: '#6366f1',
       bg: '#eef2ff',
     },
@@ -64,117 +67,104 @@ function ModeSelectorModal({ isOpen, onClose, onSelect, currentMode }: ModeSelec
       }}>
         <h2 style={{
           margin: '0 0 8px 0',
-          fontSize: 28,
+          fontSize: 24,
           fontWeight: 800,
           color: '#1e293b',
           textAlign: 'center',
         }}>
-          Choose Your Game Mode
+          {t.dashboard.selectGameMode}
         </h2>
         <p style={{
-          margin: '0 0 32px 0',
-          fontSize: 16,
+          margin: '0 0 24px 0',
+          fontSize: 14,
           color: '#64748b',
           textAlign: 'center',
         }}>
-          Transforming the classroom at any age
+          {t.dashboard.selectGameModeSubtitle}
         </p>
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-          gap: 20,
-        }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {modes.map((mode) => (
-            <div
+            <button
               key={mode.id}
-              onClick={() => onSelect(mode.id)}
+              onClick={() => {
+                onSelect(mode.id);
+                onClose();
+              }}
               style={{
-                padding: 24,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 20,
+                padding: 20,
                 borderRadius: 16,
-                border: `3px solid ${currentMode === mode.id ? mode.color : '#e2e8f0'}`,
-                backgroundColor: currentMode === mode.id ? mode.bg : 'white',
+                border: currentMode === mode.id 
+                  ? `3px solid ${mode.color}` 
+                  : '3px solid transparent',
+                backgroundColor: mode.bg,
                 cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                position: 'relative',
+                transition: 'all 0.2s',
+                textAlign: 'left',
               }}
               onMouseOver={(e) => {
-                e.currentTarget.style.borderColor = mode.color;
-                e.currentTarget.style.backgroundColor = mode.bg;
-                e.currentTarget.style.transform = 'translateY(-4px)';
+                e.currentTarget.style.transform = 'scale(1.02)';
+                e.currentTarget.style.boxShadow = `0 8px 24px ${mode.color}30`;
               }}
               onMouseOut={(e) => {
-                e.currentTarget.style.borderColor = currentMode === mode.id ? mode.color : '#e2e8f0';
-                e.currentTarget.style.backgroundColor = currentMode === mode.id ? mode.bg : 'white';
                 e.currentTarget.style.transform = 'none';
+                e.currentTarget.style.boxShadow = 'none';
               }}
             >
-              {currentMode === mode.id && (
-                <div style={{
-                  position: 'absolute',
-                  top: -10,
-                  right: -10,
-                  width: 28,
-                  height: 28,
-                  borderRadius: '50%',
-                  backgroundColor: mode.color,
-                  color: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 14,
-                  fontWeight: 700,
-                }}>
-                  ✓
-                </div>
-              )}
-              
-              <div style={{ fontSize: 48, marginBottom: 12, textAlign: 'center' }}>
+              <div style={{
+                width: 64,
+                height: 64,
+                borderRadius: 16,
+                backgroundColor: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 32,
+                boxShadow: `0 4px 12px ${mode.color}20`,
+                flexShrink: 0,
+              }}>
                 {mode.icon}
               </div>
-              
-              <h3 style={{
-                margin: '0 0 4px 0',
-                fontSize: 18,
-                fontWeight: 700,
-                color: '#1e293b',
-                textAlign: 'center',
-              }}>
-                {mode.title}
-              </h3>
-              
-              <p style={{
-                margin: '0 0 12px 0',
-                fontSize: 13,
-                color: mode.color,
-                fontWeight: 600,
-                textAlign: 'center',
-              }}>
-                {mode.subtitle}
-              </p>
-              
-              <p style={{
-                margin: '0 0 12px 0',
-                fontSize: 13,
-                color: '#64748b',
-                textAlign: 'center',
-                lineHeight: 1.5,
-              }}>
-                {mode.description}
-              </p>
-              
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: '#1e293b',
+                  marginBottom: 4,
+                }}>
+                  {mode.title}
+                </div>
+                <div style={{
+                  fontSize: 13,
+                  color: mode.color,
+                  fontWeight: 600,
+                  marginBottom: 6,
+                }}>
+                  {mode.subtitle}
+                </div>
+                <div style={{
+                  fontSize: 13,
+                  color: '#64748b',
+                  lineHeight: 1.4,
+                }}>
+                  {mode.description}
+                </div>
+              </div>
               <div style={{
                 padding: '6px 12px',
-                backgroundColor: mode.color + '20',
                 borderRadius: 8,
-                textAlign: 'center',
+                backgroundColor: mode.color,
+                color: 'white',
                 fontSize: 12,
                 fontWeight: 600,
-                color: mode.color,
+                flexShrink: 0,
               }}>
                 {mode.ageRange}
               </div>
-            </div>
+            </button>
           ))}
         </div>
 
@@ -183,17 +173,17 @@ function ModeSelectorModal({ isOpen, onClose, onSelect, currentMode }: ModeSelec
           style={{
             marginTop: 24,
             width: '100%',
-            padding: '14px 24px',
-            fontSize: 16,
+            padding: '12px 24px',
+            fontSize: 14,
             fontWeight: 600,
             borderRadius: 12,
-            border: 'none',
-            backgroundColor: '#f1f5f9',
+            border: '2px solid #e2e8f0',
+            backgroundColor: 'white',
             color: '#64748b',
             cursor: 'pointer',
           }}
         >
-          Close
+          {t.common.cancel}
         </button>
       </div>
     </div>
@@ -201,13 +191,14 @@ function ModeSelectorModal({ isOpen, onClose, onSelect, currentMode }: ModeSelec
 }
 
 // ============================================
-// COMPONENTE PRINCIPAL
+// COMPONENTE PRINCIPAL: Dashboard
 // ============================================
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const { user, logout, isAdmin } = useAuth();
   const { mode, setMode, theme } = useGameMode();
+  const { t } = useI18n();
   
   const [showModeSelector, setShowModeSelector] = useState(false);
 
@@ -215,318 +206,308 @@ export function DashboardPage() {
     try {
       await logout();
       navigate("/login");
-    } catch (e) {
-      console.error("Logout error:", e);
+    } catch (error) {
+      console.error("Error logging out:", error);
     }
-  };
-
-  const handleModeSelect = (newMode: GameMode) => {
-    setMode(newMode);
-    setShowModeSelector(false);
-  };
-
-  // Estilos dinámicos según el tema
-  const styles = {
-    page: {
-      minHeight: "100vh",
-      background: mode === 'traffic-light' 
-        ? "linear-gradient(180deg, #f0fdf4 0%, #dcfce7 100%)"
-        : "linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%)",
-      fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
-    },
-    header: {
-      background: theme.primaryGradient,
-      padding: "24px 32px",
-      color: "white",
-      boxShadow: `0 4px 20px ${theme.primary}40`,
-    },
-    headerContent: {
-      maxWidth: 1000,
-      margin: "0 auto",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      flexWrap: "wrap" as const,
-      gap: 16,
-    },
-    logo: {
-      display: "flex",
-      alignItems: "center",
-      gap: 12,
-    },
-    logoIcon: {
-      fontSize: 36,
-    },
-    logoText: {
-      margin: 0,
-      fontSize: 24,
-      fontWeight: 800,
-    },
-    tagline: {
-      margin: 0,
-      fontSize: 12,
-      opacity: 0.9,
-      fontWeight: 500,
-    },
-    userInfo: {
-      display: "flex",
-      alignItems: "center",
-      gap: 16,
-    },
-    userEmail: {
-      fontSize: 14,
-      opacity: 0.9,
-    },
-    logoutBtn: {
-      padding: "8px 16px",
-      fontSize: 14,
-      fontWeight: 600,
-      backgroundColor: "rgba(255,255,255,0.2)",
-      color: "white",
-      border: "none",
-      borderRadius: 8,
-      cursor: "pointer",
-      transition: "background 0.2s",
-    },
-    content: {
-      maxWidth: 1000,
-      margin: "0 auto",
-      padding: "40px 24px",
-    },
-    welcome: {
-      textAlign: "center" as const,
-      marginBottom: 48,
-    },
-    welcomeTitle: {
-      margin: "0 0 8px 0",
-      fontSize: 32,
-      fontWeight: 800,
-      color: "#1e293b",
-    },
-    welcomeSubtitle: {
-      margin: 0,
-      fontSize: 18,
-      color: "#64748b",
-    },
-    modeSelector: {
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 8,
-      marginTop: 16,
-      padding: "8px 16px",
-      backgroundColor: "white",
-      borderRadius: 12,
-      boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-      cursor: "pointer",
-      border: `2px solid ${theme.primary}`,
-      transition: "all 0.2s",
-    },
-    cardsGrid: {
-      display: "grid",
-      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-      gap: 24,
-    },
-    card: {
-      backgroundColor: "white",
-      borderRadius: 20,
-      padding: 32,
-      boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
-      border: "2px solid transparent",
-      cursor: "pointer",
-      transition: "all 0.3s ease",
-      textAlign: "center" as const,
-    },
-    cardIcon: {
-      fontSize: 56,
-      marginBottom: 16,
-    },
-    cardTitle: {
-      margin: "0 0 12px 0",
-      fontSize: 22,
-      fontWeight: 700,
-      color: "#1e293b",
-    },
-    cardDescription: {
-      margin: 0,
-      fontSize: 15,
-      color: "#64748b",
-      lineHeight: 1.6,
-    },
-    footer: {
-      textAlign: "center" as const,
-      padding: "24px",
-      color: "#94a3b8",
-      fontSize: 14,
-    },
-    adminLink: {
-      display: "inline-block",
-      marginTop: 32,
-      padding: "10px 20px",
-      fontSize: 13,
-      color: "#64748b",
-      backgroundColor: "#f1f5f9",
-      borderRadius: 8,
-      textDecoration: "none",
-      transition: "all 0.2s",
-    },
-  };
-
-  const cardColors = {
-    create: { border: theme.primary, bg: theme.cardHoverBg },
-    library: { border: "#8b5cf6", bg: "#f5f3ff" },
-    about: { border: "#3b82f6", bg: "#eff6ff" },
   };
 
   const cards = [
     {
-      id: "create",
-      icon: mode === 'traffic-light' ? "🎮" : "🚀",
-      title: mode === 'traffic-light' ? "Crear Juego Nuevo" : "Create New Game",
-      description: mode === 'traffic-light' 
-        ? "Configurá un nuevo juego con tus preguntas, equipos y estudiantes."
-        : "Set up a new game with your questions, teams and students.",
-      path: "/setup",
-      colors: cardColors.create,
+      icon: '🎮',
+      title: t.dashboard.createGame,
+      description: mode === 'coopetition' 
+        ? 'Create a new coopetition session'
+        : 'Crear una nueva sesión de juego',
+      action: () => navigate('/setup'),
+      color: theme.primary,
+      gradient: theme.primaryGradient,
     },
     {
-      id: "library",
-      icon: "📚",
-      title: mode === 'traffic-light' ? "Biblioteca de Preguntas" : "Question Library",
-      description: mode === 'traffic-light'
-        ? "Explorá y usá bancos de preguntas organizados por grado y materia."
-        : "Browse and use question banks organized by grade and subject.",
-      path: "/library",
-      colors: cardColors.library,
-    },
-    {
-      id: "about",
-      icon: "❓",
-      title: mode === 'traffic-light' ? "Acerca del Juego" : "About the Game",
-      description: mode === 'traffic-light'
-        ? "Conocé qué es el Juego del Semáforo y descargá materiales informativos."
-        : "Learn about The Coopetition Game and download informative materials.",
-      path: "/about",
-      colors: cardColors.about,
+      icon: '📚',
+      title: t.dashboard.library,
+      description: mode === 'coopetition'
+        ? 'Browse and select question banks'
+        : 'Explorá y seleccioná bancos de preguntas',
+      action: () => navigate('/library'),
+      color: '#8b5cf6',
+      gradient: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
     },
   ];
 
   return (
-    <div style={styles.page}>
+    <div style={{
+      minHeight: '100vh',
+      background: `linear-gradient(180deg, ${theme.cardHoverBg} 0%, #f8fafc 50%, #f1f5f9 100%)`,
+      fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
+    }}>
       {/* Header */}
-      <header style={styles.header}>
-        <div style={styles.headerContent}>
-          <div style={styles.logo}>
-            <span style={styles.logoIcon}>{theme.icon}</span>
-            <div>
-              <h1 style={styles.logoText}>{theme.name}</h1>
-              <p style={styles.tagline}>{theme.tagline}</p>
+      <header style={{
+        background: theme.primaryGradient,
+        padding: '20px 32px',
+        color: 'white',
+        boxShadow: `0 4px 20px ${theme.primary}40`,
+      }}>
+        <div style={{
+          maxWidth: 1200,
+          margin: '0 auto',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 16,
+        }}>
+          {/* Logo + Mode */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 32 }}>{theme.icon}</span>
+              <div>
+                <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
+                  {mode === 'coopetition' ? 'Coopetition Game' : 'Traffic Light Game'}
+                </h1>
+                <p style={{ margin: 0, fontSize: 12, opacity: 0.9 }}>
+                  {theme.tagline}
+                </p>
+              </div>
             </div>
-          </div>
-          
-          <div style={styles.userInfo}>
-            <span style={styles.userEmail}>{user?.email}</span>
+            
             <button
-              style={styles.logoutBtn}
-              onClick={handleLogout}
-              onMouseOver={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.3)"}
-              onMouseOut={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.2)"}
+              onClick={() => setShowModeSelector(true)}
+              style={{
+                padding: '6px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                borderRadius: 8,
+                border: '2px solid rgba(255,255,255,0.3)',
+                backgroundColor: 'rgba(255,255,255,0.1)',
+                color: 'white',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
             >
-              {mode === 'traffic-light' ? 'Cerrar sesión' : 'Logout'}
+              ⚙️ {t.common.edit}
+            </button>
+          </div>
+
+          {/* User + Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <LanguageSelector compact />
+            
+            <span style={{ fontSize: 14, opacity: 0.9 }}>
+              {user?.email}
+            </span>
+            
+            {isAdmin && (
+              <button
+                onClick={() => navigate('/admin/metrics')}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  borderRadius: 8,
+                  border: '2px solid rgba(255,255,255,0.3)',
+                  backgroundColor: 'rgba(255,255,255,0.1)',
+                  color: 'white',
+                  cursor: 'pointer',
+                }}
+              >
+                ⚙️ Admin
+              </button>
+            )}
+            
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: '8px 16px',
+                fontSize: 14,
+                fontWeight: 600,
+                borderRadius: 8,
+                border: 'none',
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                color: 'white',
+                cursor: 'pointer',
+              }}
+            >
+              {t.auth.logout}
             </button>
           </div>
         </div>
       </header>
 
-      {/* Content */}
-      <main style={styles.content}>
-        <div style={styles.welcome}>
-          <h2 style={styles.welcomeTitle}>{theme.welcomeTitle}</h2>
-          <p style={styles.welcomeSubtitle}>{theme.welcomeSubtitle}</p>
-          
-          {/* Mode Selector Button */}
-          <div
-            style={styles.modeSelector}
-            onClick={() => setShowModeSelector(true)}
-            onMouseOver={(e) => {
-              e.currentTarget.style.backgroundColor = theme.cardHoverBg;
-              e.currentTarget.style.transform = 'scale(1.02)';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.backgroundColor = 'white';
-              e.currentTarget.style.transform = 'none';
-            }}
-          >
-            <span style={{ fontSize: 20 }}>{theme.icon}</span>
-            <span style={{ fontSize: 14, fontWeight: 600, color: theme.primary }}>
-              {mode === 'traffic-light' ? '≤13 años' : '+13 years'}
-            </span>
-            <span style={{ fontSize: 12, color: '#94a3b8' }}>▼</span>
-          </div>
+      {/* Main Content */}
+      <main style={{
+        maxWidth: 1200,
+        margin: '0 auto',
+        padding: '48px 24px',
+      }}>
+        {/* Welcome */}
+        <div style={{ marginBottom: 48, textAlign: 'center' }}>
+          <h2 style={{
+            margin: '0 0 8px 0',
+            fontSize: 32,
+            fontWeight: 800,
+            color: '#1e293b',
+          }}>
+            {t.dashboard.welcome}, {user?.displayName?.split(' ')[0] || 'Docente'}! 👋
+          </h2>
+          <p style={{
+            margin: 0,
+            fontSize: 18,
+            color: '#64748b',
+          }}>
+            {t.dashboard.title}
+          </p>
         </div>
 
-        <div style={styles.cardsGrid}>
-          {cards.map((card) => (
-            <div
-              key={card.id}
+        {/* Action Cards */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: 24,
+          marginBottom: 48,
+        }}>
+          {cards.map((card, i) => (
+            <button
+              key={i}
+              onClick={card.action}
               style={{
-                ...styles.card,
-                borderColor: card.colors.border,
+                padding: 32,
+                borderRadius: 20,
+                border: 'none',
+                backgroundColor: 'white',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                cursor: 'pointer',
+                transition: 'all 0.3s',
+                textAlign: 'left',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 16,
               }}
-              onClick={() => navigate(card.path)}
               onMouseOver={(e) => {
-                e.currentTarget.style.transform = "translateY(-4px)";
-                e.currentTarget.style.boxShadow = `0 12px 32px ${card.colors.border}30`;
-                e.currentTarget.style.backgroundColor = card.colors.bg;
+                e.currentTarget.style.transform = 'translateY(-8px)';
+                e.currentTarget.style.boxShadow = `0 20px 40px ${card.color}30`;
               }}
               onMouseOut={(e) => {
-                e.currentTarget.style.transform = "none";
-                e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.08)";
-                e.currentTarget.style.backgroundColor = "white";
+                e.currentTarget.style.transform = 'none';
+                e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.08)';
               }}
             >
-              <div style={styles.cardIcon}>{card.icon}</div>
-              <h3 style={styles.cardTitle}>{card.title}</h3>
-              <p style={styles.cardDescription}>{card.description}</p>
-            </div>
+              <div style={{
+                width: 64,
+                height: 64,
+                borderRadius: 16,
+                background: card.gradient,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 28,
+                boxShadow: `0 8px 24px ${card.color}40`,
+              }}>
+                {card.icon}
+              </div>
+              <div>
+                <h3 style={{
+                  margin: '0 0 8px 0',
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: '#1e293b',
+                }}>
+                  {card.title}
+                </h3>
+                <p style={{
+                  margin: 0,
+                  fontSize: 14,
+                  color: '#64748b',
+                  lineHeight: 1.5,
+                }}>
+                  {card.description}
+                </p>
+              </div>
+              <div style={{
+                marginTop: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                color: card.color,
+                fontWeight: 600,
+                fontSize: 14,
+              }}>
+                {t.common.continue} →
+              </div>
+            </button>
           ))}
         </div>
 
-        {/* Admin link */}
-        {isAdmin && (
-          <div style={{ textAlign: "center" }}>
-            <a
-              href="/admin/metrics"
-              style={styles.adminLink}
-              onMouseOver={(e) => {
-                e.currentTarget.style.backgroundColor = "#e2e8f0";
-                e.currentTarget.style.color = "#475569";
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.backgroundColor = "#f1f5f9";
-                e.currentTarget.style.color = "#64748b";
+        {/* Current Mode Badge */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+        }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '12px 24px',
+            borderRadius: 16,
+            backgroundColor: theme.cardHoverBg,
+            border: `2px solid ${theme.primary}40`,
+          }}>
+            <span style={{ fontSize: 24 }}>{theme.icon}</span>
+            <div>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>
+                {mode === 'coopetition' ? 'Current mode' : 'Modo actual'}
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: theme.primary }}>
+                {mode === 'coopetition' ? 'Coopetition Game' : 'Traffic Light Game'}
+              </div>
+            </div>
+            <button
+              onClick={() => setShowModeSelector(true)}
+              style={{
+                padding: '6px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                borderRadius: 8,
+                border: `2px solid ${theme.primary}`,
+                backgroundColor: 'white',
+                color: theme.primary,
+                cursor: 'pointer',
               }}
             >
-              📊 {mode === 'traffic-light' ? 'Panel de Administrador' : 'Admin Panel'}
-            </a>
+              {t.common.edit}
+            </button>
           </div>
-        )}
+        </div>
       </main>
 
       {/* Footer */}
-      <footer style={styles.footer}>
-        <p>
-          {mode === 'traffic-light' 
-            ? 'Juego del Semáforo · Método Lúdico Integral'
-            : 'The Coopetition Game · Integral Ludic Method'
-          }
-        </p>
+      <footer style={{
+        padding: '24px',
+        textAlign: 'center',
+        color: '#94a3b8',
+        fontSize: 14,
+      }}>
+        <button
+          onClick={() => navigate('/about')}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#64748b',
+            cursor: 'pointer',
+            fontSize: 14,
+            textDecoration: 'underline',
+          }}
+        >
+          {mode === 'coopetition' ? 'About this project' : 'Acerca de este proyecto'}
+        </button>
       </footer>
 
       {/* Mode Selector Modal */}
       <ModeSelectorModal
         isOpen={showModeSelector}
         onClose={() => setShowModeSelector(false)}
-        onSelect={handleModeSelect}
+        onSelect={setMode}
         currentMode={mode}
       />
     </div>

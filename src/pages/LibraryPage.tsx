@@ -1,90 +1,207 @@
 // src/pages/LibraryPage.tsx
-// Página de biblioteca de CSVs para el docente
+// Página de biblioteca con tabs: Mis Juegos / Comunidad / Oficial
 
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useGameMode } from "../contexts/GameModeContext";
+import { useI18n, LanguageSelector } from "../i18n";
 
+// Components
 import { LibraryCard } from "../components/library/LibraryCard";
-import { getAllLibraryItems, getCSVAsFile, deleteLibraryItem } from "../services/libraryService";
+import { TeacherGameCard } from "../components/library/TeacherGameCard";
+import { EditGameModal } from "../components/library/EditGameModal";
+import { ReportGameModal } from "../components/library/ReportGameModal";
 
+// Services
+import { getAllLibraryItems, getCSVAsFile, deleteLibraryItem } from "../services/libraryService";
+import { 
+  getMyGames, 
+  getCommunityGames, 
+  deleteTeacherGame,
+  updateTeacherGame,
+  copyGameToMyLibrary,
+  rateGame,
+  getMyRating,
+  getTeacherGameCSV,
+  incrementGameUsage,
+  getGameStats,
+  reportGame,
+} from "../services/teacherLibraryService";
+
+// Types
 import type { CSVLibraryItem, LibraryGameMode, PrimaryGrade, Area, Subject, LibraryLanguage } from "../types/library";
 import { PRIMARY_GRADES, AREAS_ES, AREAS_EN, SUBJECTS_ES, SUBJECTS_EN } from "../types/library";
+import type { TeacherGame, TeacherLibraryFilters, ReportReason } from "../types/teacherLibrary";
+import { TEACHER_LIMITS } from "../types/teacherLibrary";
+
+type TabType = 'my-games' | 'community' | 'official';
 
 export function LibraryPage() {
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
   const { mode: currentGameMode, theme } = useGameMode();
+  const { t, language: appLang } = useI18n();
 
-  // Estado
-  const [items, setItems] = useState<CSVLibraryItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Tab state
+  const [activeTab, setActiveTab] = useState<TabType>('official');
+
+  // Official library state
+  const [officialItems, setOfficialItems] = useState<CSVLibraryItem[]>([]);
+  const [isLoadingOfficial, setIsLoadingOfficial] = useState(true);
+
+  // My games state
+  const [myGames, setMyGames] = useState<TeacherGame[]>([]);
+  const [isLoadingMyGames, setIsLoadingMyGames] = useState(false);
+  const [myStats, setMyStats] = useState({ privateCount: 0, publicCount: 0, totalUses: 0, avgRating: 0 });
+
+  // Community state
+  const [communityGames, setCommunityGames] = useState<TeacherGame[]>([]);
+  const [isLoadingCommunity, setIsLoadingCommunity] = useState(false);
+  const [myRatings, setMyRatings] = useState<Record<string, number>>({});
+
+  // Modal state
+  const [editingGame, setEditingGame] = useState<TeacherGame | null>(null);
+  const [reportingGame, setReportingGame] = useState<TeacherGame | null>(null);
+
+  // Loading state
   const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
-  
-  // Filtros
-  const [gameMode, setGameMode] = useState<LibraryGameMode | 'all'>(currentGameMode || 'all');
+
+  // Filters (shared)
+  const [gameMode, setGameMode] = useState<LibraryGameMode | 'all'>('all');
   const [grade, setGrade] = useState<PrimaryGrade | 'all'>('all');
   const [area, setArea] = useState<Area | 'all'>('all');
   const [subject, setSubject] = useState<Subject | 'all'>('all');
   const [language, setLanguage] = useState<LibraryLanguage | 'all'>('all');
   const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'recent' | 'rating' | 'popular'>('recent');
 
-  // Cargar items al montar
+  // Load data based on active tab
   useEffect(() => {
-    loadItems();
-  }, []);
+    if (activeTab === 'official') {
+      loadOfficialItems();
+    } else if (activeTab === 'my-games' && user) {
+      loadMyGames();
+    } else if (activeTab === 'community') {
+      loadCommunityGames();
+    }
+  }, [activeTab, user]);
 
-  const loadItems = async () => {
-    setIsLoading(true);
+  const loadOfficialItems = async () => {
+    setIsLoadingOfficial(true);
     try {
       const data = await getAllLibraryItems();
-      setItems(data);
+      setOfficialItems(data);
     } catch (error) {
-      console.error("Error loading library:", error);
+      console.error("Error loading official library:", error);
     } finally {
-      setIsLoading(false);
+      setIsLoadingOfficial(false);
     }
   };
 
-  // Filtrar items
-  const filteredItems = useMemo(() => {
-    return items.filter((item) => {
+  const loadMyGames = async () => {
+    if (!user) return;
+    setIsLoadingMyGames(true);
+    try {
+      const [games, stats] = await Promise.all([
+        getMyGames(user.uid),
+        getGameStats(user.uid),
+      ]);
+      setMyGames(games);
+      setMyStats(stats);
+    } catch (error) {
+      console.error("Error loading my games:", error);
+    } finally {
+      setIsLoadingMyGames(false);
+    }
+  };
+
+  const loadCommunityGames = async () => {
+    setIsLoadingCommunity(true);
+    try {
+      const filters: Partial<TeacherLibraryFilters> = {
+        sortBy,
+        ...(gameMode !== 'all' && { gameMode }),
+        ...(grade !== 'all' && { grade }),
+        ...(area !== 'all' && { area }),
+        ...(subject !== 'all' && { subject }),
+        ...(language !== 'all' && { language }),
+        ...(search && { search }),
+      };
+      const games = await getCommunityGames(filters);
+      setCommunityGames(games);
+
+      // Load my ratings for these games
+      if (user) {
+        const ratings: Record<string, number> = {};
+        for (const game of games) {
+          const rating = await getMyRating(game.id, user.uid);
+          if (rating) ratings[game.id] = rating;
+        }
+        setMyRatings(ratings);
+      }
+    } catch (error) {
+      console.error("Error loading community games:", error);
+    } finally {
+      setIsLoadingCommunity(false);
+    }
+  };
+
+  // Reload community when filters change
+  useEffect(() => {
+    if (activeTab === 'community') {
+      loadCommunityGames();
+    }
+  }, [gameMode, grade, area, subject, language, search, sortBy]);
+
+  // Filter official items locally
+  const filteredOfficialItems = useMemo(() => {
+    return officialItems.filter((item) => {
       if (gameMode !== 'all' && item.gameMode !== gameMode) return false;
       if (grade !== 'all' && item.grade !== grade) return false;
       if (area !== 'all' && item.area !== area) return false;
       if (subject !== 'all' && item.subject !== subject) return false;
       if (language !== 'all' && item.language !== language) return false;
-      
       if (search) {
         const searchLower = search.toLowerCase();
-        const matchTitle = item.title?.toLowerCase().includes(searchLower);
-        const matchTopic = item.topic?.toLowerCase().includes(searchLower);
-        const matchContents = item.mainContents?.toLowerCase().includes(searchLower);
-        const matchFileName = item.fileName?.toLowerCase().includes(searchLower);
-        if (!matchTitle && !matchTopic && !matchContents && !matchFileName) {
-          return false;
-        }
+        const match = 
+          item.title?.toLowerCase().includes(searchLower) ||
+          item.topic?.toLowerCase().includes(searchLower) ||
+          item.mainContents?.toLowerCase().includes(searchLower);
+        if (!match) return false;
       }
       return true;
     });
-  }, [items, gameMode, grade, area, subject, language, search]);
+  }, [officialItems, gameMode, grade, area, subject, language, search]);
 
-  // Estadísticas rápidas
-  const stats = useMemo(() => {
-    const trafficLight = items.filter(i => i.gameMode === 'traffic-light').length;
-    const coopetition = items.filter(i => i.gameMode === 'coopetition').length;
-    const withFile = items.filter(i => !!i.storagePath).length;
-    return { trafficLight, coopetition, withFile, total: items.length };
-  }, [items]);
+  // Filter my games locally
+  const filteredMyGames = useMemo(() => {
+    return myGames.filter((game) => {
+      if (gameMode !== 'all' && game.gameMode !== gameMode) return false;
+      if (grade !== 'all' && game.grade !== grade) return false;
+      if (area !== 'all' && game.area !== area) return false;
+      if (subject !== 'all' && game.subject !== subject) return false;
+      if (language !== 'all' && game.language !== language) return false;
+      if (search) {
+        const searchLower = search.toLowerCase();
+        const match = 
+          game.title?.toLowerCase().includes(searchLower) ||
+          game.description?.toLowerCase().includes(searchLower) ||
+          game.topic?.toLowerCase().includes(searchLower);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [myGames, gameMode, grade, area, subject, language, search]);
 
-  // Handler: Usar un CSV en el juego
-  const handleUseItem = async (item: CSVLibraryItem) => {
+  // ============================================
+  // HANDLERS - Official Library
+  // ============================================
+
+  const handleUseOfficialItem = async (item: CSVLibraryItem) => {
     setLoadingItemId(item.id);
-    
     try {
       const file = await getCSVAsFile(item);
-      
       const reader = new FileReader();
       reader.onload = () => {
         const csvContent = reader.result as string;
@@ -92,39 +209,174 @@ export function LibraryPage() {
         sessionStorage.setItem('library_csv_filename', file.name);
         sessionStorage.setItem('library_csv_title', item.title || item.topic);
         sessionStorage.setItem('library_csv_subject', item.subject || item.area);
-        sessionStorage.setItem('library_csv_grade', item.grade || item.level || '');
-        
-        navigate('/setup', { 
-          state: { 
-            fromLibrary: true,
-            csvTitle: item.title || item.topic,
-          } 
-        });
+        navigate('/setup', { state: { fromLibrary: true, csvTitle: item.title || item.topic } });
       };
       reader.readAsText(file);
-      
     } catch (error) {
       console.error("Error loading CSV:", error);
-      alert("Error al cargar el archivo. Intentá de nuevo.");
+      alert(t.errors.loadingCSV);
     } finally {
       setLoadingItemId(null);
     }
   };
 
-  // Handler: Delete item (admin only)
-  const handleDeleteItem = async (item: CSVLibraryItem) => {
+  const handleDeleteOfficialItem = async (item: CSVLibraryItem) => {
     try {
       await deleteLibraryItem(item.id);
-      setItems(prev => prev.filter(i => i.id !== item.id));
+      setOfficialItems(prev => prev.filter(i => i.id !== item.id));
     } catch (error) {
       console.error("Error deleting item:", error);
-      alert("Error al eliminar el item.");
+      alert(t.errors.generic);
     }
   };
 
-  const isCoopetition = gameMode === 'coopetition';
+  // ============================================
+  // HANDLERS - Teacher Games
+  // ============================================
+
+  const handleUseTeacherGame = async (game: TeacherGame) => {
+    setLoadingItemId(game.id);
+    try {
+      const file = await getTeacherGameCSV(game);
+      const reader = new FileReader();
+      reader.onload = () => {
+        const csvContent = reader.result as string;
+        sessionStorage.setItem('library_csv_content', csvContent);
+        sessionStorage.setItem('library_csv_filename', file.name);
+        sessionStorage.setItem('library_csv_title', game.title);
+        sessionStorage.setItem('library_csv_subject', game.subject || game.area);
+        
+        // Increment usage
+        incrementGameUsage(game.id);
+        
+        navigate('/setup', { state: { fromLibrary: true, csvTitle: game.title } });
+      };
+      reader.readAsText(file);
+    } catch (error) {
+      console.error("Error loading CSV:", error);
+      alert(t.errors.loadingCSV);
+    } finally {
+      setLoadingItemId(null);
+    }
+  };
+
+  const handleDeleteTeacherGame = async (game: TeacherGame) => {
+    if (!user) return;
+    try {
+      await deleteTeacherGame(game.id, user.uid);
+      setMyGames(prev => prev.filter(g => g.id !== game.id));
+      // Refresh stats
+      const stats = await getGameStats(user.uid);
+      setMyStats(stats);
+    } catch (error) {
+      console.error("Error deleting game:", error);
+      alert(t.errors.generic);
+    }
+  };
+
+  const handleToggleVisibility = async (game: TeacherGame) => {
+    if (!user) return;
+    const newVisibility = game.visibility === 'public' ? 'private' : 'public';
+    
+    // Check limits if making private
+    if (newVisibility === 'private' && myStats.privateCount >= TEACHER_LIMITS.maxPrivateGames) {
+      alert(t.teacherLibrary.privateLimitReached);
+      return;
+    }
+
+    try {
+      await updateTeacherGame(game.id, user.uid, { visibility: newVisibility });
+      setMyGames(prev => prev.map(g => 
+        g.id === game.id ? { ...g, visibility: newVisibility } : g
+      ));
+      // Refresh stats
+      const stats = await getGameStats(user.uid);
+      setMyStats(stats);
+    } catch (error) {
+      console.error("Error updating visibility:", error);
+      alert(t.errors.generic);
+    }
+  };
+
+  const handleCopyGame = async (game: TeacherGame) => {
+    if (!user) return;
+    
+    // Check limits
+    if (myStats.privateCount >= TEACHER_LIMITS.maxPrivateGames) {
+      alert(t.teacherLibrary.privateLimitReached);
+      return;
+    }
+
+    try {
+      await copyGameToMyLibrary(game.id, user.uid, user.displayName || 'Docente', user.email || '');
+      alert(t.teacherLibrary.copySuccess + '\n' + t.teacherLibrary.copyAsPrivate);
+      // Refresh my games
+      loadMyGames();
+    } catch (error) {
+      console.error("Error copying game:", error);
+      alert(error instanceof Error ? error.message : t.errors.generic);
+    }
+  };
+
+  const handleRateGame = async (game: TeacherGame, stars: number) => {
+    if (!user) return;
+    try {
+      await rateGame(game.id, user.uid, stars);
+      setMyRatings(prev => ({ ...prev, [game.id]: stars }));
+      // Refresh community to update rating display
+      loadCommunityGames();
+    } catch (error) {
+      console.error("Error rating game:", error);
+      alert(error instanceof Error ? error.message : t.errors.generic);
+    }
+  };
+
+  const handleReportGame = (game: TeacherGame) => {
+    setReportingGame(game);
+  };
+
+  const handleEditGame = (game: TeacherGame) => {
+    setEditingGame(game);
+  };
+
+  const handleSaveEdit = async (updates: Partial<TeacherGame>) => {
+    if (!editingGame || !user) return;
+    
+    try {
+      await updateTeacherGame(editingGame.id, user.uid, updates);
+      setMyGames(prev => prev.map(g => 
+        g.id === editingGame.id ? { ...g, ...updates, updatedAt: Date.now() } : g
+      ));
+      setEditingGame(null);
+    } catch (error) {
+      console.error("Error updating game:", error);
+      throw error;
+    }
+  };
+
+  const handleSubmitReport = async (reason: ReportReason, details?: string) => {
+    if (!reportingGame || !user) return;
+    
+    try {
+      await reportGame(reportingGame.id, user.uid, reason, details);
+      // Optionally refresh community games to hide highly reported ones
+      loadCommunityGames();
+    } catch (error) {
+      console.error("Error reporting game:", error);
+      throw error;
+    }
+  };
+
+  // ============================================
+  // RENDER
+  // ============================================
+
   const showSubjectFilter = gameMode === 'coopetition' || gameMode === 'all';
   const showGradeFilter = gameMode === 'traffic-light' || gameMode === 'all';
+  const isLoading = 
+    (activeTab === 'official' && isLoadingOfficial) ||
+    (activeTab === 'my-games' && isLoadingMyGames) ||
+    (activeTab === 'community' && isLoadingCommunity);
 
   return (
     <div style={{
@@ -162,67 +414,99 @@ export function LibraryPage() {
                 cursor: "pointer",
               }}
             >
-              ← Volver
+              ← {t.common.back}
             </button>
             
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 32 }}>📚</span>
-              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Biblioteca</h1>
+              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>{t.library.title}</h1>
             </div>
           </div>
 
-          <div style={{ fontSize: 14, opacity: 0.9 }}>
-            {user?.email}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <LanguageSelector compact />
+            <span style={{ fontSize: 14, opacity: 0.9 }}>{user?.email}</span>
           </div>
         </div>
       </header>
 
       {/* Content */}
       <main style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
-        <h2 style={{ margin: "0 0 8px 0", fontSize: 28, fontWeight: 800, color: "#1e293b" }}>
-          Bancos de Preguntas
-        </h2>
-        <p style={{ margin: "0 0 24px 0", fontSize: 16, color: "#64748b" }}>
-          Explorá preguntas organizadas por nivel, área y materia.
-        </p>
-
-        {/* Stats */}
+        
+        {/* Tabs */}
         <div style={{
           display: "flex",
-          gap: 16,
+          gap: 4,
           marginBottom: 24,
-          flexWrap: "wrap",
+          backgroundColor: "white",
+          padding: 4,
+          borderRadius: 12,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
         }}>
-          <div style={{
-            padding: "12px 20px",
-            backgroundColor: "#f0fdf4",
-            borderRadius: 10,
-            border: "2px solid #22c55e",
-          }}>
-            <span style={{ fontSize: 20, marginRight: 8 }}>🚦</span>
-            <strong>{stats.trafficLight}</strong> Traffic Light
-          </div>
-          <div style={{
-            padding: "12px 20px",
-            backgroundColor: "#eef2ff",
-            borderRadius: 10,
-            border: "2px solid #6366f1",
-          }}>
-            <span style={{ fontSize: 20, marginRight: 8 }}>🎯</span>
-            <strong>{stats.coopetition}</strong> Coopetition
-          </div>
-          <div style={{
-            padding: "12px 20px",
-            backgroundColor: "#f8fafc",
-            borderRadius: 10,
-            border: "2px solid #94a3b8",
-          }}>
-            <span style={{ fontSize: 20, marginRight: 8 }}>📄</span>
-            <strong>{stats.withFile}</strong> con archivo
-          </div>
+          {[
+            { id: 'my-games' as TabType, label: t.teacherLibrary.myGames, icon: '👤' },
+            { id: 'community' as TabType, label: t.teacherLibrary.community, icon: '🌐' },
+            { id: 'official' as TabType, label: t.teacherLibrary.official, icon: '📚' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                flex: 1,
+                padding: "14px 20px",
+                fontSize: 15,
+                fontWeight: 600,
+                borderRadius: 10,
+                border: "none",
+                backgroundColor: activeTab === tab.id ? theme.primary : "transparent",
+                color: activeTab === tab.id ? "white" : "#64748b",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+            >
+              <span>{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        {/* Filtros */}
+        {/* My Games Stats */}
+        {activeTab === 'my-games' && user && (
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+            gap: 12,
+            marginBottom: 24,
+          }}>
+            <StatCard 
+              value={myStats.privateCount} 
+              label={t.teacherLibrary.privateGames}
+              sublabel={`/ ${TEACHER_LIMITS.maxPrivateGames}`}
+              color="#6366f1" 
+            />
+            <StatCard 
+              value={myStats.publicCount} 
+              label={t.teacherLibrary.publicGames}
+              color="#22c55e" 
+            />
+            <StatCard 
+              value={myStats.totalUses} 
+              label={t.teacherLibrary.totalUses}
+              color="#f59e0b" 
+            />
+            <StatCard 
+              value={myStats.avgRating ? myStats.avgRating.toFixed(1) : '-'} 
+              label={t.teacherLibrary.avgRating}
+              color="#ec4899" 
+            />
+          </div>
+        )}
+
+        {/* Filters */}
         <div style={{
           backgroundColor: "white",
           borderRadius: 16,
@@ -232,154 +516,94 @@ export function LibraryPage() {
         }}>
           <div style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
             gap: 16,
           }}>
             {/* Game Mode */}
-            <div>
-              <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: "#64748b" }}>
-                Juego
-              </label>
-              <select
-                value={gameMode}
-                onChange={(e) => {
-                  setGameMode(e.target.value as LibraryGameMode | 'all');
-                  setGrade('all');
-                  setSubject('all');
-                }}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  fontSize: 14,
-                  borderRadius: 8,
-                  border: "2px solid #e2e8f0",
-                }}
-              >
-                <option value="all">Todos</option>
-                <option value="traffic-light">🚦 Traffic Light</option>
-                <option value="coopetition">🎯 Coopetition</option>
-              </select>
-            </div>
+            <FilterSelect
+              label={t.library.game}
+              value={gameMode}
+              onChange={(v) => { setGameMode(v as any); setGrade('all'); setSubject('all'); }}
+              options={[
+                { value: 'all', label: t.common.all },
+                { value: 'traffic-light', label: '🚦 Traffic Light' },
+                { value: 'coopetition', label: '🎯 Coopetition' },
+              ]}
+            />
 
-            {/* Grade (solo para Traffic Light) */}
+            {/* Grade */}
             {showGradeFilter && (
-              <div>
-                <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: "#64748b" }}>
-                  Grado
-                </label>
-                <select
-                  value={grade}
-                  onChange={(e) => setGrade(e.target.value as PrimaryGrade | 'all')}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    fontSize: 14,
-                    borderRadius: 8,
-                    border: "2px solid #e2e8f0",
-                  }}
-                >
-                  <option value="all">Todos</option>
-                  {PRIMARY_GRADES.map(g => (
-                    <option key={g} value={g}>{g} Primaria</option>
-                  ))}
-                </select>
-              </div>
+              <FilterSelect
+                label={t.library.grade}
+                value={grade}
+                onChange={(v) => setGrade(v as any)}
+                options={[
+                  { value: 'all', label: t.common.all },
+                  ...PRIMARY_GRADES.map(g => ({ value: g, label: g })),
+                ]}
+              />
             )}
 
             {/* Area */}
-            <div>
-              <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: "#64748b" }}>
-                Área
-              </label>
-              <select
-                value={area}
-                onChange={(e) => setArea(e.target.value as Area | 'all')}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  fontSize: 14,
-                  borderRadius: 8,
-                  border: "2px solid #e2e8f0",
-                }}
-              >
-                <option value="all">Todas</option>
-                <optgroup label="Español">
-                  {AREAS_ES.map(a => (
-                    <option key={a} value={a}>{a}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="English">
-                  {AREAS_EN.map(a => (
-                    <option key={a} value={a}>{a}</option>
-                  ))}
-                </optgroup>
-              </select>
-            </div>
+            <FilterSelect
+              label={t.library.area}
+              value={area}
+              onChange={(v) => setArea(v as any)}
+              options={[
+                { value: 'all', label: t.common.all },
+                ...(appLang === 'es' ? AREAS_ES : AREAS_EN).map(a => ({ value: a, label: a })),
+              ]}
+            />
 
-            {/* Subject (solo para Coopetition) */}
+            {/* Subject */}
             {showSubjectFilter && (
-              <div>
-                <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: "#64748b" }}>
-                  Materia
-                </label>
-                <select
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value as Subject | 'all')}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    fontSize: 14,
-                    borderRadius: 8,
-                    border: "2px solid #e2e8f0",
-                  }}
-                >
-                  <option value="all">Todas</option>
-                  <optgroup label="Español">
-                    {SUBJECTS_ES.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="English">
-                    {SUBJECTS_EN.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </optgroup>
-                </select>
-              </div>
+              <FilterSelect
+                label={t.library.subject}
+                value={subject}
+                onChange={(v) => setSubject(v as any)}
+                options={[
+                  { value: 'all', label: t.common.all },
+                  ...(appLang === 'es' ? SUBJECTS_ES : SUBJECTS_EN).map(s => ({ value: s, label: s })),
+                ]}
+              />
             )}
 
             {/* Language */}
-            <div>
-              <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: "#64748b" }}>
-                Idioma
-              </label>
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value as LibraryLanguage | 'all')}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  fontSize: 14,
-                  borderRadius: 8,
-                  border: "2px solid #e2e8f0",
-                }}
-              >
-                <option value="all">Todos</option>
-                <option value="es">🇪🇸 Español</option>
-                <option value="en">🇺🇸 English</option>
-              </select>
-            </div>
+            <FilterSelect
+              label={t.setup.language}
+              value={language}
+              onChange={(v) => setLanguage(v as any)}
+              options={[
+                { value: 'all', label: t.common.all },
+                { value: 'es', label: '🇪🇸 Español' },
+                { value: 'en', label: '🇺🇸 English' },
+              ]}
+            />
+
+            {/* Sort (only for community) */}
+            {activeTab === 'community' && (
+              <FilterSelect
+                label={t.teacherLibrary.sortBy}
+                value={sortBy}
+                onChange={(v) => setSortBy(v as any)}
+                options={[
+                  { value: 'recent', label: t.teacherLibrary.recent },
+                  { value: 'rating', label: t.teacherLibrary.rating },
+                  { value: 'popular', label: t.teacherLibrary.popular },
+                ]}
+              />
+            )}
 
             {/* Search */}
             <div style={{ gridColumn: "span 2" }}>
               <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: "#64748b" }}>
-                Buscar
+                {t.common.search}
               </label>
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por título, tema o contenido..."
+                placeholder={t.library.searchPlaceholder}
                 style={{
                   width: "100%",
                   padding: "10px 12px",
@@ -391,43 +615,108 @@ export function LibraryPage() {
               />
             </div>
           </div>
-
-          <div style={{ marginTop: 16, fontSize: 14, color: "#64748b" }}>
-            Mostrando <strong>{filteredItems.length}</strong> de {items.length} items
-          </div>
         </div>
 
-        {/* Grid de cards */}
+        {/* Content Grid */}
         {isLoading ? (
-          <div style={{ textAlign: "center", padding: 48, color: "#64748b" }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
-            <p>Cargando biblioteca...</p>
-          </div>
-        ) : filteredItems.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 48, color: "#64748b" }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>📭</div>
-            <p>No se encontraron items con los filtros seleccionados.</p>
-          </div>
+          <LoadingState />
         ) : (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-            gap: 20,
-          }}>
-            {filteredItems.map(item => (
-              <LibraryCard
-                key={item.id}
-                item={item}
-                onUse={handleUseItem}
-                onDelete={isAdmin ? handleDeleteItem : undefined}
-                isLoading={loadingItemId === item.id}
-                isAdmin={isAdmin}
-              />
-            ))}
-          </div>
+          <>
+            {/* MY GAMES TAB */}
+            {activeTab === 'my-games' && (
+              filteredMyGames.length === 0 ? (
+                <EmptyState
+                  icon="📝"
+                  title={t.teacherLibrary.noMyGames}
+                  description={t.teacherLibrary.noMyGamesDesc}
+                  action={{
+                    label: t.dashboard.createGame,
+                    onClick: () => navigate('/setup'),
+                  }}
+                />
+              ) : (
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                  gap: 20,
+                }}>
+                  {filteredMyGames.map(game => (
+                    <TeacherGameCard
+                      key={game.id}
+                      game={game}
+                      onUse={handleUseTeacherGame}
+                      onEdit={handleEditGame}
+                      onDelete={handleDeleteTeacherGame}
+                      onToggleVisibility={handleToggleVisibility}
+                      isLoading={loadingItemId === game.id}
+                    />
+                  ))}
+                </div>
+              )
+            )}
+
+            {/* COMMUNITY TAB */}
+            {activeTab === 'community' && (
+              communityGames.length === 0 ? (
+                <EmptyState
+                  icon="🌐"
+                  title={t.teacherLibrary.noCommunityGames}
+                  description={t.teacherLibrary.noCommunityGamesDesc}
+                />
+              ) : (
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                  gap: 20,
+                }}>
+                  {communityGames.map(game => (
+                    <TeacherGameCard
+                      key={game.id}
+                      game={game}
+                      onUse={handleUseTeacherGame}
+                      onCopy={handleCopyGame}
+                      onRate={handleRateGame}
+                      onReport={handleReportGame}
+                      myRating={myRatings[game.id]}
+                      isLoading={loadingItemId === game.id}
+                    />
+                  ))}
+                </div>
+              )
+            )}
+
+            {/* OFFICIAL TAB */}
+            {activeTab === 'official' && (
+              filteredOfficialItems.length === 0 ? (
+                <EmptyState
+                  icon="📚"
+                  title={t.library.noResults}
+                  description=""
+                />
+              ) : (
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                  gap: 20,
+                }}>
+                 {filteredOfficialItems.map(item => (
+                    <LibraryCard
+                      key={item.id}
+                      item={item}
+                      onUse={handleUseOfficialItem}
+                      onDelete={isAdmin ? handleDeleteOfficialItem : undefined}
+                      onRefresh={loadOfficialItems}
+                      isLoading={loadingItemId === item.id}
+                      isAdmin={isAdmin}
+                    />
+                  ))}
+                </div>
+              )
+            )}
+          </>
         )}
 
-        {/* Sección Admin */}
+        {/* Admin Section */}
         {isAdmin && (
           <div style={{
             marginTop: 48,
@@ -441,14 +730,11 @@ export function LibraryPage() {
               fontSize: 18,
               fontWeight: 700,
               color: "#b45309",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
             }}>
-              ⚙️ Administración
+              ⚙️ {t.library.adminTitle}
             </h3>
             <p style={{ margin: "0 0 16px 0", color: "#92400e", fontSize: 14 }}>
-              Como administrador, podés subir nuevos bancos de preguntas.
+              {t.library.adminDesc}
             </p>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <button
@@ -464,7 +750,7 @@ export function LibraryPage() {
                   cursor: "pointer",
                 }}
               >
-                📤 Subir individual
+                📤 {t.library.uploadSingle}
               </button>
               <button
                 onClick={() => navigate("/admin/library/bulk")}
@@ -479,12 +765,147 @@ export function LibraryPage() {
                   cursor: "pointer",
                 }}
               >
-                📦 Bulk upload
+                📦 {t.library.bulkUpload}
               </button>
             </div>
           </div>
         )}
       </main>
+
+      {/* Edit Game Modal */}
+      {editingGame && (
+        <EditGameModal
+          isOpen={!!editingGame}
+          onClose={() => setEditingGame(null)}
+          game={editingGame}
+          onSave={handleSaveEdit}
+        />
+      )}
+
+      {/* Report Game Modal */}
+      {reportingGame && (
+        <ReportGameModal
+          isOpen={!!reportingGame}
+          onClose={() => setReportingGame(null)}
+          game={reportingGame}
+          onSubmit={handleSubmitReport}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// HELPER COMPONENTS
+// ============================================
+
+function StatCard({ value, label, sublabel, color }: { 
+  value: number | string; 
+  label: string; 
+  sublabel?: string;
+  color: string;
+}) {
+  return (
+    <div style={{
+      padding: "16px 20px",
+      backgroundColor: "white",
+      borderRadius: 12,
+      border: `2px solid ${color}30`,
+      boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+    }}>
+      <div style={{ 
+        fontSize: 28, 
+        fontWeight: 800, 
+        color,
+        display: "flex",
+        alignItems: "baseline",
+        gap: 4,
+      }}>
+        {value}
+        {sublabel && <span style={{ fontSize: 14, color: "#94a3b8" }}>{sublabel}</span>}
+      </div>
+      <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>{label}</div>
+    </div>
+  );
+}
+
+function FilterSelect({ label, value, onChange, options }: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <div>
+      <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: "#64748b" }}>
+        {label}
+      </label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          width: "100%",
+          padding: "10px 12px",
+          fontSize: 14,
+          borderRadius: 8,
+          border: "2px solid #e2e8f0",
+        }}
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div style={{ textAlign: "center", padding: 48, color: "#64748b" }}>
+      <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+      <p>Loading...</p>
+    </div>
+  );
+}
+
+function EmptyState({ icon, title, description, action }: {
+  icon: string;
+  title: string;
+  description: string;
+  action?: { label: string; onClick: () => void };
+}) {
+  return (
+    <div style={{
+      textAlign: "center",
+      padding: 64,
+      backgroundColor: "white",
+      borderRadius: 16,
+      boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+    }}>
+      <div style={{ fontSize: 64, marginBottom: 16 }}>{icon}</div>
+      <h3 style={{ margin: "0 0 8px 0", fontSize: 20, fontWeight: 700, color: "#1e293b" }}>
+        {title}
+      </h3>
+      <p style={{ margin: "0 0 24px 0", fontSize: 15, color: "#64748b" }}>
+        {description}
+      </p>
+      {action && (
+        <button
+          onClick={action.onClick}
+          style={{
+            padding: "12px 24px",
+            fontSize: 15,
+            fontWeight: 600,
+            borderRadius: 10,
+            border: "none",
+            background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+            color: "white",
+            cursor: "pointer",
+          }}
+        >
+          {action.label}
+        </button>
+      )}
     </div>
   );
 }

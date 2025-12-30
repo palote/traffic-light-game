@@ -11,7 +11,6 @@ import type {
   Team,
   Player,
   Question,
-  Stage0Config,
   GameMode,
 } from "../types/game";
 
@@ -19,15 +18,22 @@ import {
   createGame,
   addTeams,
   addQuestions,
-  generateRoomCode,
   startGame,
 } from "../services/gameRepository";
 
 import { CSVPreview } from "./CSVPreview";
+import { SaveGameModal } from "./library/SaveGameModal";
+import { PromptGeneratorModal } from "./PromptGeneratorModal";
+import { RoomCodeDisplay } from "./RoomCodeDisplay"; // ✅ NUEVO
 import { useGameMode } from "../contexts/GameModeContext";
+import { useAuth } from "../contexts/AuthContext";
+import { useI18n } from "../i18n";
 
 import { parseCSV } from "../utils/csvParser";
 import type { ParseResult, ParsedQuestion } from "../utils/csvParser";
+
+import { saveTeacherGame } from "../services/teacherLibraryService";
+import type { NewTeacherGame } from "../types/teacherLibrary";
 
 
 // 🦁 Nombres de equipos con animales (Traffic Light - niños)
@@ -66,6 +72,8 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { mode: gameMode, theme } = useGameMode();
+  const { user } = useAuth();
+  const { t: appT } = useI18n(); // Traducciones globales de la app
 
   // Estado del formulario
   const [level] = useState<GameLevel>('primary');
@@ -77,12 +85,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
   const [studentsPerTeam, setStudentsPerTeam] = useState(5);
   const [csvError, setCsvError] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
-
-  // ✅ Stage 0 Config
-  const [stage0Enabled, setStage0Enabled] = useState(gameMode === 'coopetition');
-  const [stage0MaterialType, setStage0MaterialType] = useState<'text' | 'link'>('link');
-  const [stage0MaterialContent, setStage0MaterialContent] = useState('');
-  const [stage0MaterialTitle, setStage0MaterialTitle] = useState('');
 
   // Texto de estudiantes
   const [studentsText, setStudentsText] = useState('');
@@ -110,11 +112,18 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
   // Estado para CSV de biblioteca
   const [libraryCSVLoaded, setLibraryCSVLoaded] = useState(false);
   const [libraryCSVTitle, setLibraryCSVTitle] = useState<string | null>(null);
+  
+  // Estado para guardar juego
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [csvContentForSave, setCsvContentForSave] = useState<string>('');
+  const [gameSaved, setGameSaved] = useState(false);
+
+  // Estado para generador de prompts
+  const [showPromptGenerator, setShowPromptGenerator] = useState(false);
 
   // Actualizar idioma cuando cambia el modo
   useEffect(() => {
     setLanguage(gameMode === 'coopetition' ? 'en' : 'es');
-    setStage0Enabled(gameMode === 'coopetition');
   }, [gameMode]);
 
   // Detectar si viene de la biblioteca
@@ -150,6 +159,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
   const processLibraryCSV = async (content: string, filename: string) => {
     setIsParsing(true);
     setCsvError(null);
+    setCsvContentForSave(content); // Guardar para SaveGameModal
 
     try {
       const result = await parseCSV(content);
@@ -203,49 +213,49 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
     };
   }, [studentsText]);
 
-  // Textos según idioma
+  // Textos según idioma del juego (language) usando traducciones globales
   const t = language === 'es'
     ? {
-      title: 'Configurar Nuevo Juego',
-      step1: 'Paso 1: Información Básica',
-      step2: 'Paso 2: Preguntas',
-      step3: 'Paso 3: Configurar Equipos',
-      step4: 'Paso 4: ¡Listo para Jugar!',
-      lang: 'Idioma',
-      spanish: 'Español',
-      english: 'English',
-      className: 'Nombre de la clase',
-      subject: 'Materia',
-      numTeams: 'Cantidad de equipos',
-      studentsPerTeam: 'Alumnos por equipo',
-      uploadCSV: 'Subir archivo CSV',
-      continue: 'Continuar',
-      back: 'Atrás',
-      createGame: 'Crear Juego',
-      assignRandom: 'Asignar aleatoriamente',
-      enterNames: 'Ingresá los nombres (uno por línea)',
-      roomCode: 'Código de sala',
-      shareCode: 'Compartí este código con tus estudiantes',
-      startGame: 'Comenzar Juego',
-      totalStudents: 'Total:',
-      uniqueStudents: 'Únicos:',
-      duplicates: 'Duplicados:',
-      duplicatesNote: 'Se ignoran duplicados al armar los equipos.',
-      chooseFromLibrary: 'Elegir de la biblioteca',
-      orUploadFile: 'O subir archivo propio:',
-      loadedFromLibrary: 'Cargado desde biblioteca:',
-      stage0Section: 'Etapa 0: Preparación (opcional)',
-      stage0Enable: 'Habilitar etapa de preparación grupal',
-      stage0Desc: 'Los equipos tendrán acceso a material de estudio antes de comenzar el juego.',
-      stage0Warning: '💡 ¿Primera vez jugando? Recomendamos saltar la Etapa 0 y usar un juego de la biblioteca. La Etapa 0 está pensada para estudiantes que ya conocen la dinámica del juego.',
-      stage0MaterialType: 'Tipo de material',
-      stage0MaterialLink: 'Link externo',
-      stage0MaterialText: 'Texto',
-      stage0MaterialTitle: 'Título del material',
-      stage0MaterialContent: 'Contenido',
-      stage0MaterialLinkPlaceholder: 'https://docs.google.com/...',
-      stage0MaterialTextPlaceholder: 'Pegá aquí el texto que los equipos deben leer...',
-      stage0GeneratePrompt: '¿Necesitás generar material? Usá este prompt con ChatGPT',
+      title: appT.setup.title,
+      step1: appT.setup.step1,
+      step2: appT.setup.step2,
+      step3: appT.setup.step3,
+      step4: appT.setup.step4,
+      lang: appT.setup.language,
+      spanish: appT.setup.spanish,
+      english: appT.setup.english,
+      className: appT.setup.className,
+      subject: appT.setup.subject,
+      numTeams: appT.setup.numTeams,
+      studentsPerTeam: appT.setup.studentsPerTeam,
+      uploadCSV: appT.setup.uploadCSV,
+      continue: appT.common.continue,
+      back: appT.common.back,
+      createGame: appT.setup.createGame,
+      assignRandom: appT.setup.assignRandom,
+      enterNames: appT.setup.enterNames,
+      roomCode: appT.setup.roomCode,
+      shareCode: appT.setup.shareCode,
+      startGame: appT.setup.startGame,
+      totalStudents: appT.setup.totalStudents,
+      uniqueStudents: appT.setup.uniqueStudents,
+      duplicates: appT.setup.duplicates,
+      duplicatesNote: appT.setup.duplicatesNote,
+      chooseFromLibrary: appT.setup.chooseFromLibrary,
+      orUploadFile: appT.setup.orUploadFile,
+      loadedFromLibrary: appT.setup.loadedFromLibrary,
+      stage0Section: appT.setup.stage0Section,
+      stage0Enable: appT.setup.stage0Enable,
+      stage0Desc: appT.setup.stage0Desc,
+      stage0Warning: appT.setup.stage0Warning,
+      stage0MaterialType: appT.setup.stage0MaterialType,
+      stage0MaterialLink: appT.setup.stage0MaterialLink,
+      stage0MaterialText: appT.setup.stage0MaterialText,
+      stage0MaterialTitle: appT.setup.stage0MaterialTitle,
+      stage0MaterialContent: appT.setup.stage0MaterialContent,
+      stage0MaterialLinkPlaceholder: appT.setup.stage0MaterialLinkPlaceholder,
+      stage0MaterialTextPlaceholder: appT.setup.stage0MaterialTextPlaceholder,
+      stage0GeneratePrompt: appT.setup.stage0GeneratePrompt,
     }
     : {
       title: 'Setup New Game',
@@ -302,6 +312,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
 
     reader.onload = async (e) => {
       const text = (e.target?.result as string) || "";
+      setCsvContentForSave(text); // Guardar para SaveGameModal
 
       setIsParsing(true);
       setCsvError(null);
@@ -328,9 +339,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
     const uniqueNames = parsedNamesInfo.unique;
 
     if (uniqueNames.length === 0) {
-      alert(language === 'es'
-        ? 'Primero ingresá los nombres de los estudiantes'
-        : 'First enter student names');
+      alert(appT.errors.enterStudentNames);
       return;
     }
 
@@ -395,46 +404,23 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
 
   const handleCreateGame = async () => {
     if (!className || !subject) {
-      alert(language === 'es'
-        ? 'Completá el nombre de la clase y la materia'
-        : 'Complete class name and subject');
+      alert(appT.errors.completeFields);
       return;
     }
 
     if (questions.length === 0) {
-      alert(language === 'es'
-        ? 'Subí un archivo CSV con preguntas'
-        : 'Upload a CSV file with questions');
+      alert(appT.errors.uploadCSV);
       return;
     }
 
     if (teams.length === 0) {
-      alert(language === 'es'
-        ? 'Asigná los estudiantes a los equipos'
-        : 'Assign students to teams');
+      alert(appT.errors.assignStudents);
       return;
     }
 
     setIsCreating(true);
 
     try {
-      // ✅ CORREGIDO: Solo incluir stage0Config si está habilitado y tiene contenido válido
-      let stage0Config = undefined;
-      if (stage0Enabled) {
-        if (stage0MaterialContent && stage0MaterialContent.trim()) {
-          stage0Config = {
-            enabled: true,
-            material: {
-              type: stage0MaterialType,
-              content: stage0MaterialContent.trim(),
-              ...(stage0MaterialTitle?.trim() ? { title: stage0MaterialTitle.trim() } : {}),
-            },
-          };
-        } else {
-          stage0Config = { enabled: true };
-        }
-      }
-
       const config: any = {
         level,
         language,
@@ -457,9 +443,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
       if (csvFile?.name) {
         config.csvFileName = csvFile.name;
       }
-      if (stage0Config) {
-        config.stage0Config = stage0Config;
-      }
 
       const gameId = await createGame(config);
       setCreatedGameId(gameId);
@@ -467,9 +450,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
       await addTeams(gameId, teams);
       await addQuestions(gameId, questions);
 
-      const code = generateRoomCode();
-      setRoomCode(code);
-
+      // El RoomCodeDisplay genera el código automáticamente
       setCurrentStep(4);
       setIsCreating(false);
 
@@ -478,7 +459,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
       }, 2000);
     } catch (error) {
       console.error('Error creating game:', error);
-      alert(language === 'es' ? 'Error al crear el juego' : 'Error creating game');
+      alert(appT.errors.creatingGame);
       setIsCreating(false);
     }
   };
@@ -585,171 +566,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
             </div>
           </div>
 
-          {/* STAGE 0 SECTION */}
-          <div style={{
-            marginTop: 24,
-            padding: 20,
-            backgroundColor: gameMode === 'coopetition' ? '#eef2ff' : '#f0fdf4',
-            borderRadius: 12,
-            border: `2px solid ${gameMode === 'coopetition' ? '#6366f1' : '#22c55e'}20`,
-          }}>
-            <h3 style={{ 
-              margin: '0 0 12px 0', 
-              fontSize: 16, 
-              color: '#1e293b',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}>
-              📖 {t.stage0Section}
-            </h3>
-            
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              cursor: 'pointer',
-              fontSize: 14,
-            }}>
-              <input
-                type="checkbox"
-                checked={stage0Enabled}
-                onChange={(e) => setStage0Enabled(e.target.checked)}
-                style={{ width: 18, height: 18 }}
-              />
-              <span>{t.stage0Enable}</span>
-            </label>
-            
-            <p style={{ 
-              margin: '8px 0 0 28px', 
-              fontSize: 13, 
-              color: '#64748b',
-            }}>
-              {t.stage0Desc}
-            </p>
-
-            {/* Advertencia para primera vez */}
-            <div style={{
-              margin: '12px 0 0 28px',
-              padding: '10px 14px',
-              backgroundColor: '#fef3c7',
-              borderRadius: 8,
-              border: '1px solid #fbbf24',
-              fontSize: 12,
-              color: '#92400e',
-              lineHeight: 1.5,
-            }}>
-              {t.stage0Warning}
-            </div>
-
-            {stage0Enabled && (
-              <div style={{ marginTop: 16, marginLeft: 28 }}>
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>
-                    {t.stage0MaterialType}
-                  </label>
-                  <div style={{ display: 'flex', gap: 16, marginTop: 6 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        value="link"
-                        checked={stage0MaterialType === 'link'}
-                        onChange={() => setStage0MaterialType('link')}
-                      />
-                      🔗 {t.stage0MaterialLink}
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        value="text"
-                        checked={stage0MaterialType === 'text'}
-                        onChange={() => setStage0MaterialType('text')}
-                      />
-                      📝 {t.stage0MaterialText}
-                    </label>
-                  </div>
-                </div>
-
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>
-                    {t.stage0MaterialTitle}
-                  </label>
-                  <input
-                    type="text"
-                    value={stage0MaterialTitle}
-                    onChange={(e) => setStage0MaterialTitle(e.target.value)}
-                    placeholder={language === 'es' ? "Material de lectura" : "Reading material"}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      marginTop: 6,
-                      borderRadius: 8,
-                      border: '2px solid #e2e8f0',
-                      fontSize: 14,
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>
-                    {t.stage0MaterialContent}
-                  </label>
-                  {stage0MaterialType === 'link' ? (
-                    <input
-                      type="url"
-                      value={stage0MaterialContent}
-                      onChange={(e) => setStage0MaterialContent(e.target.value)}
-                      placeholder={t.stage0MaterialLinkPlaceholder}
-                      style={{
-                        width: '100%',
-                        padding: '10px 12px',
-                        marginTop: 6,
-                        borderRadius: 8,
-                        border: '2px solid #e2e8f0',
-                        fontSize: 14,
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                  ) : (
-                    <textarea
-                      value={stage0MaterialContent}
-                      onChange={(e) => setStage0MaterialContent(e.target.value)}
-                      placeholder={t.stage0MaterialTextPlaceholder}
-                      rows={6}
-                      style={{
-                        width: '100%',
-                        padding: '10px 12px',
-                        marginTop: 6,
-                        borderRadius: 8,
-                        border: '2px solid #e2e8f0',
-                        fontSize: 14,
-                        resize: 'vertical',
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                  )}
-                </div>
-
-                <a
-                  href="https://chat.openai.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    fontSize: 13,
-                    color: theme.primary,
-                    textDecoration: 'none',
-                  }}
-                >
-                  💡 {t.stage0GeneratePrompt} →
-                </a>
-              </div>
-            )}
-          </div>
-
           <button
             className="btn-primary"
             onClick={() => setCurrentStep(2)}
@@ -796,6 +612,36 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
               }}
             >
               📚 {t.chooseFromLibrary}
+            </button>
+
+            {/* Botón Generar con IA */}
+            <button
+              onClick={() => setShowPromptGenerator(true)}
+              style={{
+                padding: '14px 24px',
+                fontSize: 15,
+                fontWeight: 600,
+                backgroundColor: '#f0fdf4',
+                color: '#16a34a',
+                border: '2px solid #22c55e',
+                borderRadius: 12,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)';
+                e.currentTarget.style.color = 'white';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = '#f0fdf4';
+                e.currentTarget.style.color = '#16a34a';
+              }}
+            >
+              🤖 {language === 'es' ? 'Generar con IA' : 'Generate with AI'}
             </button>
           </div>
 
@@ -960,26 +806,57 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
       {currentStep === 4 && (
         <div className="step-content step-ready">
           <h2>🎉 {t.step4}</h2>
-          <div className="room-code-display">
-            <label>{t.roomCode}</label>
-            <div className="code">{roomCode || 'ABC123'}</div>
-            <p>{t.shareCode}</p>
-          </div>
+          {/* ✅ NUEVO: Código de sala con QR */}
+          <RoomCodeDisplay gameId={createdGameId} />
 
-          {stage0Enabled && (
+          {/* Guardar juego en biblioteca personal */}
+          {user && csvContentForSave && !gameSaved && (
             <div style={{
               marginBottom: 20,
               padding: 16,
-              backgroundColor: theme.cardHoverBg,
+              backgroundColor: '#f0f9ff',
               borderRadius: 12,
-              border: `2px solid ${theme.primary}`,
+              border: '2px solid #0ea5e9',
               textAlign: 'center',
             }}>
-              <span style={{ fontSize: 24 }}>📖</span>
-              <p style={{ margin: '8px 0 0', fontSize: 14, color: '#475569' }}>
+              <span style={{ fontSize: 24 }}>💾</span>
+              <p style={{ margin: '8px 0 12px', fontSize: 14, color: '#0369a1' }}>
                 {language === 'es' 
-                  ? 'Etapa 0 habilitada. Los equipos verán el material de preparación.'
-                  : 'Stage 0 enabled. Teams will see the preparation material.'}
+                  ? '¿Querés guardar este juego para usarlo después?'
+                  : 'Do you want to save this game for later use?'}
+              </p>
+              <button
+                onClick={() => setShowSaveModal(true)}
+                style={{
+                  padding: '10px 20px',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  borderRadius: 8,
+                  border: 'none',
+                  backgroundColor: '#0ea5e9',
+                  color: 'white',
+                  cursor: 'pointer',
+                }}
+              >
+                💾 {appT.teacherLibrary.saveGame}
+              </button>
+            </div>
+          )}
+
+          {gameSaved && (
+            <div style={{
+              marginBottom: 20,
+              padding: 16,
+              backgroundColor: '#f0fdf4',
+              borderRadius: 12,
+              border: '2px solid #22c55e',
+              textAlign: 'center',
+            }}>
+              <span style={{ fontSize: 24 }}>✅</span>
+              <p style={{ margin: '8px 0 0', fontSize: 14, color: '#16a34a' }}>
+                {language === 'es' 
+                  ? '¡Juego guardado en tu biblioteca!'
+                  : 'Game saved to your library!'}
               </p>
             </div>
           )}
@@ -1022,6 +899,38 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
           }}
         />
       )}
+
+      {/* Save Game Modal */}
+      {showSaveModal && user && (
+        <SaveGameModal
+          isOpen={showSaveModal}
+          onClose={() => setShowSaveModal(false)}
+          csvContent={csvContentForSave}
+          csvFileName={csvFile?.name}
+          initialData={{
+            title: libraryCSVTitle || csvFile?.name?.replace('.csv', '') || '',
+            topic: subject,
+            language: language as 'es' | 'en',
+          }}
+          onSave={async (gameData: NewTeacherGame, csvContent: string) => {
+            await saveTeacherGame(
+              user.uid,
+              user.displayName || 'Docente',
+              user.email || '',
+              gameData,
+              csvContent
+            );
+            setGameSaved(true);
+            setShowSaveModal(false);
+          }}
+        />
+      )}
+
+      {/* Prompt Generator Modal */}
+      <PromptGeneratorModal
+        isOpen={showPromptGenerator}
+        onClose={() => setShowPromptGenerator(false)}
+      />
     </div>
   );
 }

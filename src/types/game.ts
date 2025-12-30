@@ -105,9 +105,55 @@ export interface Round {
 }
 
 // ============================================
-// STAGE 0 CONFIG (NUEVO)
+// STAGE 0 CONFIG (v1.1 - Completo)
 // ============================================
 
+// Tipos de consigna propuesta
+export type ProposalType = 
+  | 'comprehension'   // Comprensión básica
+  | 'relation'        // Relación con otros temas
+  | 'application'     // Aplicación práctica
+  | 'analysis'        // Análisis / Opinión
+  | 'production';     // Producción
+
+// Propuesta de consigna de un equipo
+export interface Stage0Proposal {
+  id: string;
+  teamId: string;
+  teamName: string;
+  
+  // Contenido
+  type: ProposalType;
+  questionText: string;
+  hint?: string;
+  
+  // Para tipo 'relation' - con qué tema se conecta
+  relatedTopic?: string;
+  
+  // Metadata
+  submittedAt: number;
+  submittedBy?: string;  // nombre del estudiante que la escribió
+  
+  // Review del docente
+  status: 'pending' | 'approved' | 'rejected' | 'edited';
+  bonusPoints: number;  // puntos asignados por el docente (0+)
+  teacherComment?: string;
+  editedText?: string;   // si el docente la editó
+  reviewedAt?: number;
+  savedToLibrary?: boolean;
+}
+
+// Estado de Stage 0 durante el juego
+export type Stage0Phase = 'reading' | 'proposing' | 'reviewing' | 'results';
+
+export interface Stage0State {
+  phase: Stage0Phase;
+  proposals: Record<string, Stage0Proposal>;
+  timerStartedAt?: number;
+  readyTeams: string[];  // equipos que terminaron de proponer
+}
+
+// Configuración de Stage 0
 export interface Stage0Config {
   enabled: boolean;
   material?: {
@@ -115,9 +161,14 @@ export interface Stage0Config {
     content: string;              // texto, URL, o path en Storage
     title?: string;               // título opcional del material
   };
-  // Para v1.1:
-  // timerMinutes?: number;
-  // maxQuestionsPerTeam?: number;
+  
+  // Propuestas de consignas (v1.1)
+  proposalsEnabled: boolean;
+  maxProposalsPerTeam: number;  // 1-10, default 5
+  timerMinutes?: number;        // tiempo límite opcional
+  
+  // Puntos - el docente los asigna manualmente al aprobar
+  // (no hay puntos predefinidos por tipo)
 }
 
 // ============================================
@@ -267,6 +318,8 @@ export interface Game {
   stage2Config?: Stage2Config;
   stage2?: Stage2State;
 
+  // Stage 0 state (v1.1)
+  stage0?: Stage0State;
   stage0BonusApplied?: boolean;
 
   createdAt: number;
