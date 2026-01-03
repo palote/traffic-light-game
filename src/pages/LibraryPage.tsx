@@ -15,9 +15,9 @@ import { ReportGameModal } from "../components/library/ReportGameModal";
 
 // Services
 import { getAllLibraryItems, getCSVAsFile, deleteLibraryItem } from "../services/libraryService";
-import { 
-  getMyGames, 
-  getCommunityGames, 
+import {
+  getMyGames,
+  getCommunityGames,
   deleteTeacherGame,
   updateTeacherGame,
   copyGameToMyLibrary,
@@ -164,7 +164,7 @@ export function LibraryPage() {
       if (language !== 'all' && item.language !== language) return false;
       if (search) {
         const searchLower = search.toLowerCase();
-        const match = 
+        const match =
           item.title?.toLowerCase().includes(searchLower) ||
           item.topic?.toLowerCase().includes(searchLower) ||
           item.mainContents?.toLowerCase().includes(searchLower);
@@ -184,7 +184,7 @@ export function LibraryPage() {
       if (language !== 'all' && game.language !== language) return false;
       if (search) {
         const searchLower = search.toLowerCase();
-        const match = 
+        const match =
           game.title?.toLowerCase().includes(searchLower) ||
           game.description?.toLowerCase().includes(searchLower) ||
           game.topic?.toLowerCase().includes(searchLower);
@@ -205,11 +205,17 @@ export function LibraryPage() {
       const reader = new FileReader();
       reader.onload = () => {
         const csvContent = reader.result as string;
-        sessionStorage.setItem('library_csv_content', csvContent);
-        sessionStorage.setItem('library_csv_filename', file.name);
-        sessionStorage.setItem('library_csv_title', item.title || item.topic);
-        sessionStorage.setItem('library_csv_subject', item.subject || item.area);
-        navigate('/setup', { state: { fromLibrary: true, csvTitle: item.title || item.topic } });
+
+        // ✅ Pasar todo en location.state (no depender de sessionStorage)
+        navigate('/setup-traditional', {
+          state: {
+            fromLibrary: true,
+            csvContent,
+            csvFilename: file.name,
+            csvTitle: item.title || item.topic,
+            csvSubject: item.subject || item.area,
+          }
+        });
       };
       reader.readAsText(file);
     } catch (error) {
@@ -245,10 +251,10 @@ export function LibraryPage() {
         sessionStorage.setItem('library_csv_filename', file.name);
         sessionStorage.setItem('library_csv_title', game.title);
         sessionStorage.setItem('library_csv_subject', game.subject || game.area);
-        
+
         // Increment usage
         incrementGameUsage(game.id);
-        
+
         navigate('/setup', { state: { fromLibrary: true, csvTitle: game.title } });
       };
       reader.readAsText(file);
@@ -277,7 +283,7 @@ export function LibraryPage() {
   const handleToggleVisibility = async (game: TeacherGame) => {
     if (!user) return;
     const newVisibility = game.visibility === 'public' ? 'private' : 'public';
-    
+
     // Check limits if making private
     if (newVisibility === 'private' && myStats.privateCount >= TEACHER_LIMITS.maxPrivateGames) {
       alert(t.teacherLibrary.privateLimitReached);
@@ -286,7 +292,7 @@ export function LibraryPage() {
 
     try {
       await updateTeacherGame(game.id, user.uid, { visibility: newVisibility });
-      setMyGames(prev => prev.map(g => 
+      setMyGames(prev => prev.map(g =>
         g.id === game.id ? { ...g, visibility: newVisibility } : g
       ));
       // Refresh stats
@@ -300,7 +306,7 @@ export function LibraryPage() {
 
   const handleCopyGame = async (game: TeacherGame) => {
     if (!user) return;
-    
+
     // Check limits
     if (myStats.privateCount >= TEACHER_LIMITS.maxPrivateGames) {
       alert(t.teacherLibrary.privateLimitReached);
@@ -341,10 +347,10 @@ export function LibraryPage() {
 
   const handleSaveEdit = async (updates: Partial<TeacherGame>) => {
     if (!editingGame || !user) return;
-    
+
     try {
       await updateTeacherGame(editingGame.id, user.uid, updates);
-      setMyGames(prev => prev.map(g => 
+      setMyGames(prev => prev.map(g =>
         g.id === editingGame.id ? { ...g, ...updates, updatedAt: Date.now() } : g
       ));
       setEditingGame(null);
@@ -356,7 +362,7 @@ export function LibraryPage() {
 
   const handleSubmitReport = async (reason: ReportReason, details?: string) => {
     if (!reportingGame || !user) return;
-    
+
     try {
       await reportGame(reportingGame.id, user.uid, reason, details);
       // Optionally refresh community games to hide highly reported ones
@@ -373,7 +379,7 @@ export function LibraryPage() {
 
   const showSubjectFilter = gameMode === 'coopetition' || gameMode === 'all';
   const showGradeFilter = gameMode === 'traffic-light' || gameMode === 'all';
-  const isLoading = 
+  const isLoading =
     (activeTab === 'official' && isLoadingOfficial) ||
     (activeTab === 'my-games' && isLoadingMyGames) ||
     (activeTab === 'community' && isLoadingCommunity);
@@ -416,7 +422,7 @@ export function LibraryPage() {
             >
               ← {t.common.back}
             </button>
-            
+
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 32 }}>📚</span>
               <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>{t.library.title}</h1>
@@ -432,7 +438,7 @@ export function LibraryPage() {
 
       {/* Content */}
       <main style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
-        
+
         {/* Tabs */}
         <div style={{
           display: "flex",
@@ -482,26 +488,26 @@ export function LibraryPage() {
             gap: 12,
             marginBottom: 24,
           }}>
-            <StatCard 
-              value={myStats.privateCount} 
+            <StatCard
+              value={myStats.privateCount}
               label={t.teacherLibrary.privateGames}
               sublabel={`/ ${TEACHER_LIMITS.maxPrivateGames}`}
-              color="#6366f1" 
+              color="#6366f1"
             />
-            <StatCard 
-              value={myStats.publicCount} 
+            <StatCard
+              value={myStats.publicCount}
               label={t.teacherLibrary.publicGames}
-              color="#22c55e" 
+              color="#22c55e"
             />
-            <StatCard 
-              value={myStats.totalUses} 
+            <StatCard
+              value={myStats.totalUses}
               label={t.teacherLibrary.totalUses}
-              color="#f59e0b" 
+              color="#f59e0b"
             />
-            <StatCard 
-              value={myStats.avgRating ? myStats.avgRating.toFixed(1) : '-'} 
+            <StatCard
+              value={myStats.avgRating ? myStats.avgRating.toFixed(1) : '-'}
               label={t.teacherLibrary.avgRating}
-              color="#ec4899" 
+              color="#ec4899"
             />
           </div>
         )}
@@ -699,7 +705,7 @@ export function LibraryPage() {
                   gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
                   gap: 20,
                 }}>
-                 {filteredOfficialItems.map(item => (
+                  {filteredOfficialItems.map(item => (
                     <LibraryCard
                       key={item.id}
                       item={item}
@@ -799,9 +805,9 @@ export function LibraryPage() {
 // HELPER COMPONENTS
 // ============================================
 
-function StatCard({ value, label, sublabel, color }: { 
-  value: number | string; 
-  label: string; 
+function StatCard({ value, label, sublabel, color }: {
+  value: number | string;
+  label: string;
   sublabel?: string;
   color: string;
 }) {
@@ -813,9 +819,9 @@ function StatCard({ value, label, sublabel, color }: {
       border: `2px solid ${color}30`,
       boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
     }}>
-      <div style={{ 
-        fontSize: 28, 
-        fontWeight: 800, 
+      <div style={{
+        fontSize: 28,
+        fontWeight: 800,
         color,
         display: "flex",
         alignItems: "baseline",

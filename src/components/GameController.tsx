@@ -65,13 +65,22 @@ function normalizeRounds(rounds: unknown): Record<number, Round> {
 }
 
 function normalizeTeams(teamsObj: unknown): Team[] {
-  const arr =
-    teamsObj && typeof teamsObj === "object"
-      ? (Object.values(teamsObj as Record<string, unknown>) as Team[])
-      : [];
+  if (!teamsObj || typeof teamsObj !== "object") return [];
 
-  return arr
-    .filter((t: any) => !!t && typeof t === "object" && !!t.id)
+  // Si es objeto, convertir a array agregando el id de la key
+  if (!Array.isArray(teamsObj)) {
+    return Object.entries(teamsObj as Record<string, unknown>)
+      .filter(([key, val]) => val && typeof val === 'object')
+      .map(([key, val]: [string, any]) => ({
+        ...val,
+        id: val.id || key, // ✅ Usar la key como id si no existe
+        players: normalizePlayers(val.players),
+      })) as Team[];
+  }
+
+  // Si ya es array
+  return (teamsObj as any[])
+    .filter((t: any) => !!t && typeof t === "object")
     .map((t: any) => ({
       ...t,
       players: normalizePlayers(t.players),
@@ -104,7 +113,7 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
   const [error, setError] = useState<string | null>(null);
 
   const [showStage1Classroom, setShowStage1Classroom] = useState(false);
-  
+
   // ✅ NUEVO: Toggle para vista Stage 0
   const [showStage0TeacherPanel, setShowStage0TeacherPanel] = useState(false);
 
@@ -329,6 +338,15 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
 
         const currentRound = roundsByNumber[currentRoundNumber];
 
+        // ✅ AGREGÁ ESTE LOG (temporal)
+        console.log("🔍 GameController currentRound:", {
+          teamId,
+          currentRoundNumber,
+          captainName: currentRound?.captainName,
+          respondingPlayerName: currentRound?.respondingPlayerName,
+          fullRound: currentRound
+        });
+
         if (!currentRound) {
           screen = (
             <div className="game-controller waiting">
@@ -408,8 +426,8 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
         </button>
       )}
 
-      {/* Botón toggle ClassroomView Stage 1 */}
-      {game?.status?.status === "stage1" && (
+      {/* ✅ Botón toggle ClassroomView Stage 1 (solo docente) */}
+      {game?.status?.status === "stage1" && isTeacher === true && (
         <button
           onClick={() => setShowStage1Classroom(!showStage1Classroom)}
           style={{
@@ -445,4 +463,5 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
       </div>
     </div>
   );
+
 }

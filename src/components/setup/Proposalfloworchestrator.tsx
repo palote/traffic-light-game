@@ -25,61 +25,65 @@ interface ProposalGameConfig {
   numberOfTeams: number;
   materials: Array<{
     id: string;
-    type: 'file' | 'text' | 'link';
+    type: "file" | "text" | "link";
     name: string;
     content: string;
   }>;
   maxProposalsPerTeam: number;
   timerMinutes: number | null;
   showLiveProposals: boolean;
+  teams: Team[];  // ✅ AGREGADO: Equipos con jugadores asignados
 }
 
 // Nombres de equipos
 const TEAM_ANIMALS = [
-  { emoji: '🦁', name: 'Leones', nameEn: 'Lions' },
-  { emoji: '🐯', name: 'Tigres', nameEn: 'Tigers' },
-  { emoji: '🐻', name: 'Osos', nameEn: 'Bears' },
-  { emoji: '🦅', name: 'Águilas', nameEn: 'Eagles' },
-  { emoji: '🐺', name: 'Lobos', nameEn: 'Wolves' },
-  { emoji: '🦊', name: 'Zorros', nameEn: 'Foxes' },
-  { emoji: '🦒', name: 'Jirafas', nameEn: 'Giraffes' },
-  { emoji: '🐘', name: 'Elefantes', nameEn: 'Elephants' },
+  { emoji: "🦁", name: "Leones", nameEn: "Lions" },
+  { emoji: "🐯", name: "Tigres", nameEn: "Tigers" },
+  { emoji: "🐻", name: "Osos", nameEn: "Bears" },
+  { emoji: "🦅", name: "Águilas", nameEn: "Eagles" },
+  { emoji: "🐺", name: "Lobos", nameEn: "Wolves" },
+  { emoji: "🦊", name: "Zorros", nameEn: "Foxes" },
+  { emoji: "🦒", name: "Jirafas", nameEn: "Giraffes" },
+  { emoji: "🐘", name: "Elefantes", nameEn: "Elephants" },
 ];
 
 const TEAM_PROFESSIONAL = [
-  { emoji: '🔷', name: 'Estrategas', nameEn: 'Strategists' },
-  { emoji: '🔶', name: 'Innovadores', nameEn: 'Innovators' },
-  { emoji: '💎', name: 'Vanguardia', nameEn: 'Vanguard' },
-  { emoji: '⚡', name: 'Impulso', nameEn: 'Momentum' },
-  { emoji: '🎯', name: 'Enfoque', nameEn: 'Focus' },
-  { emoji: '🚀', name: 'Pioneros', nameEn: 'Pioneers' },
-  { emoji: '💡', name: 'Creativos', nameEn: 'Creatives' },
-  { emoji: '🔥', name: 'Impacto', nameEn: 'Impact' },
+  { emoji: "🔷", name: "Estrategas", nameEn: "Strategists" },
+  { emoji: "🔶", name: "Innovadores", nameEn: "Innovators" },
+  { emoji: "💎", name: "Vanguardia", nameEn: "Vanguard" },
+  { emoji: "⚡", name: "Impulso", nameEn: "Momentum" },
+  { emoji: "🎯", name: "Enfoque", nameEn: "Focus" },
+  { emoji: "🚀", name: "Pioneros", nameEn: "Pioneers" },
+  { emoji: "💡", name: "Creativos", nameEn: "Creatives" },
+  { emoji: "🔥", name: "Impacto", nameEn: "Impact" },
 ];
 
-type FlowStep = 'setup' | 'waiting' | 'collecting' | 'curating' | 'done';
+type FlowStep = "setup" | "waiting" | "collecting" | "curating" | "done";
 
 interface ProposalFlowOrchestratorProps {
   onBack: () => void;
   onGameCreated: (gameId: string) => void;
 }
 
-export function ProposalFlowOrchestrator({ onBack, onGameCreated }: ProposalFlowOrchestratorProps) {
+export function ProposalFlowOrchestrator({
+  onBack,
+  onGameCreated,
+}: ProposalFlowOrchestratorProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { mode: gameMode } = useGameMode();
   const { language } = useI18n();
-  
-  const [step, setStep] = useState<FlowStep>('setup');
-  const [gameId, setGameId] = useState<string>('');
+
+  const [step, setStep] = useState<FlowStep>("setup");
+  const [gameId, setGameId] = useState<string>("");
   const [config, setConfig] = useState<ProposalGameConfig | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [isCreating, setIsCreating] = useState(false);
 
   // Generar código de sala
   const generateRoomCode = (): string => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = '';
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let code = "";
     for (let i = 0; i < 6; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
@@ -88,35 +92,23 @@ export function ProposalFlowOrchestrator({ onBack, onGameCreated }: ProposalFlow
 
   // Crear juego en Firebase
   const createGame = async (proposalConfig: ProposalGameConfig): Promise<string> => {
-    const isCoopetition = gameMode === 'coopetition';
+    const isCoopetition = gameMode === "coopetition";
     const teamNames = isCoopetition ? TEAM_PROFESSIONAL : TEAM_ANIMALS;
-    const lang = language === 'en' ? 'en' : 'es';
-    
-    // Crear equipos
-    const gameTeams: Team[] = [];
-    for (let i = 0; i < proposalConfig.numberOfTeams; i++) {
-      const teamData = teamNames[i];
-      gameTeams.push({
-        id: `team_${i + 1}`,
-        name: lang === 'en' ? teamData.nameEn : teamData.name,
-        emoji: teamData.emoji,
-        color: ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'][i],
-        players: [],
-        score: 0,
-        stage0Bonus: 0,
-      });
-    }
-    
+    const lang = language === "en" ? "en" : "es";
+
+    // ✅ MODIFICADO (Cambio 1): Usar los equipos que vienen del config (ya tienen jugadores)
+    const gameTeams: Team[] = proposalConfig.teams;
+
     // Configuración del juego
     const gameConfig = {
-      level: 'primary',
+      level: "primary",
       language: lang,
       gameMode: gameMode,
       className: proposalConfig.gameName,
-      subject: proposalConfig.subject || '',
+      subject: proposalConfig.subject || "",
       numberOfTeams: proposalConfig.numberOfTeams,
       studentsPerTeam: 5,
-      ratingMode: 'devices',
+      ratingMode: "devices",
       timers: {
         stage1Rating: 30,
         stage2Hint: 60,
@@ -135,35 +127,47 @@ export function ProposalFlowOrchestrator({ onBack, onGameCreated }: ProposalFlow
     };
 
     // Crear juego en Firebase
-    const gamesRef = ref(database, 'games');
+    const gamesRef = ref(database, "games");
     const newGameRef = push(gamesRef);
     const newGameId = newGameRef.key!;
-    
+
     await set(newGameRef, {
       config: gameConfig,
       status: {
         currentStage: 0,
-        currentPhase: 'proposal-setup',
+        currentPhase: "proposal-setup",
         isActive: true,
         startedAt: Date.now(),
       },
       createdBy: {
-        uid: user?.uid || 'anonymous',
-        email: user?.email || '',
+        uid: user?.uid || "anonymous",
+        email: user?.email || "",
       },
     });
 
-    // Agregar equipos
+    // ✅ MODIFICADO (Cambio 2): Agregar equipos con jugadores (players array -> objeto para Firebase)
     const teamsRef = ref(database, `games/${newGameId}/teams`);
     const teamsData: Record<string, unknown> = {};
-    gameTeams.forEach(team => {
+    gameTeams.forEach((team) => {
+      // Convertir players array a objeto para Firebase
+      const playersObj: Record<string, any> = {};
+      (team.players as any[]).forEach((player: any) => {
+        playersObj[player.id] = {
+          id: player.id,
+          name: player.name,
+          score: player.score || 0,
+          consecutiveLastPlace: player.consecutiveLastPlace || 0,
+        };
+      });
+
       teamsData[team.id] = {
+        id: team.id,
         name: team.name,
-        emoji: team.emoji,
-        color: team.color,
+        emoji: (team as any).emoji || "",
+        color: (team as any).color || "#6366f1",
         score: 0,
         stage0Bonus: 0,
-        players: {},
+        players: playersObj,
       };
     });
     await set(teamsRef, teamsData);
@@ -171,7 +175,7 @@ export function ProposalFlowOrchestrator({ onBack, onGameCreated }: ProposalFlow
     // Inicializar stage0
     const stage0Ref = ref(database, `games/${newGameId}/stage0`);
     await set(stage0Ref, {
-      phase: 'waiting',
+      phase: "waiting",
       proposals: {},
       timerMinutes: proposalConfig.timerMinutes,
     });
@@ -182,7 +186,7 @@ export function ProposalFlowOrchestrator({ onBack, onGameCreated }: ProposalFlow
     await set(roomCodeRef, {
       gameId: newGameId,
       createdAt: Date.now(),
-      createdBy: user?.uid || 'anonymous',
+      createdBy: user?.uid || "anonymous",
     });
 
     // Guardar código en el juego
@@ -194,6 +198,7 @@ export function ProposalFlowOrchestrator({ onBack, onGameCreated }: ProposalFlow
     return newGameId;
   };
 
+
   // Handler: Configuración completada
   const handleSetupComplete = async (proposalConfig: ProposalGameConfig) => {
     setIsCreating(true);
@@ -201,10 +206,10 @@ export function ProposalFlowOrchestrator({ onBack, onGameCreated }: ProposalFlow
       setConfig(proposalConfig);
       const newGameId = await createGame(proposalConfig);
       setGameId(newGameId);
-      setStep('waiting');
+      setStep("waiting");
     } catch (error) {
-      console.error('Error creating game:', error);
-      alert('Error al crear el juego');
+      console.error("Error creating game:", error);
+      alert("Error al crear el juego");
     } finally {
       setIsCreating(false);
     }
@@ -213,48 +218,60 @@ export function ProposalFlowOrchestrator({ onBack, onGameCreated }: ProposalFlow
   // Handler: Comenzar propuestas
   const handleStartProposals = async () => {
     if (!gameId || !config) return;
-    
+
     await update(ref(database, `games/${gameId}/stage0`), {
-      phase: 'collecting',
+      phase: "collecting",
       timerStartedAt: Date.now(),
       timerMinutes: config.timerMinutes,
     });
-    
+
     await update(ref(database, `games/${gameId}/status`), {
-      currentPhase: 'proposal-collecting',
+      currentPhase: "proposal-collecting",
     });
-    
-    setStep('collecting');
+
+    setStep("collecting");
   };
 
   // Handler: Cerrar propuestas y pasar a curado
   const handleCloseProposals = async () => {
     if (!gameId) return;
-    
+
     await update(ref(database, `games/${gameId}/stage0`), {
-      phase: 'curating',
+      phase: "curating",
       closedAt: Date.now(),
     });
-    
+
     await update(ref(database, `games/${gameId}/status`), {
-      currentPhase: 'proposal-curating',
+      currentPhase: "proposal-curating",
     });
-    
-    setStep('curating');
+
+    setStep("curating");
   };
 
   // Handler: Curado completado
-  const handleCurationComplete = async (questions: Question[], bonusPoints: Record<string, number>) => {
+  const handleCurationComplete = async (
+    questions: Question[],
+    bonusPoints: Record<string, number>
+  ) => {
     if (!gameId) return;
-    
+
+    // ✅ DEBUG: Ver qué llega
+    console.log("🔍 handleCurationComplete questions:", questions.map(q => ({
+      id: q.id,
+      text: (q as any).questionText || (q as any).text,
+      hint: q.hint,
+      stage: (q as any).stage,
+    })));
+
     // Guardar preguntas
     const questionsRef = ref(database, `games/${gameId}/questions`);
     const questionsData: Record<string, unknown> = {};
-    questions.forEach(q => {
+    questions.forEach((q) => {
       questionsData[q.id] = {
-        questionText: q.questionText,
-        hint: q.hint || '',
-        stage: q.stage,
+        id: q.id,
+        text: q.questionText || q.text,
+        hint: q.hint || "",
+        suggestedStage: q.stage || 1,
         order: q.order,
       };
     });
@@ -265,47 +282,48 @@ export function ProposalFlowOrchestrator({ onBack, onGameCreated }: ProposalFlow
       if (bonus > 0) {
         await update(ref(database, `games/${gameId}/teams/${teamId}`), {
           stage0Bonus: bonus,
-          score: bonus,
+          totalScore: bonus,
         });
       }
     }
 
-    // Actualizar estado del juego
+    // Actualizar estado del juego - marcar Stage 0 como completado
     await update(ref(database, `games/${gameId}/stage0`), {
-      phase: 'done',
+      phase: "done",
       completedAt: Date.now(),
     });
-    
+
+    // ✅ NUEVO: Cambiar a status "stage0" para que finishStage0AndStartStage1 funcione
     await update(ref(database, `games/${gameId}/status`), {
-      currentStage: 1,
-      currentPhase: 'preparation',
+      status: "stage0",
+      currentStage: 0,
     });
 
+    // ✅ NUEVO: Usar la función que inicializa Stage 1 correctamente
+    const { finishStage0AndStartStage1 } = await import("../../services/stage0Service");
+    await finishStage0AndStartStage1(gameId);
+
+    console.log("✅ Curation complete, Stage 1 started");
     onGameCreated(gameId);
   };
 
   // Handler: Volver al paso anterior
   const handleBack = () => {
-    if (step === 'setup') {
+    if (step === "setup") {
       onBack();
-    } else if (step === 'waiting') {
-      setStep('setup');
-      setGameId('');
+    } else if (step === "waiting") {
+      setStep("setup");
+      setGameId("");
       setConfig(null);
     }
   };
 
   // Render según el paso
-  if (step === 'setup') {
-    return (
-      <StudentProposalSetup
-        onComplete={handleSetupComplete}
-        onBack={onBack}
-      />
-    );
+  if (step === "setup") {
+    return <StudentProposalSetup onComplete={handleSetupComplete} onBack={onBack} />;
   }
-  
-  if (step === 'waiting') {
+
+  if (step === "waiting") {
     if (!gameId || !config) return null;
     return (
       <ProposalWaitingRoom
@@ -316,8 +334,8 @@ export function ProposalFlowOrchestrator({ onBack, onGameCreated }: ProposalFlow
       />
     );
   }
-  
-  if (step === 'collecting') {
+
+  if (step === "collecting") {
     if (!gameId || !config) return null;
     return (
       <ProposalTeacherView
@@ -331,18 +349,18 @@ export function ProposalFlowOrchestrator({ onBack, onGameCreated }: ProposalFlow
       />
     );
   }
-  
-  if (step === 'curating') {
+
+  if (step === "curating") {
     if (!gameId) return null;
     return (
       <ProposalCurationView
         gameId={gameId}
         teams={teams}
         onComplete={handleCurationComplete}
-        onBack={() => {}}
+        onBack={() => { }}
       />
     );
   }
-  
+
   return null;
 }

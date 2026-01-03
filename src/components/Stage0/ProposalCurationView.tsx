@@ -1,5 +1,6 @@
 // src/components/Stage0/ProposalCurationView.tsx
 // Pantalla donde el profesor cura las propuestas de los equipos
+// ✅ ACTUALIZADO: Incluye campo de hint para Stage 2
 
 import { useState, useEffect } from "react";
 import { ref, onValue, off, update, get } from "firebase/database";
@@ -20,6 +21,13 @@ interface Proposal {
   createdAt: number;
 }
 
+// ✅ NUEVO: Tipo para propuesta seleccionada con hint
+interface SelectedProposal {
+  stage: 1 | 2;
+  text: string;
+  hint: string;
+}
+
 interface ProposalCurationViewProps {
   gameId: string;
   teams: Team[];
@@ -31,13 +39,16 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
   const { language } = useI18n();
   
   const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [selectedProposals, setSelectedProposals] = useState<Map<string, { stage: 1 | 2; text: string }>>(new Map());
+  // ✅ MODIFICADO: Ahora incluye hint
+  const [selectedProposals, setSelectedProposals] = useState<Map<string, SelectedProposal>>(new Map());
   const [bonusPoints, setBonusPoints] = useState<Record<string, number>>({});
   const [filter, setFilter] = useState<'all' | 'pending' | 'accepted'>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const [editHint, setEditHint] = useState('');
   const [showAddManual, setShowAddManual] = useState(false);
   const [manualQuestion, setManualQuestion] = useState('');
+  const [manualHint, setManualHint] = useState('');
   const [manualStage, setManualStage] = useState<1 | 2>(1);
 
   // Traducciones
@@ -68,6 +79,12 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
     
     addManual: language === 'es' ? '+ Agregar consigna propia' : '+ Add own question',
     manualPlaceholder: language === 'es' ? 'Escribí tu consigna...' : 'Write your question...',
+    
+    // ✅ NUEVO: Traducciones para hint
+    hint: language === 'es' ? 'Pista' : 'Hint',
+    hintPlaceholder: language === 'es' ? 'Pista opcional para Etapa 2 (se muestra antes de responder)' : 'Optional hint for Stage 2 (shown before answering)',
+    hintDesc: language === 'es' ? 'La pista ayuda a orientar la respuesta en Etapa 2' : 'The hint helps guide the answer in Stage 2',
+    addHint: language === 'es' ? '+ Agregar pista' : '+ Add hint',
     
     summary: language === 'es' ? 'Resumen' : 'Summary',
     stage1Questions: language === 'es' ? 'consignas Etapa 1' : 'Stage 1 questions',
@@ -130,9 +147,11 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
   // Aceptar propuesta
   const handleAccept = (proposal: Proposal, stage: 1 | 2) => {
     const newSelected = new Map(selectedProposals);
+    const existing = newSelected.get(proposal.id);
     newSelected.set(proposal.id, { 
       stage, 
-      text: proposal.editedText || proposal.questionText 
+      text: existing?.text || proposal.editedText || proposal.questionText,
+      hint: existing?.hint || '',
     });
     setSelectedProposals(newSelected);
   };
@@ -146,19 +165,36 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
 
   // Editar propuesta
   const handleStartEdit = (proposal: Proposal) => {
+    const selectedData = selectedProposals.get(proposal.id);
     setEditingId(proposal.id);
-    setEditText(selectedProposals.get(proposal.id)?.text || proposal.questionText);
+    setEditText(selectedData?.text || proposal.questionText);
+    setEditHint(selectedData?.hint || '');
   };
 
   const handleSaveEdit = (proposalId: string) => {
     const current = selectedProposals.get(proposalId);
     if (current) {
       const newSelected = new Map(selectedProposals);
-      newSelected.set(proposalId, { ...current, text: editText });
+      newSelected.set(proposalId, { 
+        ...current, 
+        text: editText,
+        hint: editHint,
+      });
       setSelectedProposals(newSelected);
     }
     setEditingId(null);
     setEditText('');
+    setEditHint('');
+  };
+
+  // ✅ NUEVO: Actualizar solo el hint
+  const handleUpdateHint = (proposalId: string, hint: string) => {
+    const current = selectedProposals.get(proposalId);
+    if (current) {
+      const newSelected = new Map(selectedProposals);
+      newSelected.set(proposalId, { ...current, hint });
+      setSelectedProposals(newSelected);
+    }
   };
 
   // Agregar consigna manual
@@ -180,10 +216,15 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
     setProposals(prev => [...prev, newProposal]);
     
     const newSelected = new Map(selectedProposals);
-    newSelected.set(manualId, { stage: manualStage, text: manualQuestion.trim() });
+    newSelected.set(manualId, { 
+      stage: manualStage, 
+      text: manualQuestion.trim(),
+      hint: manualHint.trim(),
+    });
     setSelectedProposals(newSelected);
     
     setManualQuestion('');
+    setManualHint('');
     setManualStage(1);
     setShowAddManual(false);
   };
@@ -199,7 +240,7 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
         questions.push({
           id: `q_${order}`,
           questionText: value.text,
-          hint: '',
+          hint: value.hint || '',
           stage: 1,
           order: order,
         });
@@ -213,7 +254,7 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
         questions.push({
           id: `q_${order}`,
           questionText: value.text,
-          hint: '',
+          hint: value.hint || '',
           stage: 2,
           order: order,
         });
@@ -359,6 +400,31 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
                   boxSizing: 'border-box',
                 }}
               />
+              
+              {/* ✅ NUEVO: Campo de hint en manual */}
+              {manualStage === 2 && (
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#7c3aed', marginBottom: 4 }}>
+                    💡 {t.hint} ({t.stage2})
+                  </label>
+                  <input
+                    type="text"
+                    value={manualHint}
+                    onChange={(e) => setManualHint(e.target.value)}
+                    placeholder={t.hintPlaceholder}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      fontSize: 13,
+                      border: '1px solid #c4b5fd',
+                      borderRadius: 6,
+                      backgroundColor: '#faf5ff',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              )}
+              
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <select
                   value={manualStage}
@@ -389,7 +455,7 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
                   {t.save}
                 </button>
                 <button
-                  onClick={() => { setShowAddManual(false); setManualQuestion(''); }}
+                  onClick={() => { setShowAddManual(false); setManualQuestion(''); setManualHint(''); }}
                   style={{
                     padding: '8px 16px',
                     fontSize: 13,
@@ -418,6 +484,7 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
               const isSelected = selectedProposals.has(proposal.id);
               const selectedData = selectedProposals.get(proposal.id);
               const isEditing = editingId === proposal.id;
+              const isStage2 = selectedData?.stage === 2;
               
               return (
                 <div
@@ -483,9 +550,33 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
                           borderRadius: 8,
                           resize: 'none',
                           boxSizing: 'border-box',
+                          marginBottom: 8,
                         }}
                       />
-                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      
+                      {/* ✅ NUEVO: Campo de hint en edición */}
+                      <div style={{ marginBottom: 8 }}>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#7c3aed', marginBottom: 4 }}>
+                          💡 {t.hint}
+                        </label>
+                        <input
+                          type="text"
+                          value={editHint}
+                          onChange={(e) => setEditHint(e.target.value)}
+                          placeholder={t.hintPlaceholder}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            fontSize: 13,
+                            border: '1px solid #c4b5fd',
+                            borderRadius: 6,
+                            backgroundColor: '#faf5ff',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                      
+                      <div style={{ display: 'flex', gap: 8 }}>
                         <button
                           onClick={() => handleSaveEdit(proposal.id)}
                           style={{
@@ -502,7 +593,7 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
                           {t.save}
                         </button>
                         <button
-                          onClick={() => setEditingId(null)}
+                          onClick={() => { setEditingId(null); setEditHint(''); }}
                           style={{
                             padding: '6px 14px',
                             fontSize: 12,
@@ -518,14 +609,67 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
                       </div>
                     </div>
                   ) : (
-                    <p style={{
-                      margin: '0 0 12px 0',
-                      fontSize: 15,
-                      color: '#1e293b',
-                      lineHeight: 1.5,
-                    }}>
-                      "{selectedData?.text || proposal.questionText}"
-                    </p>
+                    <>
+                      <p style={{
+                        margin: '0 0 8px 0',
+                        fontSize: 15,
+                        color: '#1e293b',
+                        lineHeight: 1.5,
+                      }}>
+                        "{selectedData?.text || proposal.questionText}"
+                      </p>
+                      
+                      {/* ✅ NUEVO: Mostrar hint si existe y está seleccionada para Stage 2 */}
+                      {isSelected && isStage2 && (
+                        <div style={{ marginBottom: 12 }}>
+                          {selectedData?.hint ? (
+                            <div style={{
+                              padding: '8px 12px',
+                              backgroundColor: '#faf5ff',
+                              borderRadius: 6,
+                              border: '1px solid #e9d5ff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                            }}>
+                              <span style={{ fontSize: 14 }}>💡</span>
+                              <span style={{ fontSize: 13, color: '#7c3aed', flex: 1 }}>
+                                {selectedData.hint}
+                              </span>
+                              <button
+                                onClick={() => handleStartEdit(proposal)}
+                                style={{
+                                  padding: '2px 8px',
+                                  fontSize: 11,
+                                  backgroundColor: 'transparent',
+                                  color: '#8b5cf6',
+                                  border: '1px solid #c4b5fd',
+                                  borderRadius: 4,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                ✏️
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleStartEdit(proposal)}
+                              style={{
+                                padding: '6px 12px',
+                                fontSize: 12,
+                                backgroundColor: '#faf5ff',
+                                color: '#8b5cf6',
+                                border: '1px dashed #c4b5fd',
+                                borderRadius: 6,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              💡 {t.addHint}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {/* Acciones */}
@@ -711,7 +855,7 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
                       borderRadius: 10,
                     }}
                   >
-                    <span style={{ fontSize: 20 }}>{team.emoji}</span>
+                    <span style={{ fontSize: 20 }}>{(team as any).emoji}</span>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, color: '#1e293b' }}>
                         {team.name}

@@ -27,8 +27,6 @@ import type {
   GameStatus,
 } from "../types/game";
 
-
-
 const GAMES_ROOT = "games";
 
 /* ============================================================
@@ -47,14 +45,34 @@ async function updateGameTimestamp(gameId: string) {
 }
 
 function normalizePlayers(players: unknown): Player[] {
-  if (Array.isArray(players)) return players as Player[];
-  if (players && typeof players === "object") return Object.values(players as any) as Player[];
+  if (Array.isArray(players)) {
+    return players.filter((p): p is Player => !!p && typeof p === 'object' && !!p.id);
+  }
+  if (players && typeof players === "object") {
+    return Object.entries(players as Record<string, any>)
+      .filter(([key, val]) => val && typeof val === 'object')
+      .map(([key, val]) => ({
+        id: val.id || key,
+        name: val.name || 'Jugador',  // ✅ Explícitamente extraer name
+        score: val.score || 0,
+        consecutiveLastPlace: val.consecutiveLastPlace || 0,
+      })) as Player[];
+  }
   return [];
 }
 
 function normalizeTeams(teams: unknown): Team[] {
-  if (Array.isArray(teams)) return teams as Team[];
-  if (teams && typeof teams === "object") return Object.values(teams as any) as Team[];
+  if (Array.isArray(teams)) {
+    return teams.filter((t): t is Team => !!t && typeof t === 'object');
+  }
+  if (teams && typeof teams === "object") {
+    return Object.entries(teams as Record<string, any>)
+      .filter(([key, val]) => val && typeof val === 'object')
+      .map(([key, val]) => ({
+        ...val,
+        id: val.id || key,
+      })) as Team[];
+  }
   return [];
 }
 
@@ -133,7 +151,7 @@ export async function createGame(
 
     // ✅ NUEVO (no rompe juegos viejos)
     createdBy,
-    
+
     // ✅ NUEVO: Stage 0 state inicial (si está habilitado)
     ...(stage0Enabled ? {
       stage0: {
@@ -238,6 +256,7 @@ export async function startGame(gameId: string): Promise<void> {
 
   await update(ref(database), updates);
 }
+
 /* ============================================================
   STAGE 1 ROUNDS - AHORA POR EQUIPO
 ============================================================ */
@@ -330,8 +349,8 @@ export async function awardPoints(
   await set(
     ref(
       database,
-      `${GAMES_ROOT}/${gameId}/teams/${teamId}/stage1Rounds/${roundNumber}/pointsAwarded`
-    ),
+      `${GAMES_ROOT}/${gameId}/teams/${teamId}/stage1Rounds/${roundNumber}/pointsAwarded`)
+    ,
     pointsAwarded
   );
   await updateGameTimestamp(gameId);
@@ -434,6 +453,7 @@ export async function updateGameStatus(
   PREPARE NEXT ROUND (STAGE 1) - AHORA POR EQUIPO
 ============================================================ */
 
+// ✅ REEMPLAZADA COMPLETA (versión corregida con filtro de jugadores fantasma + capitán rotativo)
 export async function prepareNextRound(gameId: string, teamId: string): Promise<void> {
   const snap = await get(ref(database, `${GAMES_ROOT}/${gameId}`));
   const game = snap.val() as Game;
@@ -452,11 +472,19 @@ export async function prepareNextRound(gameId: string, teamId: string): Promise<
   const nextQuestionIndex = currentQuestionIndex + 1;
   const nextRoundNumber = currentRound + 1;
 
-  const players = normalizePlayers((currentTeam as any).players);
-  if (!players.length) throw new Error("No players in team");
+  // ✅ CORREGIDO: Filtrar jugadores fantasma
+  const allPlayers = normalizePlayers((currentTeam as any).players);
+  const players = allPlayers.filter(p =>
+    (p as any).name &&
+    (p as any).name !== 'Jugador' &&
+    (p as any).name !== 'Capitán' &&
+    (p as any).name !== 'Equipo' &&
+    !(String((p as any).id || "").startsWith('player_')) // IDs generados automáticamente
+  );
 
-  const sorted = [...players].sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
-  const nextResponder = sorted[0] ?? players[0];
+  console.log("🔍 prepareNextRound players:", players.map(p => ({ id: (p as any).id, name: (p as any).name, score: (p as any).score })));
+
+  if (!players.length) throw new Error("No players in team");
 
   // Si ya no hay preguntas Stage 1, marcar stage1Completed
   if (nextQuestionIndex >= stage1Questions.length) {
@@ -468,22 +496,41 @@ export async function prepareNextRound(gameId: string, teamId: string): Promise<
     return;
   }
 
+  // Respondedor: el de menor puntaje
+  const sorted = [...players].sort((a, b) => ((a as any).score ?? 0) - ((b as any).score ?? 0));
+  const nextResponder = sorted[0];
+
+  // ✅ CORREGIDO: Capitán rota según número de ronda
+  let captainIndex = nextRoundNumber % players.length;
+  let captain = players[captainIndex];
+
+  // Si el capitán es el mismo que el respondedor, pasar al siguiente
+  if ((captain as any).id === (nextResponder as any).id) {
+    captainIndex = (captainIndex + 1) % players.length;
+    captain = players[captainIndex];
+  }
+
   const nextQuestion = stage1Questions[nextQuestionIndex];
 
   const nextRound: Round = {
     roundNumber: nextRoundNumber,
     questionId: (nextQuestion as any).id,
-    respondingPlayerId: nextResponder.id,
-    respondingPlayerName: nextResponder.name,
-    captainId: nextResponder.id,
-    captainName: nextResponder.name,
+    respondingPlayerId: (nextResponder as any).id,
+    respondingPlayerName: (nextResponder as any).name,
+    captainId: (captain as any).id,
+    captainName: (captain as any).name,
     ratings: {},
     pointsAwarded: {},
     hasResponded: false,
     timestamp: Date.now(),
   };
 
-  await set(ref(database, `${GAMES_ROOT}/${gameId}/teams/${teamId}/stage1Rounds/${nextRoundNumber}`), nextRound);
+  console.log("🔍 nextRound:", { responder: (nextResponder as any).name, captain: (captain as any).name });
+
+  await set(
+    ref(database, `${GAMES_ROOT}/${gameId}/teams/${teamId}/stage1Rounds/${nextRoundNumber}`),
+    nextRound
+  );
 
   await update(ref(database), {
     [`${GAMES_ROOT}/${gameId}/teams/${teamId}/currentRound`]: nextRoundNumber,
@@ -494,17 +541,21 @@ export async function prepareNextRound(gameId: string, teamId: string): Promise<
   console.log(`✅ Team ${teamId} advanced to round ${nextRoundNumber}`);
 }
 
-/* ============================================================
-  STAGE 2 BOOTSTRAP
-============================================================ */
-
 export async function startStage2Safely(gameId: string): Promise<void> {
   const snap = await get(ref(database, `${GAMES_ROOT}/${gameId}`));
   const game = snap.val() as Game;
   if (!game) throw new Error("Game not found");
 
+  // Si stage2 ya existe, solo asegurar que el status sea correcto
   if ((game as any).stage2) {
-    console.log("ℹ️ Stage 2 already exists, skipping bootstrap.");
+    console.log("ℹ️ Stage 2 already exists, ensuring status is updated.");
+
+    // ✅ Asegurar que el status sea "stage2" aunque ya exista
+    await update(ref(database), {
+      [`${GAMES_ROOT}/${gameId}/status/status`]: "stage2",
+      [`${GAMES_ROOT}/${gameId}/status/currentStage`]: 2,
+      [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
+    });
     return;
   }
 

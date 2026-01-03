@@ -3,8 +3,9 @@
 // Con soporte para múltiples encodings (UTF-8, Latin-1, Windows-1252)
 
 import { ref, get, set, push, remove, query, orderByChild } from "firebase/database";
-import { ref as storageRef, uploadString, getBlob, deleteObject } from "firebase/storage";
+import { ref as storageRef, uploadString, getDownloadURL, deleteObject } from "firebase/storage";
 import { database, storage } from "../firebase.config";
+
 import type { 
   CSVLibraryItem, 
   NewCSVLibraryItem, 
@@ -197,15 +198,41 @@ export async function getLibraryItemById(itemId: string): Promise<CSVLibraryItem
 /**
  * Descargar CSV usando getBlob con soporte para múltiples encodings
  */
+
+
+// ... (quitar getBlob del import si está)
+
+/**
+ * Descargar CSV usando getDownloadURL + fetch (mejor soporte CORS)
+ */
 export async function downloadCSVContent(storagePath: string): Promise<string> {
   if (!storagePath) {
     throw new Error("No hay archivo CSV vinculado");
   }
-  const fileRef = storageRef(storage, storagePath);
-  const blob = await getBlob(fileRef);
   
-  // Usar la función que maneja múltiples encodings
-  return await readBlobWithEncoding(blob);
+  try {
+    const fileRef = storageRef(storage, storagePath);
+    const downloadURL = await getDownloadURL(fileRef);
+    
+    const response = await fetch(downloadURL);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const text = await response.text();
+    
+    // Detectar y corregir encoding
+    const hasBadEncoding = /Ã[¡©­³ºÁÉÍÓÚ±Ñ¼œ§‡]|â€[œ˜™"]/g.test(text);
+    
+    if (hasBadEncoding) {
+      return fixEncoding(text);
+    }
+    
+    return text;
+  } catch (error) {
+    console.error("Error downloading CSV:", error);
+    throw new Error("No se pudo descargar el archivo CSV");
+  }
 }
 
 /**

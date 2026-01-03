@@ -2,7 +2,6 @@
 
 import { ref, update, get, runTransaction } from "firebase/database";
 import { database } from "../firebase.config";
-
 import type {
   Game,
   Team,
@@ -152,7 +151,18 @@ export async function startStage2Round(gameId: string) {
   const questions = normalizeQuestions((game as any).questions);
   const stage2Questions = questions.filter((q) => q.suggestedStage === 2);
 
-  if (qIndex >= stage2Questions.length) throw new Error("No Stage 2 questions left");
+  // ✅ Si no quedan preguntas, marcar juego como completado
+  if (qIndex >= stage2Questions.length) {
+    console.log("🏆 No more Stage 2 questions - Game complete!");
+    
+    await update(ref(database), {
+      [`${GAMES_ROOT}/${gameId}/status/status`]: "game_complete",
+      [`${GAMES_ROOT}/${gameId}/stage2/phase`]: "game_complete",
+      [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
+    });
+    
+    return; // ✅ Salir sin error
+  }
 
   const question = stage2Questions[qIndex];
   const hintDuration =
@@ -173,7 +183,6 @@ export async function startStage2Round(gameId: string) {
     respondingTeam: null,
     ratingTeams: {},
 
-    // 🆕 Calificación simultánea (sin raterOrder ni currentRaterIndex)
     ratingStartedAt: null,
     ratingTimerActive: false,
     ratingsRevealed: false,
@@ -694,6 +703,19 @@ export async function startJustificationPhase(gameId: string): Promise<void> {
   const r = game.stage2.currentRound;
   const base = `${GAMES_ROOT}/${gameId}/stage2/rounds/${r}`;
   const now = Date.now();
+
+  // ✅ Si no hay nadie que justificar (todos verdes), saltar a validación
+  if (justificationOrder.length === 0) {
+    console.log("ℹ️ No justifications needed (all green), skipping to validation");
+
+    await update(ref(database), {
+      [`${base}/phase`]: "validation_response",
+      [`${base}/justificationOrder`]: [],
+      [`${base}/currentJustificationIndex`]: 0,
+      [`${GAMES_ROOT}/${gameId}/updatedAt`]: now,
+    });
+    return;
+  }
 
   await update(ref(database), {
     [`${base}/phase`]: "justification",

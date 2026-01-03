@@ -1,4 +1,6 @@
 // src/utils/csvParser.ts
+// Parser de CSV robusto con detección automática de delimitador + fallback sin headers (y sin ID)
+
 import Papa from "papaparse";
 
 export type SuggestedStage = 1 | 2;
@@ -8,7 +10,7 @@ export interface ParsedQuestion {
   text: string;
   hint?: string;
   suggestedStage: SuggestedStage;
-  rowNumber: number; // para debug / mensajes
+  rowNumber: number;
 }
 
 export interface ParseResult {
@@ -24,7 +26,6 @@ function normalize(s: unknown): string {
     .trim();
 }
 
-// Normaliza claves/headers: saca espacios y TODA puntuación (comas, comillas, etc.)
 function normalizeKey(k: string): string {
   return normalize(k)
     .toLowerCase()
@@ -32,11 +33,10 @@ function normalizeKey(k: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
-// Stage robusto: acepta "Stage 1", "etapa-2", "S1", etc.
 function parseStage(v: unknown): SuggestedStage | null {
   const s = normalize(v)
     .toLowerCase()
-    .replace(/[^a-z0-9]/g, ""); // quita espacios y signos
+    .replace(/[^a-z0-9]/g, "");
 
   if (!s) return null;
 
@@ -46,9 +46,7 @@ function parseStage(v: unknown): SuggestedStage | null {
   return null;
 }
 
-// Detecta filas que son “encabezado repetido” (estricto, sin falsos positivos)
 function looksLikeRepeatedHeader(row: Record<string, unknown>): boolean {
-  // miramos valores como tokens normalizados (no "includes")
   const values = Object.values(row).map((v) => normalizeKey(String(v ?? "")));
   if (values.length === 0) return false;
 
@@ -59,6 +57,7 @@ function looksLikeRepeatedHeader(row: Record<string, unknown>): boolean {
     "text",
     "question",
     "pregunta",
+    "preguntas",
     "hint",
     "pista",
     "ayuda",
@@ -69,14 +68,10 @@ function looksLikeRepeatedHeader(row: Record<string, unknown>): boolean {
   ]);
 
   const hits = values.filter((v) => headerTokens.has(v)).length;
-
-  // Estricto: debe haber al menos 2 tokens típicos de header en esa fila
   return hits >= 2;
 }
 
-// Toma un campo de una fila tolerando keys "sucias" (id, "id", ID, etc.)
 function pickField(row: Record<string, unknown>, keys: string[]): string {
-  // mapa normalizado por fila (evita buscar keys repetidamente)
   const map: Record<string, unknown> = {};
   for (const rk of Object.keys(row)) {
     map[normalizeKey(rk)] = row[rk];
@@ -88,6 +83,84 @@ function pickField(row: Record<string, unknown>, keys: string[]): string {
     if (s) return s;
   }
   return "";
+}
+
+/**
+ * ✅ Detectar el delimitador automáticamente
+ * Cuenta ocurrencias de , ; \t | en la primera línea
+ */
+function detectDelimiter(text: string): string {
+  const firstLine = text.split(/\r?\n/)[0] || "";
+
+  const delimiters = [",", ";", "\t", "|"];
+  let bestDelimiter = ",";
+  let maxCount = 0;
+
+  for (const d of delimiters) {
+    const count =
+      (firstLine.match(new RegExp(d === "|" ? "\\|" : d, "g")) || []).length;
+    if (count > maxCount) {
+      maxCount = count;
+      bestDelimiter = d;
+    }
+  }
+
+  console.log(
+    `[csvParser] Delimitador detectado: "${bestDelimiter}" (${maxCount} ocurrencias)`
+  );
+  return bestDelimiter;
+}
+
+/**
+ * ✅ Detectar posibles problemas de encoding
+ */
+function hasEncodingIssues(text: string): boolean {
+  // Caracteres típicos de encoding incorrecto
+  return /�|Ã¡|Ã©|Ã­|Ã³|Ãº|Ã±/.test(text);
+}
+
+/**
+ * ✅ NUEVO: Validar si los headers parecen realmente headers
+ * - Debe existir un campo tipo text/question/pregunta
+ * - Evitar casos donde PapaParse tomó la primera fila de datos como header (frases largas)
+ */
+function hasValidHeaderFields(fields: string[] | undefined): boolean {
+  if (!fields || fields.length === 0) return false;
+
+  const normalized = fields.map((f) => normalizeKey(f));
+
+  const hasText =
+    normalized.includes("text") ||
+    normalized.includes("question") ||
+    normalized.includes("pregunta") ||
+    normalized.includes("preguntas");
+
+  const tooLong = fields.some((f) => normalize(f).length > 40);
+
+  return hasText && !tooLong;
+}
+
+/**
+ * ✅ NUEVO: Convertir fila array (header=false) a objeto “tipo header”
+ * Soporta:
+ * - 4 cols: id, text, hint, suggestedStage
+ * - 3 cols: text, hint, suggestedStage (sin id)
+ */
+function rowFromArray(cols: unknown[]): Record<string, unknown> {
+  if ((cols?.length ?? 0) >= 4) {
+    return {
+      id: cols?.[0],
+      text: cols?.[1],
+      hint: cols?.[2],
+      suggestedStage: cols?.[3],
+    };
+  }
+
+  return {
+    text: cols?.[0],
+    hint: cols?.[1],
+    suggestedStage: cols?.[2],
+  };
 }
 
 export function parseCSV(text: string): Promise<ParseResult> {
@@ -104,93 +177,171 @@ export function parseCSV(text: string): Promise<ParseResult> {
       return;
     }
 
+    const delimiter = detectDelimiter(trimmed);
+    const encodingWarning = hasEncodingIssues(trimmed);
+
+    // ✅ Procesamiento común para header=true y header=false
+    const processRows = (
+      dataRows: Record<string, unknown>[],
+      baseRowNumber: number
+    ): ParseResult => {
+      const errors: string[] = [];
+      const warnings: string[] = [];
+      const questions: ParsedQuestion[] = [];
+
+      if (encodingWarning) {
+        warnings.push(
+          "⚠️ El archivo puede tener problemas de encoding (acentos incorrectos). Considerá guardarlo como UTF-8."
+        );
+      }
+
+      const rawRowCount = dataRows.length;
+
+      for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i] || {};
+        const rowNumber = baseRowNumber + i;
+
+        if (looksLikeRepeatedHeader(row)) {
+          warnings.push(`Fila ${rowNumber}: encabezado repetido (se ignoró).`);
+          continue;
+        }
+
+        const textField = pickField(row, ["text", "question", "pregunta", "preguntas"]);
+        const hintField = pickField(row, ["hint", "ayuda", "pista"]);
+        const idField = pickField(row, ["id", "qid", "questionid"]);
+
+        const stageFieldRaw = pickField(row, [
+          "suggestedstage",
+          "suggested_stage",
+          "suggestedStage",
+          "stage",
+          "etapa",
+          "suggested",
+        ]);
+
+        if (!textField) {
+          const anyContent = Object.values(row).some((v) => normalize(v));
+          if (anyContent) {
+            warnings.push(`Fila ${rowNumber}: sin texto de pregunta (se ignoró).`);
+          }
+          continue;
+        }
+
+        const parsed = parseStage(stageFieldRaw);
+        let suggestedStage: SuggestedStage = 1;
+
+        if (parsed === null) {
+          if (stageFieldRaw) {
+            warnings.push(
+              `Fila ${rowNumber}: suggestedStage inválido ("${normalize(
+                stageFieldRaw
+              )}"). Se usó Stage 1.`
+            );
+          }
+          suggestedStage = 1;
+        } else {
+          suggestedStage = parsed;
+        }
+
+        // ✅ ID automático: q1, q2, q3...
+        const id = idField ? idField : `q${questions.length + 1}`;
+
+        questions.push({
+          id,
+          text: textField,
+          hint: hintField || undefined,
+          suggestedStage,
+          rowNumber,
+        });
+      }
+
+      if (questions.length === 0 && errors.length === 0) {
+        errors.push("No se encontraron preguntas válidas en el CSV.");
+      }
+
+      return { questions, errors, warnings, rawRowCount };
+    };
+
+    // ✅ 1) Intento normal (header=true)
     Papa.parse<Record<string, unknown>>(trimmed, {
       header: true,
       skipEmptyLines: "greedy",
       dynamicTyping: false,
-      worker: true, // clave para no congelar la UI
+      delimiter,
 
       complete: (results) => {
-        const errors: string[] = [];
-        const warnings: string[] = [];
-        const questions: ParsedQuestion[] = [];
+        console.log("[csvParser] PAPA DEBUG (header=true)", {
+          delimiter,
+          meta: results.meta,
+          fields: results.meta?.fields,
+          firstRow: results.data?.[0],
+          firstRowKeys: results.data?.[0]
+            ? Object.keys(results.data[0] as object)
+            : [],
+        });
 
-        // Errores propios de PapaParse
-        if (results.errors?.length) {
-          for (const e of results.errors) {
-            errors.push(`CSV: ${e.message} (fila ${e.row ?? "?"})`);
-          }
-        }
+        const parseErrors = (results.errors ?? []).map(
+          (e) => `CSV: ${e.message} (fila ${e.row ?? "?"})`
+        );
 
         const data = results.data ?? [];
-        const rawRowCount = data.length;
+        const fields = results.meta?.fields;
 
-        for (let i = 0; i < data.length; i++) {
-          const row = data[i] || {};
-          const rowNumber = i + 2; // +2 porque header es la línea 1
+        const headerOk = hasValidHeaderFields(fields);
 
-          // 1) Ignorar encabezado repetido
-          if (looksLikeRepeatedHeader(row)) {
-            warnings.push(`Fila ${rowNumber}: encabezado repetido (se ignoró).`);
-            continue;
-          }
+        // ✅ 2) Fallback (header=false) si headers no son válidos / faltan
+        if (!headerOk) {
+          console.warn("[csvParser] Header inválido o ausente → fallback header=false");
 
-          // 2) Tomar campos con tolerancia a nombres distintos
-          const textField = pickField(row, ["text", "question", "pregunta"]);
-          const hintField = pickField(row, ["hint", "ayuda", "pista"]);
-          const idField = pickField(row, ["id", "qid", "questionid"]);
+          Papa.parse<unknown[]>(trimmed, {
+            header: false,
+            skipEmptyLines: "greedy",
+            dynamicTyping: false,
+            delimiter,
 
-          const stageFieldRaw = pickField(row, [
-            "suggestedstage",
-            "suggested_stage",
-            "suggestedStage",
-            "stage",
-            "etapa",
-            "suggested",
-          ]);
+            complete: (results2) => {
+              console.log("[csvParser] PAPA DEBUG (header=false)", {
+                delimiter,
+                meta: results2.meta,
+                firstRow: results2.data?.[0],
+              });
 
-          // 3) Filas vacías (o sin pregunta) afuera
-          if (!textField) {
-            const anyContent = Object.values(row).some((v) => normalize(v));
-            if (anyContent) warnings.push(`Fila ${rowNumber}: sin texto de pregunta (se ignoró).`);
-            continue;
-          }
+              const rows = (results2.data ?? [])
+                .filter((r) => Array.isArray(r) && r.some((c) => normalize(c)))
+                .map((r) => rowFromArray(r as unknown[]));
 
-          // 4) Stage robusto (default 1 si no se entiende)
-          const parsed = parseStage(stageFieldRaw);
-          let suggestedStage: SuggestedStage = 1;
+              // header=false: fila 1 es la primera de datos
+              const processed = processRows(rows, 1);
 
-          if (parsed === null) {
-            if (stageFieldRaw) {
-              warnings.push(
-                `Fila ${rowNumber}: suggestedStage inválido (“${normalize(
-                  stageFieldRaw
-                )}”). Se usó Stage 1.`
+              processed.errors.unshift(...parseErrors);
+              processed.warnings.unshift(
+                "ℹ️ Este CSV no tenía encabezados válidos. Se interpretaron columnas por posición y se generaron IDs si faltaban."
               );
-            }
-            suggestedStage = 1;
-          } else {
-            suggestedStage = parsed;
-          }
 
-          // 5) ID: si falta, generamos uno estable
-          const id = idField ? idField : `q_${questions.length + 1}`;
+              resolve(processed);
+            },
 
-          questions.push({
-            id,
-            text: textField,
-            hint: hintField || undefined,
-            suggestedStage,
-            rowNumber,
+            error: (err: unknown) => {
+              const message =
+                err instanceof Error ? err.message : "Error desconocido al leer el CSV";
+
+              resolve({
+                questions: [],
+                errors: [...parseErrors, `No se pudo leer el CSV (fallback): ${message}`],
+                warnings: [],
+                rawRowCount: 0,
+              });
+            },
           });
+
+          return;
         }
 
-        // Validación final mínima
-        if (questions.length === 0 && errors.length === 0) {
-          errors.push("No se encontraron preguntas válidas en el CSV.");
-        }
+        // ✅ Header OK: procesar como siempre
+        const processed = processRows(data, 2);
+        processed.errors.unshift(...parseErrors);
 
-        resolve({ questions, errors, warnings, rawRowCount });
+        resolve(processed);
       },
 
       error: (err: unknown) => {

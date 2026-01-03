@@ -22,7 +22,7 @@ interface ProposalStudentViewProps {
 
 export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: ProposalStudentViewProps) {
   const { language } = useI18n();
-  
+
   const [proposalText, setProposalText] = useState('');
   const [suggestedStage, setSuggestedStage] = useState<1 | 2>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,54 +39,54 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
   const t = {
     title: language === 'es' ? 'Proponé consignas' : 'Propose questions',
     timeRemaining: language === 'es' ? 'Tiempo restante' : 'Time remaining',
-    
+
     materials: language === 'es' ? 'Material de referencia' : 'Reference material',
     viewMaterial: language === 'es' ? 'Ver' : 'View',
     closeMaterial: language === 'es' ? 'Cerrar' : 'Close',
-    
+
     tipTitle: language === 'es' ? '💡 Podés proponer:' : '💡 You can propose:',
-    tipItems: language === 'es' 
+    tipItems: language === 'es'
       ? [
-          'Preguntas de comprensión',
-          'Consignas que pidan relacionar ideas',
-          'Actividades: "Explicá...", "Compará...", "Justificá..."',
-        ]
+        'Preguntas de comprensión',
+        'Consignas que pidan relacionar ideas',
+        'Actividades: "Explicá...", "Compará...", "Justificá..."',
+      ]
       : [
-          'Comprehension questions',
-          'Prompts that ask to relate ideas',
-          'Activities: "Explain...", "Compare...", "Justify..."',
-        ],
+        'Comprehension questions',
+        'Prompts that ask to relate ideas',
+        'Activities: "Explain...", "Compare...", "Justify..."',
+      ],
     tipStage2: language === 'es'
       ? 'Para Etapa 2 pensá en consignas más profundas que requieran explicar, relacionar o dar puntos de vista.'
       : 'For Stage 2, think of deeper prompts that require explaining, relating, or giving points of view.',
-    
+
     yourProposal: language === 'es' ? 'Tu propuesta' : 'Your proposal',
-    proposalPlaceholder: language === 'es' 
+    proposalPlaceholder: language === 'es'
       ? 'Escribí una pregunta o consigna basada en el material...'
       : 'Write a question or prompt based on the material...',
-    
+
     suggestedStage: language === 'es' ? 'Sugerencia de etapa' : 'Suggested stage',
     stage1: language === 'es' ? 'Etapa 1 (básica)' : 'Stage 1 (basic)',
     stage2: language === 'es' ? 'Etapa 2 (profunda)' : 'Stage 2 (deep)',
-    
+
     submit: language === 'es' ? 'Enviar propuesta' : 'Submit proposal',
     submitted: language === 'es' ? '✓ Enviada' : '✓ Submitted',
-    
+
     yourProposals: language === 'es' ? 'Tus propuestas enviadas' : 'Your submitted proposals',
-    noProposalsYet: language === 'es' 
+    noProposalsYet: language === 'es'
       ? 'Todavía no enviaste propuestas'
       : 'You haven\'t submitted proposals yet',
-    
+
     proposalsCount: language === 'es' ? 'enviadas' : 'submitted',
     maxReached: language === 'es' ? '¡Llegaste al máximo!' : 'You reached the maximum!',
-    
-    closed: language === 'es' 
+
+    closed: language === 'es'
       ? 'Se cerró la recepción de propuestas'
       : 'Proposal reception is closed',
     waitingCuration: language === 'es'
       ? 'Esperá mientras el profesor organiza el juego...'
       : 'Wait while the teacher organizes the game...',
-    
+
     // ✅ NUEVO: Mensajes para fase waiting
     waitingToStart: language === 'es'
       ? 'Esperando que el profesor inicie la etapa de propuestas...'
@@ -103,7 +103,7 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
       // Usar un ID único pero estable para esta sesión
       const sessionId = sessionStorage.getItem('playerSessionId') || `player_${Date.now()}`;
       sessionStorage.setItem('playerSessionId', sessionId);
-      
+
       try {
         // Registrar el jugador en el equipo
         const playerRef = ref(database, `games/${gameId}/teams/${teamId}/players/${sessionId}`);
@@ -112,22 +112,39 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
           name: 'Jugador',
           active: true,
         });
-        
+
         // También marcar el equipo como conectado
         await update(ref(database, `games/${gameId}/teams/${teamId}`), {
           connected: true,
           lastActivity: Date.now(),
         });
-        
+
         console.log('Player registered:', sessionId, 'in team:', teamId);
       } catch (error) {
         console.error('Error registering player:', error);
       }
     };
-    
+
     registerConnection();
   }, [gameId, teamId]);
+  // ✅ NUEVO: Detectar cambio a Stage 1 y redirigir
+  useEffect(() => {
+    const statusRef = ref(database, `games/${gameId}/status`);
 
+    const unsubscribe = onValue(statusRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const status = snapshot.val();
+
+        // Si el juego pasó a Stage 1, redirigir al TeamView
+        if (status.status === 'stage1' || status.currentStage === 1) {
+          console.log("🎮 Stage 1 detected, redirecting to game...");
+          window.location.href = `/team/${gameId}/${teamId}`;
+        }
+      }
+    });
+
+    return () => off(statusRef);
+  }, [gameId, teamId]);
   // Cargar configuración del juego
   useEffect(() => {
     const configRef = ref(database, `games/${gameId}/config/stage0Config`);
@@ -135,7 +152,7 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
       if (snapshot.exists()) {
         const config = snapshot.val();
         setMaxProposals(config.maxProposalsPerTeam || 10);
-        
+
         // Cargar materiales si existen
         if (config.materials) {
           setMaterials(Object.values(config.materials));
@@ -147,14 +164,14 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
   // Escuchar fase y timer
   useEffect(() => {
     const stage0Ref = ref(database, `games/${gameId}/stage0`);
-    
+
     const unsubscribe = onValue(stage0Ref, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
         // ✅ CORREGIDO: Manejar todas las fases correctamente
         const currentPhase = data.phase || 'waiting';
         setPhase(currentPhase);
-        
+
         // Calcular tiempo restante si hay timer y estamos en collecting
         if (currentPhase === 'collecting' && data.timerStartedAt && data.timerMinutes) {
           const elapsed = Math.floor((Date.now() - data.timerStartedAt) / 1000);
@@ -170,7 +187,7 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
   // Timer countdown
   useEffect(() => {
     if (timeRemaining === null || timeRemaining <= 0 || phase !== 'collecting') return;
-    
+
     const interval = setInterval(() => {
       setTimeRemaining(prev => prev !== null ? Math.max(0, prev - 1) : null);
     }, 1000);
@@ -181,7 +198,7 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
   // Escuchar mis propuestas
   useEffect(() => {
     const proposalsRef = ref(database, `games/${gameId}/stage0/proposals`);
-    
+
     const unsubscribe = onValue(proposalsRef, (snapshot) => {
       if (snapshot.exists()) {
         const allProposals = snapshot.val();
@@ -200,9 +217,9 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
   const handleSubmit = async () => {
     if (!proposalText.trim() || isSubmitting) return;
     if (myProposals.length >= maxProposals) return;
-    
+
     setIsSubmitting(true);
-    
+
     try {
       const proposalsRef = ref(database, `games/${gameId}/stage0/proposals`);
       await push(proposalsRef, {
@@ -214,7 +231,7 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
         status: 'pending',
         createdAt: Date.now(),
       });
-      
+
       setProposalText('');
       setSuggestedStage(1);
       setSubmitSuccess(true);
@@ -339,7 +356,7 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
               </div>
             </div>
           </div>
-          
+
           {timeRemaining !== null && (
             <div style={{
               padding: '8px 16px',
@@ -394,7 +411,7 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
               </button>
             ))}
           </div>
-          
+
           {showMaterial && (
             <div style={{
               marginTop: 12,
@@ -405,7 +422,7 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
               overflow: 'auto',
             }}>
               {materials.find(m => m.id === showMaterial)?.type === 'link' ? (
-                <a 
+                <a
                   href={materials.find(m => m.id === showMaterial)?.content}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -479,10 +496,10 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
               {t.suggestedStage}
             </label>
             <div style={{ display: 'flex', gap: 12 }}>
-              <label style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 8, 
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
                 cursor: 'pointer',
                 padding: '8px 14px',
                 backgroundColor: suggestedStage === 1 ? '#dcfce7' : '#f8fafc',
@@ -501,10 +518,10 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
                   {t.stage1}
                 </span>
               </label>
-              <label style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 8, 
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
                 cursor: 'pointer',
                 padding: '8px 14px',
                 backgroundColor: suggestedStage === 2 ? '#ede9fe' : '#f8fafc',
@@ -564,7 +581,7 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
             {t.maxReached}
           </div>
           <p style={{ margin: '8px 0 0 0', fontSize: 14, color: '#22c55e' }}>
-            {language === 'es' 
+            {language === 'es'
               ? 'Esperá a que el profesor cierre la recepción de propuestas.'
               : 'Wait for the teacher to close proposal reception.'}
           </p>
@@ -581,12 +598,12 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
         <h3 style={{ margin: '0 0 16px 0', fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
           ✅ {t.yourProposals}
         </h3>
-        
+
         {myProposals.length === 0 ? (
-          <p style={{ 
-            margin: 0, 
-            fontSize: 14, 
-            color: '#94a3b8', 
+          <p style={{
+            margin: 0,
+            fontSize: 14,
+            color: '#94a3b8',
             textAlign: 'center',
             padding: '20px 0',
           }}>
@@ -604,9 +621,9 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
                   borderLeft: `4px solid ${proposal.suggestedStage === 2 ? '#8b5cf6' : '#22c55e'}`,
                 }}
               >
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
                   justifyContent: 'space-between',
                   marginBottom: 6,
                 }}>

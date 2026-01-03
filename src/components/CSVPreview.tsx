@@ -1,5 +1,5 @@
 // src/components/CSVPreview.tsx
-// Preview de CSV con i18n
+// Preview de CSV con i18n y mensaje pedagógico de curación
 
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n";
@@ -12,10 +12,11 @@ interface CSVPreviewProps {
 }
 
 export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [showErrors, setShowErrors] = useState(true);
   const [showWarnings, setShowWarnings] = useState(true);
   const [editableQuestions, setEditableQuestions] = useState<ParsedQuestion[]>([]);
+  const [showCurationGuide, setShowCurationGuide] = useState(true);
 
   useEffect(() => {
     setEditableQuestions(parseResult.questions ?? []);
@@ -64,6 +65,33 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
       if (next[index]) next[index] = { ...next[index], suggestedStage: stage as SuggestedStage };
       return next;
     });
+  };
+
+  // Textos del mensaje pedagógico
+  const curationGuide = language === 'es' ? {
+    title: '🎯 Guía para asignar etapas',
+    subtitle: 'Como docente, tu rol es curar las consignas asignándolas a la etapa más apropiada:',
+    stage1Title: 'Etapa 1: Preparación grupal',
+    stage1Desc: 'Consignas de conocimiento base que el equipo resuelve internamente. Sirven para que los estudiantes se familiaricen con el contenido, alineen conceptos y construyan confianza grupal antes de competir.',
+    stage1Examples: 'Ejemplos: definiciones, identificación de conceptos, preguntas de comprensión directa.',
+    stage2Title: 'Etapa 2: Competencia inter-equipos',
+    stage2Desc: 'Consignas de comprensión profunda donde los equipos compiten entre sí. Requieren análisis, síntesis, argumentación o aplicación del conocimiento a situaciones nuevas.',
+    stage2Examples: 'Ejemplos: comparaciones, análisis de casos, justificaciones, resolución de problemas.',
+    tip: '💡 Tip: Un buen balance es 40-60% Stage 1 y 40-60% Stage 2, dependiendo del nivel del grupo.',
+    hideGuide: 'Ocultar guía',
+    showGuide: 'Mostrar guía de curación',
+  } : {
+    title: '🎯 Stage Assignment Guide',
+    subtitle: 'As a teacher, your role is to curate questions by assigning them to the most appropriate stage:',
+    stage1Title: 'Stage 1: Team Preparation',
+    stage1Desc: 'Base knowledge questions that teams solve internally. They help students familiarize themselves with the content, align concepts, and build group confidence before competing.',
+    stage1Examples: 'Examples: definitions, concept identification, direct comprehension questions.',
+    stage2Title: 'Stage 2: Inter-team Competition',
+    stage2Desc: 'Deep understanding questions where teams compete against each other. They require analysis, synthesis, argumentation, or applying knowledge to new situations.',
+    stage2Examples: 'Examples: comparisons, case analysis, justifications, problem-solving.',
+    tip: '💡 Tip: A good balance is 40-60% Stage 1 and 40-60% Stage 2, depending on the group level.',
+    hideGuide: 'Hide guide',
+    showGuide: 'Show curation guide',
   };
 
   return (
@@ -147,6 +175,176 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
             <StatCard value={stage2Count} label="Stage 2" color="#a855f7" />
           </div>
 
+          {/* ✅ NUEVO: Mensaje pedagógico de curación */}
+          <div style={{ marginBottom: 20 }}>
+            {showCurationGuide ? (
+              <div style={{
+                backgroundColor: '#f0fdf4',
+                border: '2px solid #86efac',
+                borderRadius: 16,
+                padding: 20,
+                position: 'relative',
+              }}>
+                <button
+                  onClick={() => setShowCurationGuide(false)}
+                  style={{
+                    position: 'absolute',
+                    top: 12,
+                    right: 12,
+                    background: 'none',
+                    border: 'none',
+                    fontSize: 12,
+                    color: '#64748b',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  {curationGuide.hideGuide}
+                </button>
+
+                <h3 style={{ 
+                  margin: '0 0 8px 0', 
+                  fontSize: 16, 
+                  fontWeight: 700, 
+                  color: '#15803d',
+                }}>
+                  {curationGuide.title}
+                </h3>
+                <p style={{ 
+                  margin: '0 0 16px 0', 
+                  fontSize: 14, 
+                  color: '#166534',
+                  lineHeight: 1.5,
+                }}>
+                  {curationGuide.subtitle}
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  {/* Stage 1 */}
+                  <div style={{
+                    backgroundColor: '#eff6ff',
+                    borderRadius: 12,
+                    padding: 16,
+                    border: '2px solid #3b82f6',
+                  }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 8, 
+                      marginBottom: 8,
+                    }}>
+                      <span style={{
+                        backgroundColor: '#3b82f6',
+                        color: 'white',
+                        padding: '2px 10px',
+                        borderRadius: 12,
+                        fontSize: 12,
+                        fontWeight: 700,
+                      }}>
+                        Stage 1
+                      </span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: '#1e40af' }}>
+                        {curationGuide.stage1Title}
+                      </span>
+                    </div>
+                    <p style={{ 
+                      margin: '0 0 8px 0', 
+                      fontSize: 13, 
+                      color: '#1e40af',
+                      lineHeight: 1.5,
+                    }}>
+                      {curationGuide.stage1Desc}
+                    </p>
+                    <p style={{ 
+                      margin: 0, 
+                      fontSize: 12, 
+                      color: '#3b82f6',
+                      fontStyle: 'italic',
+                    }}>
+                      {curationGuide.stage1Examples}
+                    </p>
+                  </div>
+
+                  {/* Stage 2 */}
+                  <div style={{
+                    backgroundColor: '#faf5ff',
+                    borderRadius: 12,
+                    padding: 16,
+                    border: '2px solid #a855f7',
+                  }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 8, 
+                      marginBottom: 8,
+                    }}>
+                      <span style={{
+                        backgroundColor: '#a855f7',
+                        color: 'white',
+                        padding: '2px 10px',
+                        borderRadius: 12,
+                        fontSize: 12,
+                        fontWeight: 700,
+                      }}>
+                        Stage 2
+                      </span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: '#7c3aed' }}>
+                        {curationGuide.stage2Title}
+                      </span>
+                    </div>
+                    <p style={{ 
+                      margin: '0 0 8px 0', 
+                      fontSize: 13, 
+                      color: '#7c3aed',
+                      lineHeight: 1.5,
+                    }}>
+                      {curationGuide.stage2Desc}
+                    </p>
+                    <p style={{ 
+                      margin: 0, 
+                      fontSize: 12, 
+                      color: '#a855f7',
+                      fontStyle: 'italic',
+                    }}>
+                      {curationGuide.stage2Examples}
+                    </p>
+                  </div>
+                </div>
+
+                <p style={{
+                  margin: '16px 0 0 0',
+                  fontSize: 13,
+                  color: '#15803d',
+                  backgroundColor: '#dcfce7',
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                }}>
+                  {curationGuide.tip}
+                </p>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowCurationGuide(true)}
+                style={{
+                  background: 'none',
+                  border: '2px dashed #86efac',
+                  borderRadius: 12,
+                  padding: '12px 16px',
+                  width: '100%',
+                  fontSize: 14,
+                  color: '#22c55e',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                🎯 {curationGuide.showGuide}
+              </button>
+            )}
+          </div>
+
           {/* Warnings */}
           {hasWarnings && (
             <Section
@@ -220,7 +418,13 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
                         </td>
                         <td style={tdStyle}>
                           <select
-                            style={selectStyle}
+                            style={{
+                              ...selectStyle,
+                              backgroundColor: q.suggestedStage === 2 ? '#faf5ff' : '#eff6ff',
+                              borderColor: q.suggestedStage === 2 ? '#a855f7' : '#3b82f6',
+                              color: q.suggestedStage === 2 ? '#7c3aed' : '#1e40af',
+                              fontWeight: 600,
+                            }}
                             value={String(q.suggestedStage)}
                             onChange={(e) => updateStage(i, e.target.value)}
                           >
@@ -427,7 +631,7 @@ const textareaStyle: React.CSSProperties = {
 const selectStyle: React.CSSProperties = {
   padding: "8px 12px",
   fontSize: 14,
-  border: "1px solid #e2e8f0",
+  border: "2px solid #e2e8f0",
   borderRadius: 8,
   backgroundColor: "white",
   cursor: "pointer",

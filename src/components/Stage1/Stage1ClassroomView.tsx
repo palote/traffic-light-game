@@ -1,6 +1,7 @@
 // src/components/Stage1/Stage1ClassroomView.tsx
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ref, update } from "firebase/database";
 import { database } from "../../firebase.config";
 import type { Game, Team } from "../../types/game";
@@ -15,6 +16,7 @@ interface Stage1ClassroomViewProps {
 
 export function Stage1ClassroomView({ game, gameId }: Stage1ClassroomViewProps) {
   const [resetting, setResetting] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   // ✅ Auth: logout docente (métricas cierran sesión desde AuthContext)
   const { logout, authRequired } = useAuth();
@@ -24,10 +26,27 @@ export function Stage1ClassroomView({ game, gameId }: Stage1ClassroomViewProps) 
     const raw = (game as any).teams;
     if (!raw) return [];
 
+    // Si es objeto, convertir a array agregando el id de la key
+    if (!Array.isArray(raw) && typeof raw === 'object') {
+      return Object.entries(raw)
+        .filter(([key, val]) => val && typeof val === 'object')
+        .map(([key, val]: [string, any]) => ({
+          ...val,
+          id: val.id || key, // ✅ Usar la key como id si no existe
+        }));
+    }
+
+    // Si es array, filtrar los válidos
     const arr = Array.isArray(raw) ? raw : Object.values(raw);
-    return arr.filter((t: any) => !!t && typeof t === "object" && !!t.id);
+    return arr.filter((t: any) => !!t && typeof t === "object");
   })();
 
+  // ✅ Verificar si todos los equipos completaron Stage 1
+  const allTeamsCompleted = teams.length > 0 && teams.every((t) => {
+    const teamData = (game.teams as any)?.[t.id];
+    return teamData?.stage1Completed === true;
+  });
+  console.log("DEBUG allTeamsCompleted:", allTeamsCompleted, "teams:", teams.length);
   // Resetear un equipo específico
   const handleResetTeam = async (teamId: string) => {
     if (!confirm(`¿Resetear ${teamId} a ronda 1? Perderá todo su progreso.`)) return;
@@ -61,6 +80,11 @@ export function Stage1ClassroomView({ game, gameId }: Stage1ClassroomViewProps) 
     } finally {
       setResetting(null);
     }
+  };
+
+  // ✅ Iniciar Stage 2
+  const handleStartStage2 = () => {
+    navigate(`/stage2/classroom/${gameId}`);
   };
 
   return (
@@ -110,6 +134,52 @@ export function Stage1ClassroomView({ game, gameId }: Stage1ClassroomViewProps) 
         </p>
       </div>
 
+      {/* ✅ BOTÓN PARA INICIAR STAGE 2 - Solo visible cuando todos completaron */}
+      {allTeamsCompleted && (
+        <div
+          style={{
+            marginBottom: 24,
+            padding: 24,
+            backgroundColor: "#f0fdf4",
+            borderRadius: 12,
+            border: "2px solid #22c55e",
+            textAlign: "center",
+          }}
+        >
+          <h3 style={{ margin: "0 0 8px 0", color: "#16a34a", fontSize: 20 }}>
+            🎉 ¡Todos los equipos completaron Stage 1!
+          </h3>
+          <p style={{ margin: "0 0 16px 0", color: "#15803d", fontSize: 14 }}>
+            Los equipos están listos para la siguiente etapa
+          </p>
+          <button
+            onClick={handleStartStage2}
+            style={{
+              padding: "16px 32px",
+              fontSize: 18,
+              fontWeight: 700,
+              backgroundColor: "#22c55e",
+              color: "white",
+              border: "none",
+              borderRadius: 12,
+              cursor: "pointer",
+              boxShadow: "0 4px 16px rgba(34, 197, 94, 0.4)",
+              transition: "transform 0.2s, box-shadow 0.2s",
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = "scale(1.02)";
+              e.currentTarget.style.boxShadow = "0 6px 20px rgba(34, 197, 94, 0.5)";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+              e.currentTarget.style.boxShadow = "0 4px 16px rgba(34, 197, 94, 0.4)";
+            }}
+          >
+            🚀 INICIAR STAGE 2
+          </button>
+        </div>
+      )}
+
       {/* Tabla de equipos */}
       <table
         style={{
@@ -140,8 +210,8 @@ export function Stage1ClassroomView({ game, gameId }: Stage1ClassroomViewProps) 
             const players = Array.isArray(team.players)
               ? team.players
               : team.players && typeof team.players === "object"
-              ? Object.values(team.players)
-              : [];
+                ? Object.values(team.players)
+                : [];
 
             const totalScore = players.reduce((sum: number, p: any) => sum + (p.score ?? 0), 0);
 

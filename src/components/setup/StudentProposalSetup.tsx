@@ -1,9 +1,39 @@
 // src/components/setup/StudentProposalSetup.tsx
 // Configuración del juego cuando los alumnos proponen las consignas
+// ✅ ACTUALIZADO: Incluye Step 2 para distribución de alumnos en equipos
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useGameMode } from "../../contexts/GameModeContext";
 import { useI18n } from "../../i18n";
+import type { Team, Player } from "../../types/game";
+
+// 🦁 Nombres de equipos con animales (Traffic Light - niños)
+const TEAM_ANIMALS = [
+  { emoji: '🦁', name: 'Leones', nameEn: 'Lions' },
+  { emoji: '🐯', name: 'Tigres', nameEn: 'Tigers' },
+  { emoji: '🐻', name: 'Osos', nameEn: 'Bears' },
+  { emoji: '🦅', name: 'Águilas', nameEn: 'Eagles' },
+  { emoji: '🦊', name: 'Zorros', nameEn: 'Foxes' },
+  { emoji: '🐺', name: 'Lobos', nameEn: 'Wolves' },
+  { emoji: '🦒', name: 'Jirafas', nameEn: 'Giraffes' },
+  { emoji: '🐘', name: 'Elefantes', nameEn: 'Elephants' },
+  { emoji: '🦓', name: 'Cebras', nameEn: 'Zebras' },
+  { emoji: '🦘', name: 'Canguros', nameEn: 'Kangaroos' },
+];
+
+// 🎯 Nombres de equipos profesionales (Coopetition - adolescentes/adultos)
+const TEAM_PROFESSIONAL = [
+  { emoji: '🔷', name: 'Estrategas', nameEn: 'Strategists' },
+  { emoji: '🔶', name: 'Innovadores', nameEn: 'Innovators' },
+  { emoji: '💎', name: 'Vanguardia', nameEn: 'Vanguard' },
+  { emoji: '⚡', name: 'Impulso', nameEn: 'Momentum' },
+  { emoji: '🎯', name: 'Enfoque', nameEn: 'Focus' },
+  { emoji: '🚀', name: 'Pioneros', nameEn: 'Pioneers' },
+  { emoji: '💡', name: 'Creativos', nameEn: 'Creatives' },
+  { emoji: '🔥', name: 'Impacto', nameEn: 'Impact' },
+  { emoji: '⭐', name: 'Élite', nameEn: 'Elite' },
+  { emoji: '🌟', name: 'Líderes', nameEn: 'Leaders' },
+];
 
 // Tipos
 interface MaterialItem {
@@ -19,8 +49,9 @@ export interface ProposalGameConfig {
   numberOfTeams: number;
   materials: MaterialItem[];
   maxProposalsPerTeam: number;
-  timerMinutes: number | null; // null = sin límite
-  showLiveProposals: boolean; // mostrar propuestas en vivo en pantalla del aula
+  timerMinutes: number | null;
+  showLiveProposals: boolean;
+  teams: Team[]; // ✅ NUEVO: Equipos con jugadores asignados
 }
 
 interface StudentProposalSetupProps {
@@ -29,14 +60,19 @@ interface StudentProposalSetupProps {
 }
 
 export function StudentProposalSetup({ onComplete, onBack }: StudentProposalSetupProps) {
-  const { theme } = useGameMode();
+  const { mode: gameMode, theme } = useGameMode();
   const { language } = useI18n();
   
-  // Estado del formulario
-  const [step, setStep] = useState<1 | 2>(1);
+  // Estado del formulario - ahora 3 steps
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [gameName, setGameName] = useState('');
   const [subject, setSubject] = useState('');
   const [numberOfTeams, setNumberOfTeams] = useState(4);
+  const [studentsPerTeam, setStudentsPerTeam] = useState(5);
+  
+  // ✅ NUEVO: Estado para distribución de alumnos
+  const [studentsText, setStudentsText] = useState('');
+  const [teams, setTeams] = useState<Team[]>([]);
   
   // Materiales
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
@@ -54,16 +90,63 @@ export function StudentProposalSetup({ onComplete, onBack }: StudentProposalSetu
   const [timerMinutes, setTimerMinutes] = useState(15);
   const [showLiveProposals, setShowLiveProposals] = useState(false);
 
+  // ✅ NUEVO: Parsear nombres de estudiantes
+  const parsedNamesInfo = useMemo(() => {
+    const raw = studentsText
+      .split('\n')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const normalizeKey = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    const duplicates: string[] = [];
+
+    for (const name of raw) {
+      const key = normalizeKey(name);
+      if (seen.has(key)) {
+        duplicates.push(name);
+      } else {
+        seen.add(key);
+        unique.push(name);
+      }
+    }
+
+    return {
+      rawCount: raw.length,
+      unique,
+      uniqueCount: unique.length,
+      duplicates,
+      duplicateCount: duplicates.length,
+    };
+  }, [studentsText]);
+
   // Traducciones
   const t = {
     step1Title: language === 'es' ? 'Configuración básica' : 'Basic configuration',
-    step2Title: language === 'es' ? 'Configuración de propuestas' : 'Proposal settings',
+    step2Title: language === 'es' ? 'Distribución de equipos' : 'Team distribution',
+    step3Title: language === 'es' ? 'Configuración de propuestas' : 'Proposal settings',
     
     gameName: language === 'es' ? 'Nombre del juego' : 'Game name',
     gameNamePlaceholder: language === 'es' ? 'Ej: Repaso Unidad 3 - Célula' : 'E.g.: Unit 3 Review - Cell',
     subject: language === 'es' ? 'Tema/Materia' : 'Subject/Topic',
     subjectPlaceholder: language === 'es' ? 'Ej: Biología, Ciencias Naturales' : 'E.g.: Biology, Natural Sciences',
     numberOfTeams: language === 'es' ? 'Cantidad de equipos' : 'Number of teams',
+    studentsPerTeam: language === 'es' ? 'Estudiantes por equipo' : 'Students per team',
+    
+    // Step 2 - Distribución de alumnos
+    enterNames: language === 'es' ? 'Ingresá los nombres (uno por línea)' : 'Enter names (one per line)',
+    assignRandom: language === 'es' ? 'Distribuir aleatoriamente' : 'Assign randomly',
+    totalStudents: language === 'es' ? 'Total:' : 'Total:',
+    uniqueStudents: language === 'es' ? 'Únicos:' : 'Unique:',
+    duplicates: language === 'es' ? 'Duplicados:' : 'Duplicates:',
+    duplicatesNote: language === 'es' ? 'Los duplicados se ignoran al armar equipos.' : 'Duplicates are ignored when building teams.',
+    duplicatesDetected: language === 'es' ? 'Duplicados detectados:' : 'Duplicates found:',
+    teamsConfigured: language === 'es' ? 'Equipos configurados' : 'Teams configured',
+    moveStudentHint: language === 'es' 
+      ? 'Podés mover estudiantes entre equipos seleccionando el equipo destino'
+      : 'You can move students between teams by selecting the destination team',
     
     materials: language === 'es' ? 'Material de referencia' : 'Reference material',
     materialsDesc: language === 'es' 
@@ -105,6 +188,76 @@ export function StudentProposalSetup({ onComplete, onBack }: StudentProposalSetu
     back: language === 'es' ? '← Volver' : '← Back',
     next: language === 'es' ? 'Siguiente →' : 'Next →',
     createRoom: language === 'es' ? 'Crear sala →' : 'Create room →',
+    
+    errorEnterNames: language === 'es' ? 'Ingresá al menos un nombre' : 'Enter at least one name',
+  };
+
+  // ✅ NUEVO: Asignar estudiantes aleatoriamente
+  const assignStudentsRandomly = () => {
+    const uniqueNames = parsedNamesInfo.unique;
+
+    if (uniqueNames.length === 0) {
+      alert(t.errorEnterNames);
+      return;
+    }
+
+    const shuffled = [...uniqueNames].sort(() => Math.random() - 0.5);
+    const newTeams: Team[] = [];
+
+    const teamNames = gameMode === 'coopetition' ? TEAM_PROFESSIONAL : TEAM_ANIMALS;
+
+    for (let i = 0; i < numberOfTeams; i++) {
+      const teamId = `team_${i + 1}`;
+      const teamPlayers: Player[] = [];
+
+      for (let j = 0; j < studentsPerTeam; j++) {
+        const studentIndex = i * studentsPerTeam + j;
+        if (studentIndex < shuffled.length) {
+          teamPlayers.push({
+            id: `player${studentIndex + 1}`,
+            name: shuffled[studentIndex],
+            score: 0,
+            consecutiveLastPlace: 0,
+          });
+        }
+      }
+
+      newTeams.push({
+        id: teamId,
+        name: `${teamNames[i].emoji} ${language === 'es' ? teamNames[i].name : teamNames[i].nameEn}`,
+        players: teamPlayers,
+        totalScore: 0,
+        stage0Bonus: 0,
+      });
+    }
+
+    setTeams(newTeams);
+  };
+
+  // ✅ NUEVO: Mover estudiante entre equipos
+  const moveStudentToTeam = (studentId: string, fromTeamId: string, toTeamId: string) => {
+    const updatedTeams = teams.map(team => {
+      if (team.id === fromTeamId) {
+        return {
+          ...team,
+          players: team.players.filter(p => p.id !== studentId),
+        };
+      } else if (team.id === toTeamId) {
+        const studentToMove = teams
+          .find(t => t.id === fromTeamId)
+          ?.players.find(p => p.id === studentId);
+
+        if (studentToMove) {
+          return {
+            ...team,
+            players: [...team.players, studentToMove],
+          };
+        }
+      }
+      return team;
+    });
+
+    setTeams(updatedTeams);
   };
 
   // Handlers de materiales
@@ -170,12 +323,22 @@ export function StudentProposalSetup({ onComplete, onBack }: StudentProposalSetu
       maxProposalsPerTeam,
       timerMinutes: useTimer ? timerMinutes : null,
       showLiveProposals,
+      teams, // ✅ NUEVO: Incluir equipos con jugadores
     };
     onComplete(config);
   };
 
   const canProceedStep1 = gameName.trim().length > 0;
-  const canProceedStep2 = true; // Siempre puede proceder en step 2
+  const canProceedStep2 = teams.length > 0 && teams.some(t => t.players.length > 0);
+
+  // Obtener el título del step actual
+  const getStepTitle = () => {
+    switch (step) {
+      case 1: return t.step1Title;
+      case 2: return t.step2Title;
+      case 3: return t.step3Title;
+    }
+  };
 
   return (
     <div style={{
@@ -212,19 +375,19 @@ export function StudentProposalSetup({ onComplete, onBack }: StudentProposalSetu
             👥 {language === 'es' ? 'Los equipos proponen' : 'Teams propose'}
           </h1>
           <p style={{ margin: '4px 0 0 0', fontSize: 14, color: '#64748b' }}>
-            {step === 1 ? t.step1Title : t.step2Title}
+            {getStepTitle()}
           </p>
         </div>
       </div>
 
-      {/* Progress */}
+      {/* Progress - ahora 3 steps */}
       <div style={{
         maxWidth: 700,
         margin: '0 auto 24px',
         display: 'flex',
         gap: 8,
       }}>
-        {[1, 2].map(s => (
+        {[1, 2, 3].map(s => (
           <div
             key={s}
             style={{
@@ -267,6 +430,7 @@ export function StudentProposalSetup({ onComplete, onBack }: StudentProposalSetu
                   border: '2px solid #e2e8f0',
                   borderRadius: 10,
                   outline: 'none',
+                  boxSizing: 'border-box',
                 }}
               />
             </div>
@@ -288,32 +452,58 @@ export function StudentProposalSetup({ onComplete, onBack }: StudentProposalSetu
                   border: '2px solid #e2e8f0',
                   borderRadius: 10,
                   outline: 'none',
+                  boxSizing: 'border-box',
                 }}
               />
             </div>
 
-            {/* Cantidad de equipos */}
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#1e293b', marginBottom: 8 }}>
-                {t.numberOfTeams}
-              </label>
-              <select
-                value={numberOfTeams}
-                onChange={(e) => setNumberOfTeams(Number(e.target.value))}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  fontSize: 15,
-                  border: '2px solid #e2e8f0',
-                  borderRadius: 10,
-                  outline: 'none',
-                  backgroundColor: 'white',
-                }}
-              >
-                {[2, 3, 4, 5, 6, 7, 8].map(n => (
-                  <option key={n} value={n}>{n} {language === 'es' ? 'equipos' : 'teams'}</option>
-                ))}
-              </select>
+            {/* Cantidad de equipos y estudiantes por equipo */}
+            <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#1e293b', marginBottom: 8 }}>
+                  {t.numberOfTeams}
+                </label>
+                <select
+                  value={numberOfTeams}
+                  onChange={(e) => setNumberOfTeams(Number(e.target.value))}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    fontSize: 15,
+                    border: '2px solid #e2e8f0',
+                    borderRadius: 10,
+                    outline: 'none',
+                    backgroundColor: 'white',
+                  }}
+                >
+                  {[2, 3, 4, 5, 6, 7, 8].map(n => (
+                    <option key={n} value={n}>{n} {language === 'es' ? 'equipos' : 'teams'}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#1e293b', marginBottom: 8 }}>
+                  {t.studentsPerTeam}
+                </label>
+                <select
+                  value={studentsPerTeam}
+                  onChange={(e) => setStudentsPerTeam(Number(e.target.value))}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    fontSize: 15,
+                    border: '2px solid #e2e8f0',
+                    borderRadius: 10,
+                    outline: 'none',
+                    backgroundColor: 'white',
+                  }}
+                >
+                  {[3, 4, 5, 6, 7, 8].map(n => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Materiales */}
@@ -435,6 +625,7 @@ export function StudentProposalSetup({ onComplete, onBack }: StudentProposalSetu
                       border: '1px solid #e2e8f0',
                       borderRadius: 6,
                       marginBottom: 8,
+                      boxSizing: 'border-box',
                     }}
                   />
                   <textarea
@@ -450,6 +641,7 @@ export function StudentProposalSetup({ onComplete, onBack }: StudentProposalSetu
                       borderRadius: 6,
                       resize: 'vertical',
                       marginBottom: 8,
+                      boxSizing: 'border-box',
                     }}
                   />
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -478,6 +670,7 @@ export function StudentProposalSetup({ onComplete, onBack }: StudentProposalSetu
                       border: '1px solid #e2e8f0',
                       borderRadius: 6,
                       marginBottom: 8,
+                      boxSizing: 'border-box',
                     }}
                   />
                   <input
@@ -492,6 +685,7 @@ export function StudentProposalSetup({ onComplete, onBack }: StudentProposalSetu
                       border: '1px solid #e2e8f0',
                       borderRadius: 6,
                       marginBottom: 8,
+                      boxSizing: 'border-box',
                     }}
                   />
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -526,8 +720,166 @@ export function StudentProposalSetup({ onComplete, onBack }: StudentProposalSetu
               </button>
             </div>
           </div>
+        ) : step === 2 ? (
+          /* STEP 2: Distribución de alumnos en equipos */
+          <div>
+            {/* Textarea para nombres */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#1e293b', marginBottom: 8 }}>
+                {t.enterNames}
+              </label>
+              <textarea
+                rows={10}
+                value={studentsText}
+                onChange={(e) => setStudentsText(e.target.value)}
+                placeholder={language === 'es' ? 'María\nPedro\nAna\n...' : 'John\nMary\nPeter\n...'}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  fontSize: 15,
+                  border: '2px solid #e2e8f0',
+                  borderRadius: 10,
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <small style={{ color: '#64748b', fontSize: 13 }}>
+                {t.totalStudents} {parsedNamesInfo.rawCount} · {t.uniqueStudents} {parsedNamesInfo.uniqueCount} · {t.duplicates} {parsedNamesInfo.duplicateCount}
+                {parsedNamesInfo.duplicateCount > 0 ? ` — ${t.duplicatesNote}` : ''}
+              </small>
+              {parsedNamesInfo.duplicateCount > 0 && (
+                <div style={{ marginTop: 8, fontSize: 13, color: '#dc2626' }}>
+                  <strong>{t.duplicatesDetected}</strong>{' '}
+                  {parsedNamesInfo.duplicates.slice(0, 8).join(', ')}
+                  {parsedNamesInfo.duplicates.length > 8 ? '…' : ''}
+                </div>
+              )}
+            </div>
+
+            {/* Botón asignar */}
+            <button
+              onClick={assignStudentsRandomly}
+              disabled={parsedNamesInfo.uniqueCount === 0}
+              style={{
+                padding: '12px 24px',
+                fontSize: 14,
+                fontWeight: 600,
+                backgroundColor: parsedNamesInfo.uniqueCount > 0 ? '#8b5cf6' : '#e2e8f0',
+                color: parsedNamesInfo.uniqueCount > 0 ? 'white' : '#94a3b8',
+                border: 'none',
+                borderRadius: 10,
+                cursor: parsedNamesInfo.uniqueCount > 0 ? 'pointer' : 'not-allowed',
+                marginBottom: 24,
+              }}
+            >
+              🎲 {t.assignRandom}
+            </button>
+
+            {/* Preview de equipos */}
+            {teams.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <h3 style={{ margin: '0 0 8px 0', fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
+                  ✅ {t.teamsConfigured}
+                </h3>
+                <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+                  {t.moveStudentHint}
+                </p>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                  gap: 16,
+                }}>
+                  {teams.map(team => (
+                    <div
+                      key={team.id}
+                      style={{
+                        padding: 16,
+                        backgroundColor: '#f8fafc',
+                        borderRadius: 12,
+                        border: '1px solid #e2e8f0',
+                      }}
+                    >
+                      <h4 style={{ margin: '0 0 12px 0', fontSize: 14, fontWeight: 700, color: '#1e293b' }}>
+                        {team.name}
+                      </h4>
+                      <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                        {team.players.map(p => (
+                          <li
+                            key={p.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '6px 0',
+                              borderBottom: '1px solid #e2e8f0',
+                            }}
+                          >
+                            <span style={{ fontSize: 13, color: '#475569' }}>{p.name}</span>
+                            <select
+                              value={team.id}
+                              onChange={(e) => {
+                                if (e.target.value !== team.id) {
+                                  moveStudentToTeam(p.id, team.id, e.target.value);
+                                }
+                              }}
+                              style={{
+                                padding: '4px 8px',
+                                fontSize: 11,
+                                border: '1px solid #e2e8f0',
+                                borderRadius: 4,
+                                backgroundColor: 'white',
+                              }}
+                            >
+                              {teams.map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                              ))}
+                            </select>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Botones */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 32 }}>
+              <button
+                onClick={() => setStep(1)}
+                style={{
+                  padding: '14px 28px',
+                  fontSize: 15,
+                  fontWeight: 600,
+                  backgroundColor: '#e2e8f0',
+                  color: '#475569',
+                  border: 'none',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                }}
+              >
+                {t.back}
+              </button>
+              <button
+                onClick={() => setStep(3)}
+                disabled={!canProceedStep2}
+                style={{
+                  padding: '14px 28px',
+                  fontSize: 15,
+                  fontWeight: 700,
+                  backgroundColor: canProceedStep2 ? '#8b5cf6' : '#e2e8f0',
+                  color: canProceedStep2 ? 'white' : '#94a3b8',
+                  border: 'none',
+                  borderRadius: 10,
+                  cursor: canProceedStep2 ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {t.next}
+              </button>
+            </div>
+          </div>
         ) : (
-          /* STEP 2: Configuración de propuestas */
+          /* STEP 3: Configuración de propuestas */
           <div>
             {/* Espacios por equipo */}
             <div style={{ marginBottom: 24 }}>
@@ -647,7 +999,7 @@ export function StudentProposalSetup({ onComplete, onBack }: StudentProposalSetu
             {/* Botones */}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <button
-                onClick={() => setStep(1)}
+                onClick={() => setStep(2)}
                 style={{
                   padding: '14px 28px',
                   fontSize: 15,
@@ -680,15 +1032,6 @@ export function StudentProposalSetup({ onComplete, onBack }: StudentProposalSetu
           </div>
         )}
       </div>
-
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".txt,.pdf,.doc,.docx"
-        onChange={handleFileUpload}
-        style={{ display: 'none' }}
-      />
     </div>
   );
 }

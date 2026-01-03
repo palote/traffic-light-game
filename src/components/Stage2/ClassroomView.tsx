@@ -9,6 +9,7 @@ import {
   getRoundRanking,
   getRoundSummary,
 } from "../../services/stage2ResultsHelpers";
+import { FinalPodium } from "./FinalPodium";
 import { useAuth } from "../../hooks/useAuth";
 import type { Game, Team, Question } from "../../types/game";
 import {
@@ -458,7 +459,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
     );
   }
 
-  if (!game.stage2) {
+if (!game.stage2) {
     return (
       <div style={styles.container}>
         <div style={styles.header}>
@@ -475,6 +476,12 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
         </div>
       </div>
     );
+  }
+
+  // ✅ JUEGO COMPLETADO - Mostrar podio
+  if ((game.status?.status as string) === "game_complete" || (game.stage2 as any)?.phase === "game_complete") {
+    const teams = Object.values(game.teams || {}) as Team[];
+    return <FinalPodium teams={teams} gameId={gameId} />;
   }
 
   if (!round) {

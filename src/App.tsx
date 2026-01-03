@@ -11,7 +11,7 @@ import { AdminRoute } from "./components/admin/AdminRoute";
 import { AdminMetricsPage } from "./pages/admin/AdminMetricsPage";
 import { AdminLibraryUploadPage } from "./pages/admin/AdminLibraryUploadPage";
 import { AdminBulkUploadPage } from "./pages/admin/AdminBulkUploadPage";
-import { AdminLibraryFixPage } from "./pages/admin/AdminLibraryFixPage"; // ✅ NUEVO
+import { AdminLibraryFixPage } from "./pages/admin/AdminLibraryFixPage";
 
 // ✅ PÁGINAS
 import { DashboardPage } from "./pages/DashboardPage";
@@ -23,37 +23,81 @@ import { JoinGamePage } from "./pages/JoinGamePage";
 import { SetupFlowManager } from "./components/setup/SetupFlowManager";
 import { ProposalStudentView } from "./components/Stage0/ProposalStudentView";
 
+// ✅ CLASSROOM VIEWS REALES
+import { Stage1ClassroomView } from "./components/Stage1/Stage1ClassroomView";
+import { ClassroomView as Stage2ClassroomView } from "./components/Stage2/ClassroomView";
+
 import "./App.css";
 
 // ✅ AUTH + ROUTER + GAME MODE + I18N
-import { BrowserRouter, Routes, Route, Navigate, useParams, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { GameModeProvider } from "./contexts/GameModeContext";
 import { I18nProvider } from "./i18n";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
 
-// Placeholders para ClassroomView
+import type { Game } from "./types/game";
+
+// ✅ CORREGIDO: ClassroomView real para Stage 1
 function ClassroomRouteWrapper() {
   const { gameId } = useParams();
-  return (
-    <div style={{ padding: 20 }}>
-      <h2>ClassroomView</h2>
-      <p>gameId: {gameId}</p>
-      <p>Acá va tu ClassroomView real.</p>
-    </div>
-  );
+  const [game, setGame] = useState<Game | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!gameId) return;
+
+    const gameRef = ref(database, `games/${gameId}`);
+    const unsubscribe = onValue(gameRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setGame(snapshot.val());
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [gameId]);
+
+  if (!gameId) return <div style={{ padding: 20 }}>❌ gameId no encontrado</div>;
+
+  if (loading) {
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        backgroundColor: '#f8fafc',
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+          <div style={{ fontSize: 18, color: '#64748b' }}>Cargando juego...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!game) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
+        <div style={{ fontSize: 18, color: '#ef4444' }}>Juego no encontrado</div>
+        <p style={{ color: '#64748b' }}>gameId: {gameId}</p>
+      </div>
+    );
+  }
+
+  return <Stage1ClassroomView game={game} gameId={gameId} />;
 }
 
+// ✅ CORREGIDO: ClassroomView real para Stage 2
 function Stage2ClassroomRouteWrapper() {
   const { gameId } = useParams();
-  return (
-    <div style={{ padding: 20 }}>
-      <h2>Stage 2 ClassroomView</h2>
-      <p>gameId: {gameId}</p>
-      <p>Acá va tu Stage2 ClassroomView real.</p>
-    </div>
-  );
+
+  if (!gameId) return <div style={{ padding: 20 }}>❌ gameId no encontrado</div>;
+
+  return <Stage2ClassroomView gameId={gameId} />;
 }
 
 // ✅ Rutas de alumnos
@@ -124,12 +168,32 @@ function ProposalRouteWrapper() {
 // ✅ NUEVO: Wrapper para SetupFlowManager
 function SetupFlowManagerWrapper() {
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // ✅ Detectar si viene de biblioteca
+  const fromLibrary = location.state?.fromLibrary === true;
+  
+  // ✅ Si viene de biblioteca, ir directo al SetupScreen tradicional
+  useEffect(() => {
+    if (fromLibrary) {
+      console.log("🟢 Detected fromLibrary, redirecting to /setup-traditional");
+      navigate('/setup-traditional', { state: { fromLibrary: true } });
+    }
+  }, [fromLibrary, navigate]);
   
   const handleGameCreated = (newGameId: string) => {
     console.log("Game created with ID:", newGameId);
-    // Navegar al classroom o al juego
     navigate(`/classroom/${newGameId}`);
   };
+  
+  // Si viene de biblioteca, mostrar loading mientras redirige
+  if (fromLibrary) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <p>Cargando...</p>
+      </div>
+    );
+  }
   
   return (
     <div className="App">
@@ -145,12 +209,16 @@ type AppView = "setup" | "game";
 
 /**
  * ✅ App original del docente (setup/game) - Flujo tradicional
+ * ⚠️ NOTA: Esta vista contiene elementos de debug que deberían ocultarse en producción
  */
 function TeacherAppLegacy() {
   const [currentView, setCurrentView] = useState<AppView>("setup");
   const [gameId, setGameId] = useState<string | null>(null);
   const [teamId, setTeamId] = useState("teamA");
   const [availableTeams, setAvailableTeams] = useState<string[]>([]);
+
+  // ✅ Detectar si estamos en producción
+  const isProduction = import.meta.env.PROD;
 
   useEffect(() => {
     if (!gameId) return;
@@ -190,7 +258,8 @@ function TeacherAppLegacy() {
 
         <SetupScreen onGameCreated={handleGameCreated} />
 
-        {gameId && (
+        {/* ⚠️ Botón de testing - solo en desarrollo */}
+        {gameId && !isProduction && (
           <div
             style={{
               position: "fixed",
@@ -221,76 +290,82 @@ function TeacherAppLegacy() {
           <SoundToggle />
         </div>
 
-        <div
-          style={{
-            position: "fixed",
-            top: "20px",
-            left: "20px",
-            zIndex: 10000,
-            background: "white",
-            padding: "12px 16px",
-            borderRadius: "8px",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "8px",
-          }}
-        >
-          <div style={{ fontSize: "12px", fontWeight: "bold", color: "#666" }}>
-            🎮 CONSOLA DEL PROFESOR
-          </div>
-
-          <select
-            value={teamId}
-            onChange={(e) => setTeamId(e.target.value)}
+        {/* ⚠️ Consola del profesor - solo en desarrollo */}
+        {!isProduction && (
+          <div
             style={{
-              padding: "8px 12px",
-              fontSize: "14px",
-              borderRadius: "6px",
-              border: "2px solid #3498db",
-              cursor: "pointer",
-              fontWeight: "bold",
+              position: "fixed",
+              top: "20px",
+              left: "20px",
+              zIndex: 10000,
+              background: "white",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
             }}
           >
-            {availableTeams.map((tId) => (
-              <option key={tId} value={tId}>
-                {tId === "teamA" && "🔴 Team A"}
-                {tId === "teamB" && "🟢 Team B"}
-                {tId === "teamC" && "🔵 Team C"}
-                {tId === "teamD" && "🟡 Team D"}
-                {tId === "teamE" && "🟣 Team E"}
-                {tId === "teamF" && "🟠 Team F"}
-                {!["teamA", "teamB", "teamC", "teamD", "teamE", "teamF"].includes(tId) && `📦 ${tId}`}
-              </option>
-            ))}
-          </select>
+            <div style={{ fontSize: "12px", fontWeight: "bold", color: "#666" }}>
+              🎮 CONSOLA DEL PROFESOR (DEV)
+            </div>
 
-          <div style={{ fontSize: "11px", color: "#999" }}>
-            Equipo actual: <strong>{teamId}</strong>
+            <select
+              value={teamId}
+              onChange={(e) => setTeamId(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                fontSize: "14px",
+                borderRadius: "6px",
+                border: "2px solid #3498db",
+                cursor: "pointer",
+                fontWeight: "bold",
+              }}
+            >
+              {availableTeams.map((tId) => (
+                <option key={tId} value={tId}>
+                  {tId === "teamA" && "🔴 Team A"}
+                  {tId === "teamB" && "🟢 Team B"}
+                  {tId === "teamC" && "🔵 Team C"}
+                  {tId === "teamD" && "🟡 Team D"}
+                  {tId === "teamE" && "🟣 Team E"}
+                  {tId === "teamF" && "🟠 Team F"}
+                  {!["teamA", "teamB", "teamC", "teamD", "teamE", "teamF"].includes(tId) && `📦 ${tId}`}
+                </option>
+              ))}
+            </select>
+
+            <div style={{ fontSize: "11px", color: "#999" }}>
+              Equipo actual: <strong>{teamId}</strong>
+            </div>
           </div>
-        </div>
+        )}
 
         <GameController key={teamId} gameId={gameId} teamId={teamId} />
 
-        <button
-          style={{
-            position: "fixed",
-            bottom: "20px",
-            left: "20px",
-            background: "#95a5a6",
-            color: "white",
-            padding: "10px 14px",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontSize: "12px",
-            border: "none",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-            zIndex: 9999,
-          }}
-          onClick={() => setCurrentView("setup")}
-        >
-          ← Volver a Setup
-        </button>
+        {/* ⚠️ Botón volver - solo en desarrollo */}
+        {!isProduction && (
+          <button
+            style={{
+              position: "fixed",
+              bottom: "20px",
+              left: "20px",
+              background: "#95a5a6",
+              color: "white",
+              padding: "10px 14px",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "12px",
+              border: "none",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+              zIndex: 9999,
+            }}
+            onClick={() => setCurrentView("setup")}
+          >
+            ← Volver a Setup
+          </button>
+        )}
       </div>
     );
   }
@@ -398,7 +473,7 @@ function App() {
                 }
               />
 
-              {/* DOCENTE: Classroom */}
+              {/* DOCENTE: Classroom Stage 1 */}
               <Route
                 path="/classroom/:gameId"
                 element={

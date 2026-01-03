@@ -112,7 +112,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
   // Estado para CSV de biblioteca
   const [libraryCSVLoaded, setLibraryCSVLoaded] = useState(false);
   const [libraryCSVTitle, setLibraryCSVTitle] = useState<string | null>(null);
-  
+
   // Estado para guardar juego
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [csvContentForSave, setCsvContentForSave] = useState<string>('');
@@ -120,7 +120,11 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
 
   // Estado para generador de prompts
   const [showPromptGenerator, setShowPromptGenerator] = useState(false);
-
+  // 🔴 PONÉ ESTE CONSOLE.LOG ACÁ
+  console.log("🟣 SetupScreen render", {
+    pathname: location.pathname,
+    state: location.state,
+  });
   // Actualizar idioma cuando cambia el modo
   useEffect(() => {
     setLanguage(gameMode === 'coopetition' ? 'en' : 'es');
@@ -128,59 +132,74 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
 
   // Detectar si viene de la biblioteca
   useEffect(() => {
-    const fromLibrary = location.state?.fromLibrary;
-    
+    const state = location.state as any;
+    const fromLibrary = state?.fromLibrary;
+
     if (fromLibrary) {
-      const csvContent = sessionStorage.getItem('library_csv_content');
-      const csvFilename = sessionStorage.getItem('library_csv_filename');
-      const csvTitle = sessionStorage.getItem('library_csv_title');
-      const csvSubject = sessionStorage.getItem('library_csv_subject');
-      
+      // ✅ Leer de location.state primero, fallback a sessionStorage
+      const csvContent = state?.csvContent || sessionStorage.getItem('library_csv_content');
+      const csvFilename = state?.csvFilename || sessionStorage.getItem('library_csv_filename');
+      const csvTitle = state?.csvTitle || sessionStorage.getItem('library_csv_title');
+      const csvSubject = state?.csvSubject || sessionStorage.getItem('library_csv_subject');
+
+      console.log("🟢 fromLibrary - got data:", {
+        hasContent: !!csvContent,
+        contentLength: csvContent?.length,
+        csvFilename
+      });
+
+      if (csvSubject && !subject) {
+        setSubject(csvSubject);
+      }
+
       if (csvContent && csvFilename) {
-        if (csvSubject && !subject) {
-          setSubject(csvSubject);
-        }
-        
         setLibraryCSVTitle(csvTitle || csvFilename);
         setCurrentStep(2);
         processLibraryCSV(csvContent, csvFilename);
-        
-        sessionStorage.removeItem('library_csv_content');
-        sessionStorage.removeItem('library_csv_filename');
-        sessionStorage.removeItem('library_csv_title');
-        sessionStorage.removeItem('library_csv_subject');
-        sessionStorage.removeItem('library_csv_grade');
       }
-      
+
+      // Limpiar state después de procesar
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
-
   const processLibraryCSV = async (content: string, filename: string) => {
+    console.log("🟢 processLibraryCSV start", { filename, contentLength: content.length });
+
     setIsParsing(true);
     setCsvError(null);
     setCsvContentForSave(content); // Guardar para SaveGameModal
 
     try {
       const result = await parseCSV(content);
+      console.log("🟢 parseCSV OK", {
+        questions: (result as any)?.questions?.length,
+        hasResult: !!result,
+      });
+
       setParseResult(result);
       setShowPreview(true);
       setLibraryCSVLoaded(true);
-      
+
       const blob = new Blob([content], { type: "text/csv" });
       const file = new File([blob], filename, { type: "text/csv" });
       setCsvFile(file);
-      
+
+      console.log("🟢 File created and setCsvFile done", { name: file.name, size: file.size });
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Error inesperado al parsear CSV";
+
+      console.log("🔴 parseCSV ERROR", { message, err });
+
       setParseResult(null);
       setShowPreview(false);
       setCsvError(message);
     } finally {
       setIsParsing(false);
+      console.log("🟢 processLibraryCSV end (isParsing false)");
     }
   };
+
 
   const parsedNamesInfo = useMemo(() => {
     const raw = studentsText
@@ -476,9 +495,9 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         <span style={{ fontSize: 32 }}>{theme.icon}</span>
         <h1 style={{ margin: 0 }}>{t.title}</h1>
       </div>
-      <p style={{ 
-        textAlign: 'center', 
-        color: theme.primary, 
+      <p style={{
+        textAlign: 'center',
+        color: theme.primary,
         fontWeight: 600,
         marginBottom: 24,
         fontSize: 14,
@@ -821,7 +840,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
             }}>
               <span style={{ fontSize: 24 }}>💾</span>
               <p style={{ margin: '8px 0 12px', fontSize: 14, color: '#0369a1' }}>
-                {language === 'es' 
+                {language === 'es'
                   ? '¿Querés guardar este juego para usarlo después?'
                   : 'Do you want to save this game for later use?'}
               </p>
@@ -854,7 +873,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
             }}>
               <span style={{ fontSize: 24 }}>✅</span>
               <p style={{ margin: '8px 0 0', fontSize: 14, color: '#16a34a' }}>
-                {language === 'es' 
+                {language === 'es'
                   ? '¡Juego guardado en tu biblioteca!'
                   : 'Game saved to your library!'}
               </p>
@@ -866,7 +885,8 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
             onClick={async () => {
               try {
                 await startGame(createdGameId);
-                onGameCreated(createdGameId);
+                // ✅ Navegar al classroom en lugar de solo llamar onGameCreated
+                navigate(`/classroom/${createdGameId}`);
               } catch (error) {
                 console.error('Error starting game:', error);
                 alert(language === 'es' ? 'Error al iniciar el juego' : 'Error starting game');

@@ -1,14 +1,14 @@
 // src/services/stage0Service.ts
 // Servicio para gestionar Stage 0 - Propuestas de consignas
 
-import { ref, update, get, push, set, serverTimestamp } from 'firebase/database';
+import { ref, update, get, push, set, serverTimestamp, remove } from 'firebase/database';
 import { database } from '../firebase.config';
-import type { 
-  Stage0Proposal, 
-  Stage0State, 
+import type {
+  Stage0Proposal,
+  Stage0State,
   Stage0Phase,
   ProposalType,
-  Game 
+  Game
 } from '../types/game';
 
 // ============================================
@@ -35,7 +35,7 @@ export async function initializeStage0(gameId: string): Promise<void> {
 // ============================================
 
 export async function setStage0Phase(
-  gameId: string, 
+  gameId: string,
   phase: Stage0Phase,
   timerMinutes?: number
 ): Promise<void> {
@@ -89,7 +89,7 @@ export async function submitProposal(
   };
 
   await update(ref(database, `games/${gameId}/stage0/proposals/${proposalId}`), newProposal);
-  
+
   return proposalId;
 }
 
@@ -97,7 +97,9 @@ export async function deleteProposal(
   gameId: string,
   proposalId: string
 ): Promise<void> {
-  await update(ref(database, `games/${gameId}/stage0/proposals/${proposalId}`), null);
+  await remove(
+    ref(database, `games/${gameId}/stage0/proposals/${proposalId}`)
+  );
 }
 
 export async function getTeamProposals(
@@ -105,9 +107,9 @@ export async function getTeamProposals(
   teamId: string
 ): Promise<Stage0Proposal[]> {
   const snapshot = await get(ref(database, `games/${gameId}/stage0/proposals`));
-  
+
   if (!snapshot.exists()) return [];
-  
+
   const proposals = snapshot.val() as Record<string, Stage0Proposal>;
   return Object.values(proposals).filter(p => p.teamId === teamId);
 }
@@ -116,9 +118,9 @@ export async function getAllProposals(
   gameId: string
 ): Promise<Stage0Proposal[]> {
   const snapshot = await get(ref(database, `games/${gameId}/stage0/proposals`));
-  
+
   if (!snapshot.exists()) return [];
-  
+
   const proposals = snapshot.val() as Record<string, Stage0Proposal>;
   return Object.values(proposals).sort((a, b) => a.submittedAt - b.submittedAt);
 }
@@ -133,7 +135,7 @@ export async function markTeamReady(
 ): Promise<void> {
   const snapshot = await get(ref(database, `games/${gameId}/stage0/readyTeams`));
   const readyTeams: string[] = snapshot.exists() ? snapshot.val() : [];
-  
+
   if (!readyTeams.includes(teamId)) {
     readyTeams.push(teamId);
     await update(ref(database, `games/${gameId}/stage0`), {
@@ -148,7 +150,7 @@ export async function unmarkTeamReady(
 ): Promise<void> {
   const snapshot = await get(ref(database, `games/${gameId}/stage0/readyTeams`));
   const readyTeams: string[] = snapshot.exists() ? snapshot.val() : [];
-  
+
   const filtered = readyTeams.filter(id => id !== teamId);
   await update(ref(database, `games/${gameId}/stage0`), {
     readyTeams: filtered,
@@ -225,13 +227,13 @@ export async function rejectProposal(
 export async function applyStage0Bonus(gameId: string): Promise<Record<string, number>> {
   // Obtener todas las propuestas aprobadas
   const proposals = await getAllProposals(gameId);
-  const approvedProposals = proposals.filter(p => 
+  const approvedProposals = proposals.filter(p =>
     p.status === 'approved' || p.status === 'edited'
   );
 
   // Calcular bonus por equipo
   const bonusByTeam: Record<string, number> = {};
-  
+
   for (const proposal of approvedProposals) {
     if (!bonusByTeam[proposal.teamId]) {
       bonusByTeam[proposal.teamId] = 0;
@@ -242,17 +244,40 @@ export async function applyStage0Bonus(gameId: string): Promise<Record<string, n
   // Aplicar bonus a cada equipo
   const gameSnapshot = await get(ref(database, `games/${gameId}`));
   const game = gameSnapshot.val() as Game;
-  
-  const teams = Array.isArray(game.teams) ? game.teams : Object.values(game.teams || {});
-  
+
   const teamUpdates: Record<string, unknown> = {};
-  
-  teams.forEach((team, index) => {
-    const bonus = bonusByTeam[team.id] || 0;
-    const path = Array.isArray(game.teams) ? `teams/${index}` : `teams/${team.id}`;
-    teamUpdates[`${path}/stage0Bonus`] = bonus;
-    teamUpdates[`${path}/totalScore`] = (team.totalScore || 0) + bonus;
-  });
+
+  // Soportar teams como ARRAY u OBJECT
+  if (Array.isArray((game as any).teams)) {
+    const teamsArr = (game as any).teams as any[];
+    teamsArr.forEach((team, index) => {
+      const teamId = team?.id;
+      if (!teamId) return;
+
+      const bonus = bonusByTeam[teamId] || 0;
+      const path = `teams/${index}`;
+
+      teamUpdates[`${path}/stage0Bonus`] = bonus;
+
+      const prevScore = (team?.totalScore ?? team?.score ?? 0) as number;
+      teamUpdates[`${path}/totalScore`] = prevScore + bonus;
+      teamUpdates[`${path}/score`] = prevScore + bonus;
+    });
+  } else {
+    const teamsObj = ((game as any).teams || {}) as Record<string, any>;
+
+    Object.entries(teamsObj).forEach(([teamKey, teamVal]) => {
+      const teamId = teamVal?.id || teamKey;
+      const bonus = bonusByTeam[teamId] || 0;
+      const path = `teams/${teamKey}`;
+
+      teamUpdates[`${path}/stage0Bonus`] = bonus;
+
+      const prevScore = (teamVal?.totalScore ?? teamVal?.score ?? 0) as number;
+      teamUpdates[`${path}/totalScore`] = prevScore + bonus;
+      teamUpdates[`${path}/score`] = prevScore + bonus;
+    });
+  }
 
   teamUpdates['stage0BonusApplied'] = true;
   teamUpdates['updatedAt'] = serverTimestamp();
@@ -263,18 +288,132 @@ export async function applyStage0Bonus(gameId: string): Promise<Record<string, n
 }
 
 export async function finishStage0AndStartStage1(gameId: string): Promise<void> {
-  // Primero aplicar bonus si hay propuestas
+  // 1. Aplicar bonus de Stage 0
   await applyStage0Bonus(gameId);
 
-  // Cambiar a Stage 1
-  await update(ref(database, `games/${gameId}`), {
+  // 2. Leer el juego completo
+  const gameSnap = await get(ref(database, `games/${gameId}`));
+  const game = gameSnap.val();
+
+  console.log("🔍 DEBUG finishStage0:", {
+    gameId,
+    gameExists: !!game,
+    teamsKeys: game?.teams ? Object.keys(game.teams) : [],
+  });
+
+  if (!game) throw new Error("Game not found");
+  if (!game.teams) throw new Error("No teams found in game");
+
+  // 3. Obtener preguntas de Stage 1
+  const questionsRaw = game.questions;
+  const questions = questionsRaw
+    ? (Array.isArray(questionsRaw) ? questionsRaw : Object.values(questionsRaw))
+        .filter((q: any) => q && typeof q === 'object')
+    : [];
+
+  if (questions.length === 0) throw new Error("No questions found");
+
+  const stage1Questions = questions.filter((q: any) => q.suggestedStage !== 2);
+  const firstQuestion = stage1Questions[0] || questions[0];
+
+  // 4. Preparar updates
+  const updates: Record<string, any> = {
     'status/status': 'stage1',
     'status/currentStage': 1,
-    'status/currentRound': 1,
-    'status/currentQuestionIndex': 0,
     'stage0/phase': 'results',
-    updatedAt: serverTimestamp(),
-  });
+    updatedAt: Date.now(),
+  };
+
+  // 5. Inicializar cada equipo con su ronda inicial
+  const teamEntries = Object.entries(game.teams);
+
+  for (const [teamId, teamData] of teamEntries) {
+    const team = teamData as any;
+    if (!team || typeof team !== 'object') continue;
+
+    // Obtener jugadores del equipo (filtrar fantasmas)
+    const playersRaw = team.players;
+    let players: any[] = [];
+
+    if (playersRaw) {
+      if (Array.isArray(playersRaw)) {
+        players = playersRaw.filter((p: any) => p && typeof p === 'object' && p.id);
+      } else if (typeof playersRaw === 'object') {
+        players = Object.entries(playersRaw).map(([key, val]: [string, any]) => ({
+          id: val?.id || key,
+          name: val?.name || 'Jugador',
+          score: val?.score || 0,
+          consecutiveLastPlace: val?.consecutiveLastPlace || 0,
+        }));
+      }
+    }
+
+    // ✅ NUEVO: Filtrar jugadores fantasma
+    players = players.filter(p =>
+      p.name &&
+      p.name !== 'Jugador' &&
+      p.name !== 'Capitán' &&
+      p.name !== 'Equipo' &&
+      !String(p.id || '').startsWith('player_') // IDs generados automáticamente
+    );
+
+    console.log("🔍 Players for team", teamId, players.map(p => ({ id: p.id, name: p.name })));
+
+    // Crear ronda inicial
+    let firstRound: any;
+
+    if (players.length === 0) {
+      // Sin jugadores: crear ronda básica
+      firstRound = {
+        roundNumber: 0,
+        questionId: (firstQuestion as any).id,
+        respondingPlayerId: null,
+        respondingPlayerName: 'Equipo',
+        captainId: null,
+        captainName: 'Equipo',
+        ratings: {},
+        pointsAwarded: {},
+        hasResponded: false,
+        timestamp: Date.now(),
+      };
+    } else {
+      // Con jugadores: asignar respondedor y capitán
+      const sorted = [...players].sort((a: any, b: any) => (a.score ?? 0) - (b.score ?? 0));
+      const responder = sorted[0];
+
+      let captainIndex = 0;
+      let captain = players[captainIndex];
+
+      if (players.length > 1 && captain.id === responder.id) {
+        captainIndex = 1;
+        captain = players[captainIndex];
+      }
+
+      firstRound = {
+        roundNumber: 0,
+        questionId: (firstQuestion as any).id,
+        respondingPlayerId: responder.id,
+        respondingPlayerName: responder.name, // ✅ Ya no necesita fallback
+        captainId: captain.id,
+        captainName: captain.name, // ✅ Ya no necesita fallback
+        ratings: {},
+        pointsAwarded: {},
+        hasResponded: false,
+        timestamp: Date.now(),
+      };
+    }
+
+    // Guardar ronda inicial en el equipo
+    updates[`teams/${teamId}/stage1Rounds/0`] = firstRound;
+    updates[`teams/${teamId}/currentRound`] = 0;
+    updates[`teams/${teamId}/currentQuestionIndex`] = 0;
+    updates[`teams/${teamId}/stage1Completed`] = false;
+  }
+
+  // 6. Aplicar todas las actualizaciones
+  await update(ref(database, `games/${gameId}`), updates);
+
+  console.log("✅ Stage 0 finished, Stage 1 started with", teamEntries.length, "teams");
 }
 
 // ============================================
@@ -298,7 +437,7 @@ export interface Stage0Stats {
 
 export async function getStage0Stats(gameId: string): Promise<Stage0Stats> {
   const proposals = await getAllProposals(gameId);
-  
+
   const stats: Stage0Stats = {
     totalProposals: proposals.length,
     pendingCount: 0,
@@ -400,13 +539,9 @@ export interface SavedPrompt {
   type: ProposalType;
   hint?: string;
   relatedTopic?: string;
-  
-  // Origen
   originalTeam?: string;
   gameId?: string;
   gameTopic?: string;
-  
-  // Metadata
   savedAt: number;
   usedCount: number;
 }
@@ -433,7 +568,7 @@ export async function saveProposalToLibrary(
   };
 
   await set(savedRef, savedPrompt);
-  
+
   // Mark as saved in the original proposal
   if (gameInfo?.gameId) {
     await update(ref(database, `games/${gameInfo.gameId}/stage0/proposals/${proposal.id}`), {
@@ -446,21 +581,26 @@ export async function saveProposalToLibrary(
 
 export async function getSavedPrompts(userId: string): Promise<SavedPrompt[]> {
   const snapshot = await get(ref(database, `users/${userId}/savedPrompts`));
-  
+
   if (!snapshot.exists()) return [];
-  
+
   const prompts = snapshot.val() as Record<string, SavedPrompt>;
   return Object.values(prompts).sort((a, b) => b.savedAt - a.savedAt);
 }
 
-export async function deleteSavedPrompt(userId: string, promptId: string): Promise<void> {
-  await update(ref(database, `users/${userId}/savedPrompts/${promptId}`), null);
+export async function deleteSavedPrompt(
+  userId: string,
+  promptId: string
+): Promise<void> {
+  await remove(
+    ref(database, `users/${userId}/savedPrompts/${promptId}`)
+  );
 }
 
 export async function incrementPromptUsage(userId: string, promptId: string): Promise<void> {
   const promptRef = ref(database, `users/${userId}/savedPrompts/${promptId}`);
   const snapshot = await get(promptRef);
-  
+
   if (snapshot.exists()) {
     const prompt = snapshot.val() as SavedPrompt;
     await update(promptRef, {
