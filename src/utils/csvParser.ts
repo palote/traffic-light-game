@@ -116,7 +116,35 @@ function detectDelimiter(text: string): string {
  */
 function hasEncodingIssues(text: string): boolean {
   // Caracteres típicos de encoding incorrecto
-  return /�|Ã¡|Ã©|Ã­|Ã³|Ãº|Ã±/.test(text);
+  return /�|Ã¡|Ã©|Ã­|Ã³|Ãº|Ã±|Â¿|Â¡|â€/.test(text);
+}
+
+/**
+ * ✅ NUEVO (mínimo): intentar reparar mojibake típico (UTF-8 leído como Latin-1)
+ * - No cambia la lógica de parseo: solo limpia el input si se detecta mojibake.
+ */
+function tryFixMojibake(text: string): string {
+  if (!hasEncodingIssues(text)) return text;
+
+  // Reparación general: “latin1 bytes” → decode como UTF-8
+  // (funciona cuando tenés cosas como "Ã¡" en lugar de "á")
+  try {
+    const bytes = new Uint8Array([...text].map((ch) => ch.charCodeAt(0) & 0xff));
+    const repaired = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+
+    // Si mejora (menos marcadores típicos), usar repaired
+    const beforeBad = (text.match(/�|Ã|Â|â€/g) || []).length;
+    const afterBad = (repaired.match(/�|Ã|Â|â€/g) || []).length;
+
+    if (afterBad < beforeBad) {
+      console.warn("[csvParser] Se detectó mojibake y se aplicó reparación latin1→utf8");
+      return repaired;
+    }
+  } catch {
+    // si falla, no tocamos nada
+  }
+
+  return text;
 }
 
 /**
@@ -165,7 +193,9 @@ function rowFromArray(cols: unknown[]): Record<string, unknown> {
 
 export function parseCSV(text: string): Promise<ParseResult> {
   return new Promise((resolve) => {
-    const trimmed = normalize(text);
+    // ✅ Importante: antes normalizabas y listo. Ahora: intentamos reparar si hay mojibake.
+    const repairedText = tryFixMojibake(text);
+    const trimmed = normalize(repairedText);
 
     if (!trimmed) {
       resolve({

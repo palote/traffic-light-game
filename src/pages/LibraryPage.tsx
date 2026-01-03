@@ -13,8 +13,13 @@ import { TeacherGameCard } from "../components/library/TeacherGameCard";
 import { EditGameModal } from "../components/library/EditGameModal";
 import { ReportGameModal } from "../components/library/ReportGameModal";
 
-// Services
-import { getAllLibraryItems, getCSVAsFile, deleteLibraryItem } from "../services/libraryService";
+// ✅ Services
+import {
+  getAllLibraryItems,
+  deleteLibraryItem,
+  downloadCSVContent, // ✅ usa decoding robusto directo (bytes + TextDecoder)
+} from "../services/libraryService";
+
 import {
   getMyGames,
   getCommunityGames,
@@ -30,12 +35,76 @@ import {
 } from "../services/teacherLibraryService";
 
 // Types
-import type { CSVLibraryItem, LibraryGameMode, PrimaryGrade, Area, Subject, LibraryLanguage } from "../types/library";
+import type {
+  CSVLibraryItem,
+  LibraryGameMode,
+  PrimaryGrade,
+  Area,
+  Subject,
+  LibraryLanguage,
+} from "../types/library";
 import { PRIMARY_GRADES, AREAS_ES, AREAS_EN, SUBJECTS_ES, SUBJECTS_EN } from "../types/library";
 import type { TeacherGame, TeacherLibraryFilters, ReportReason } from "../types/teacherLibrary";
 import { TEACHER_LIMITS } from "../types/teacherLibrary";
 
-type TabType = 'my-games' | 'community' | 'official';
+type TabType = "my-games" | "community" | "official";
+
+/**
+ * =========================================================
+ * ✅ Helpers de diagnóstico/encoding (best effort)
+ * Igual criterio que venimos usando: detectar "basura"
+ * y (si hace falta) elegir la decodificación con mejor score.
+ * =========================================================
+ */
+function hasVisibleBadReplacement(text: string): boolean {
+  return /ï¿½/.test(text) || text.includes("�");
+}
+
+function hasMojibakeMarkers(text: string): boolean {
+  // típicos cuando se ve “DecÃ­”, “Â¿”, “â€””, etc.
+  return /Ã|Â|â€/.test(text);
+}
+
+function scoreText(text: string): number {
+  const repl = (text.match(/�/g) || []).length;
+  const mojibake = (text.match(/Ã|Â|â€/g) || []).length;
+  const visible = (text.match(/ï¿½/g) || []).length;
+  return repl * 10 + visible * 8 + mojibake * 3;
+}
+
+function decodeArrayBufferBestEffort(buf: ArrayBuffer): {
+  text: string;
+  chosen: string;
+  candidates: Array<{ encoding: string; score: number; sample: string; hasBad: boolean }>;
+} {
+  const bytes = new Uint8Array(buf);
+  const encodings = ["utf-8", "windows-1252", "iso-8859-1"] as const;
+
+  const candidates = encodings.map((enc) => {
+    let decoded = "";
+    try {
+      decoded = new TextDecoder(enc, { fatal: false }).decode(bytes);
+    } catch {
+      decoded = "";
+    }
+    return {
+      encoding: enc,
+      score: scoreText(decoded),
+      hasBad: hasVisibleBadReplacement(decoded) || hasMojibakeMarkers(decoded),
+      sample: decoded.slice(0, 140),
+    };
+  });
+
+  const sorted = [...candidates].sort((a, b) => a.score - b.score);
+  const bestScore = sorted[0]?.score ?? 0;
+  const bestEncodings = sorted.filter((c) => c.score === bestScore).map((c) => c.encoding);
+
+  // Preferir utf-8 si empata, si no el mejor score
+  const chosen = bestEncodings.includes("utf-8") ? "utf-8" : (sorted[0]?.encoding ?? "utf-8");
+  const text = new TextDecoder(chosen, { fatal: false }).decode(bytes);
+
+  return { text, chosen, candidates };
+}
 
 export function LibraryPage() {
   const navigate = useNavigate();
@@ -44,7 +113,7 @@ export function LibraryPage() {
   const { t, language: appLang } = useI18n();
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<TabType>('official');
+  const [activeTab, setActiveTab] = useState<TabType>("official");
 
   // Official library state
   const [officialItems, setOfficialItems] = useState<CSVLibraryItem[]>([]);
@@ -68,21 +137,21 @@ export function LibraryPage() {
   const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
 
   // Filters (shared)
-  const [gameMode, setGameMode] = useState<LibraryGameMode | 'all'>('all');
-  const [grade, setGrade] = useState<PrimaryGrade | 'all'>('all');
-  const [area, setArea] = useState<Area | 'all'>('all');
-  const [subject, setSubject] = useState<Subject | 'all'>('all');
-  const [language, setLanguage] = useState<LibraryLanguage | 'all'>('all');
-  const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState<'recent' | 'rating' | 'popular'>('recent');
+  const [gameMode, setGameMode] = useState<LibraryGameMode | "all">("all");
+  const [grade, setGrade] = useState<PrimaryGrade | "all">("all");
+  const [area, setArea] = useState<Area | "all">("all");
+  const [subject, setSubject] = useState<Subject | "all">("all");
+  const [language, setLanguage] = useState<LibraryLanguage | "all">("all");
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"recent" | "rating" | "popular">("recent");
 
   // Load data based on active tab
   useEffect(() => {
-    if (activeTab === 'official') {
+    if (activeTab === "official") {
       loadOfficialItems();
-    } else if (activeTab === 'my-games' && user) {
+    } else if (activeTab === "my-games" && user) {
       loadMyGames();
-    } else if (activeTab === 'community') {
+    } else if (activeTab === "community") {
       loadCommunityGames();
     }
   }, [activeTab, user]);
@@ -103,10 +172,7 @@ export function LibraryPage() {
     if (!user) return;
     setIsLoadingMyGames(true);
     try {
-      const [games, stats] = await Promise.all([
-        getMyGames(user.uid),
-        getGameStats(user.uid),
-      ]);
+      const [games, stats] = await Promise.all([getMyGames(user.uid), getGameStats(user.uid)]);
       setMyGames(games);
       setMyStats(stats);
     } catch (error) {
@@ -121,11 +187,11 @@ export function LibraryPage() {
     try {
       const filters: Partial<TeacherLibraryFilters> = {
         sortBy,
-        ...(gameMode !== 'all' && { gameMode }),
-        ...(grade !== 'all' && { grade }),
-        ...(area !== 'all' && { area }),
-        ...(subject !== 'all' && { subject }),
-        ...(language !== 'all' && { language }),
+        ...(gameMode !== "all" && { gameMode }),
+        ...(grade !== "all" && { grade }),
+        ...(area !== "all" && { area }),
+        ...(subject !== "all" && { subject }),
+        ...(language !== "all" && { language }),
         ...(search && { search }),
       };
       const games = await getCommunityGames(filters);
@@ -149,7 +215,7 @@ export function LibraryPage() {
 
   // Reload community when filters change
   useEffect(() => {
-    if (activeTab === 'community') {
+    if (activeTab === "community") {
       loadCommunityGames();
     }
   }, [gameMode, grade, area, subject, language, search, sortBy]);
@@ -157,11 +223,11 @@ export function LibraryPage() {
   // Filter official items locally
   const filteredOfficialItems = useMemo(() => {
     return officialItems.filter((item) => {
-      if (gameMode !== 'all' && item.gameMode !== gameMode) return false;
-      if (grade !== 'all' && item.grade !== grade) return false;
-      if (area !== 'all' && item.area !== area) return false;
-      if (subject !== 'all' && item.subject !== subject) return false;
-      if (language !== 'all' && item.language !== language) return false;
+      if (gameMode !== "all" && item.gameMode !== gameMode) return false;
+      if (grade !== "all" && item.grade !== grade) return false;
+      if (area !== "all" && item.area !== area) return false;
+      if (subject !== "all" && item.subject !== subject) return false;
+      if (language !== "all" && item.language !== language) return false;
       if (search) {
         const searchLower = search.toLowerCase();
         const match =
@@ -177,11 +243,11 @@ export function LibraryPage() {
   // Filter my games locally
   const filteredMyGames = useMemo(() => {
     return myGames.filter((game) => {
-      if (gameMode !== 'all' && game.gameMode !== gameMode) return false;
-      if (grade !== 'all' && game.grade !== grade) return false;
-      if (area !== 'all' && game.area !== area) return false;
-      if (subject !== 'all' && game.subject !== subject) return false;
-      if (language !== 'all' && game.language !== language) return false;
+      if (gameMode !== "all" && game.gameMode !== gameMode) return false;
+      if (grade !== "all" && game.grade !== grade) return false;
+      if (area !== "all" && game.area !== area) return false;
+      if (subject !== "all" && game.subject !== subject) return false;
+      if (language !== "all" && game.language !== language) return false;
       if (search) {
         const searchLower = search.toLowerCase();
         const match =
@@ -201,23 +267,31 @@ export function LibraryPage() {
   const handleUseOfficialItem = async (item: CSVLibraryItem) => {
     setLoadingItemId(item.id);
     try {
-      const file = await getCSVAsFile(item);
-      const reader = new FileReader();
-      reader.onload = () => {
-        const csvContent = reader.result as string;
+      // ✅ IMPORTANTE: NO usar FileReader/readAsText acá.
+      // ✅ Usar decoding robusto del service (bytes + TextDecoder + fixEncoding)
+      const csvContent = await downloadCSVContent(item.storagePath);
 
-        // ✅ Pasar todo en location.state (no depender de sessionStorage)
-        navigate('/setup-traditional', {
-          state: {
-            fromLibrary: true,
-            csvContent,
-            csvFilename: file.name,
-            csvTitle: item.title || item.topic,
-            csvSubject: item.subject || item.area,
-          }
-        });
-      };
-      reader.readAsText(file);
+      console.log("🧪 [LibraryPage] official encoding check", {
+        storagePath: item.storagePath,
+        hasReplacement: csvContent.includes("�"),
+        hasIfffd: csvContent.includes("ï¿½"),
+        hasMojibake: hasMojibakeMarkers(csvContent),
+        score: scoreText(csvContent),
+        sample: csvContent.slice(0, 180),
+      });
+
+      // ✅ Pasar todo en location.state (no depender de sessionStorage)
+      navigate("/setup-traditional", {
+        state: {
+          fromLibrary: true,
+          csvContent,
+          csvFilename:
+            item.fileName ||
+            `${(item.title || item.topic || "archivo").replace(/\s+/g, "_")}.csv`,
+          csvTitle: item.title || item.topic,
+          csvSubject: item.subject || item.area,
+        },
+      });
     } catch (error) {
       console.error("Error loading CSV:", error);
       alert(t.errors.loadingCSV);
@@ -229,7 +303,7 @@ export function LibraryPage() {
   const handleDeleteOfficialItem = async (item: CSVLibraryItem) => {
     try {
       await deleteLibraryItem(item.id);
-      setOfficialItems(prev => prev.filter(i => i.id !== item.id));
+      setOfficialItems((prev) => prev.filter((i) => i.id !== item.id));
     } catch (error) {
       console.error("Error deleting item:", error);
       alert(t.errors.generic);
@@ -243,21 +317,42 @@ export function LibraryPage() {
   const handleUseTeacherGame = async (game: TeacherGame) => {
     setLoadingItemId(game.id);
     try {
+      // ✅ FIX IMPORTANTE:
+      // getTeacherGameCSV() te devuelve un File; si ese File fue creado desde string roto,
+      // el readAsText te mata acentos. Entonces: leer bytes + TextDecoder best-effort.
       const file = await getTeacherGameCSV(game);
-      const reader = new FileReader();
-      reader.onload = () => {
-        const csvContent = reader.result as string;
-        sessionStorage.setItem('library_csv_content', csvContent);
-        sessionStorage.setItem('library_csv_filename', file.name);
-        sessionStorage.setItem('library_csv_title', game.title);
-        sessionStorage.setItem('library_csv_subject', game.subject || game.area);
 
-        // Increment usage
-        incrementGameUsage(game.id);
+      const buf = await file.arrayBuffer();
+      const decoded = decodeArrayBufferBestEffort(buf);
 
-        navigate('/setup', { state: { fromLibrary: true, csvTitle: game.title } });
-      };
-      reader.readAsText(file);
+      console.log("🧪 [LibraryPage] teacher decode candidates", {
+        fileName: file.name,
+        gameId: game.id,
+        chosen: decoded.chosen,
+        candidates: decoded.candidates,
+      });
+
+      const csvContent = decoded.text;
+
+      // ✅ Enviar por state (recomendado) y mantener sessionStorage como fallback
+      sessionStorage.setItem("library_csv_content", csvContent);
+      sessionStorage.setItem("library_csv_filename", file.name);
+      sessionStorage.setItem("library_csv_title", game.title);
+      sessionStorage.setItem("library_csv_subject", game.subject || game.area);
+
+      // Increment usage
+      incrementGameUsage(game.id);
+
+      // ✅ Importante: tu setup-traditional es el que ya está procesando csvContent en state
+      navigate("/setup-traditional", {
+        state: {
+          fromLibrary: true,
+          csvContent,
+          csvFilename: file.name,
+          csvTitle: game.title,
+          csvSubject: game.subject || game.area,
+        },
+      });
     } catch (error) {
       console.error("Error loading CSV:", error);
       alert(t.errors.loadingCSV);
@@ -270,7 +365,7 @@ export function LibraryPage() {
     if (!user) return;
     try {
       await deleteTeacherGame(game.id, user.uid);
-      setMyGames(prev => prev.filter(g => g.id !== game.id));
+      setMyGames((prev) => prev.filter((g) => g.id !== game.id));
       // Refresh stats
       const stats = await getGameStats(user.uid);
       setMyStats(stats);
@@ -282,19 +377,19 @@ export function LibraryPage() {
 
   const handleToggleVisibility = async (game: TeacherGame) => {
     if (!user) return;
-    const newVisibility = game.visibility === 'public' ? 'private' : 'public';
+    const newVisibility = game.visibility === "public" ? "private" : "public";
 
     // Check limits if making private
-    if (newVisibility === 'private' && myStats.privateCount >= TEACHER_LIMITS.maxPrivateGames) {
+    if (newVisibility === "private" && myStats.privateCount >= TEACHER_LIMITS.maxPrivateGames) {
       alert(t.teacherLibrary.privateLimitReached);
       return;
     }
 
     try {
       await updateTeacherGame(game.id, user.uid, { visibility: newVisibility });
-      setMyGames(prev => prev.map(g =>
-        g.id === game.id ? { ...g, visibility: newVisibility } : g
-      ));
+      setMyGames((prev) =>
+        prev.map((g) => (g.id === game.id ? { ...g, visibility: newVisibility } : g))
+      );
       // Refresh stats
       const stats = await getGameStats(user.uid);
       setMyStats(stats);
@@ -314,8 +409,8 @@ export function LibraryPage() {
     }
 
     try {
-      await copyGameToMyLibrary(game.id, user.uid, user.displayName || 'Docente', user.email || '');
-      alert(t.teacherLibrary.copySuccess + '\n' + t.teacherLibrary.copyAsPrivate);
+      await copyGameToMyLibrary(game.id, user.uid, user.displayName || "Docente", user.email || "");
+      alert(t.teacherLibrary.copySuccess + "\n" + t.teacherLibrary.copyAsPrivate);
       // Refresh my games
       loadMyGames();
     } catch (error) {
@@ -328,7 +423,7 @@ export function LibraryPage() {
     if (!user) return;
     try {
       await rateGame(game.id, user.uid, stars);
-      setMyRatings(prev => ({ ...prev, [game.id]: stars }));
+      setMyRatings((prev) => ({ ...prev, [game.id]: stars }));
       // Refresh community to update rating display
       loadCommunityGames();
     } catch (error) {
@@ -350,9 +445,11 @@ export function LibraryPage() {
 
     try {
       await updateTeacherGame(editingGame.id, user.uid, updates);
-      setMyGames(prev => prev.map(g =>
-        g.id === editingGame.id ? { ...g, ...updates, updatedAt: Date.now() } : g
-      ));
+      setMyGames((prev) =>
+        prev.map((g) =>
+          g.id === editingGame.id ? { ...g, ...updates, updatedAt: Date.now() } : g
+        )
+      );
       setEditingGame(null);
     } catch (error) {
       console.error("Error updating game:", error);
@@ -377,35 +474,41 @@ export function LibraryPage() {
   // RENDER
   // ============================================
 
-  const showSubjectFilter = gameMode === 'coopetition' || gameMode === 'all';
-  const showGradeFilter = gameMode === 'traffic-light' || gameMode === 'all';
+  const showSubjectFilter = gameMode === "coopetition" || gameMode === "all";
+  const showGradeFilter = gameMode === "traffic-light" || gameMode === "all";
   const isLoading =
-    (activeTab === 'official' && isLoadingOfficial) ||
-    (activeTab === 'my-games' && isLoadingMyGames) ||
-    (activeTab === 'community' && isLoadingCommunity);
+    (activeTab === "official" && isLoadingOfficial) ||
+    (activeTab === "my-games" && isLoadingMyGames) ||
+    (activeTab === "community" && isLoadingCommunity);
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
-      fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
-    }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
+        fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
+      }}
+    >
       {/* Header */}
-      <header style={{
-        background: theme.primaryGradient,
-        padding: "24px 32px",
-        color: "white",
-        boxShadow: `0 4px 20px ${theme.primary}40`,
-      }}>
-        <div style={{
-          maxWidth: 1200,
-          margin: "0 auto",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: 16,
-        }}>
+      <header
+        style={{
+          background: theme.primaryGradient,
+          padding: "24px 32px",
+          color: "white",
+          boxShadow: `0 4px 20px ${theme.primary}40`,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1200,
+            margin: "0 auto",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 16,
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <button
               onClick={() => navigate("/")}
@@ -425,7 +528,9 @@ export function LibraryPage() {
 
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 32 }}>📚</span>
-              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>{t.library.title}</h1>
+              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>
+                {t.library.title}
+              </h1>
             </div>
           </div>
 
@@ -438,21 +543,22 @@ export function LibraryPage() {
 
       {/* Content */}
       <main style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
-
         {/* Tabs */}
-        <div style={{
-          display: "flex",
-          gap: 4,
-          marginBottom: 24,
-          backgroundColor: "white",
-          padding: 4,
-          borderRadius: 12,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-        }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 4,
+            marginBottom: 24,
+            backgroundColor: "white",
+            padding: 4,
+            borderRadius: 12,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+          }}
+        >
           {[
-            { id: 'my-games' as TabType, label: t.teacherLibrary.myGames, icon: '👤' },
-            { id: 'community' as TabType, label: t.teacherLibrary.community, icon: '🌐' },
-            { id: 'official' as TabType, label: t.teacherLibrary.official, icon: '📚' },
+            { id: "my-games" as TabType, label: t.teacherLibrary.myGames, icon: "👤" },
+            { id: "community" as TabType, label: t.teacherLibrary.community, icon: "🌐" },
+            { id: "official" as TabType, label: t.teacherLibrary.official, icon: "📚" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -481,13 +587,15 @@ export function LibraryPage() {
         </div>
 
         {/* My Games Stats */}
-        {activeTab === 'my-games' && user && (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-            gap: 12,
-            marginBottom: 24,
-          }}>
+        {activeTab === "my-games" && user && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+              gap: 12,
+              marginBottom: 24,
+            }}
+          >
             <StatCard
               value={myStats.privateCount}
               label={t.teacherLibrary.privateGames}
@@ -505,7 +613,7 @@ export function LibraryPage() {
               color="#f59e0b"
             />
             <StatCard
-              value={myStats.avgRating ? myStats.avgRating.toFixed(1) : '-'}
+              value={myStats.avgRating ? myStats.avgRating.toFixed(1) : "-"}
               label={t.teacherLibrary.avgRating}
               color="#ec4899"
             />
@@ -513,27 +621,35 @@ export function LibraryPage() {
         )}
 
         {/* Filters */}
-        <div style={{
-          backgroundColor: "white",
-          borderRadius: 16,
-          padding: 20,
-          marginBottom: 24,
-          boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
-        }}>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-            gap: 16,
-          }}>
+        <div
+          style={{
+            backgroundColor: "white",
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 24,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+              gap: 16,
+            }}
+          >
             {/* Game Mode */}
             <FilterSelect
               label={t.library.game}
               value={gameMode}
-              onChange={(v) => { setGameMode(v as any); setGrade('all'); setSubject('all'); }}
+              onChange={(v) => {
+                setGameMode(v as any);
+                setGrade("all");
+                setSubject("all");
+              }}
               options={[
-                { value: 'all', label: t.common.all },
-                { value: 'traffic-light', label: '🚦 Traffic Light' },
-                { value: 'coopetition', label: '🎯 Coopetition' },
+                { value: "all", label: t.common.all },
+                { value: "traffic-light", label: "🚦 Traffic Light" },
+                { value: "coopetition", label: "🎯 Coopetition" },
               ]}
             />
 
@@ -544,8 +660,8 @@ export function LibraryPage() {
                 value={grade}
                 onChange={(v) => setGrade(v as any)}
                 options={[
-                  { value: 'all', label: t.common.all },
-                  ...PRIMARY_GRADES.map(g => ({ value: g, label: g })),
+                  { value: "all", label: t.common.all },
+                  ...PRIMARY_GRADES.map((g) => ({ value: g, label: g })),
                 ]}
               />
             )}
@@ -556,8 +672,8 @@ export function LibraryPage() {
               value={area}
               onChange={(v) => setArea(v as any)}
               options={[
-                { value: 'all', label: t.common.all },
-                ...(appLang === 'es' ? AREAS_ES : AREAS_EN).map(a => ({ value: a, label: a })),
+                { value: "all", label: t.common.all },
+                ...(appLang === "es" ? AREAS_ES : AREAS_EN).map((a) => ({ value: a, label: a })),
               ]}
             />
 
@@ -568,8 +684,11 @@ export function LibraryPage() {
                 value={subject}
                 onChange={(v) => setSubject(v as any)}
                 options={[
-                  { value: 'all', label: t.common.all },
-                  ...(appLang === 'es' ? SUBJECTS_ES : SUBJECTS_EN).map(s => ({ value: s, label: s })),
+                  { value: "all", label: t.common.all },
+                  ...(appLang === "es" ? SUBJECTS_ES : SUBJECTS_EN).map((s) => ({
+                    value: s,
+                    label: s,
+                  })),
                 ]}
               />
             )}
@@ -580,29 +699,37 @@ export function LibraryPage() {
               value={language}
               onChange={(v) => setLanguage(v as any)}
               options={[
-                { value: 'all', label: t.common.all },
-                { value: 'es', label: '🇪🇸 Español' },
-                { value: 'en', label: '🇺🇸 English' },
+                { value: "all", label: t.common.all },
+                { value: "es", label: "🇪🇸 Español" },
+                { value: "en", label: "🇺🇸 English" },
               ]}
             />
 
             {/* Sort (only for community) */}
-            {activeTab === 'community' && (
+            {activeTab === "community" && (
               <FilterSelect
                 label={t.teacherLibrary.sortBy}
                 value={sortBy}
                 onChange={(v) => setSortBy(v as any)}
                 options={[
-                  { value: 'recent', label: t.teacherLibrary.recent },
-                  { value: 'rating', label: t.teacherLibrary.rating },
-                  { value: 'popular', label: t.teacherLibrary.popular },
+                  { value: "recent", label: t.teacherLibrary.recent },
+                  { value: "rating", label: t.teacherLibrary.rating },
+                  { value: "popular", label: t.teacherLibrary.popular },
                 ]}
               />
             )}
 
             {/* Search */}
             <div style={{ gridColumn: "span 2" }}>
-              <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: "#64748b" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: 6,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#64748b",
+                }}
+              >
                 {t.common.search}
               </label>
               <input
@@ -629,24 +756,26 @@ export function LibraryPage() {
         ) : (
           <>
             {/* MY GAMES TAB */}
-            {activeTab === 'my-games' && (
-              filteredMyGames.length === 0 ? (
+            {activeTab === "my-games" &&
+              (filteredMyGames.length === 0 ? (
                 <EmptyState
                   icon="📝"
                   title={t.teacherLibrary.noMyGames}
                   description={t.teacherLibrary.noMyGamesDesc}
                   action={{
                     label: t.dashboard.createGame,
-                    onClick: () => navigate('/setup'),
+                    onClick: () => navigate("/setup"),
                   }}
                 />
               ) : (
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-                  gap: 20,
-                }}>
-                  {filteredMyGames.map(game => (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                    gap: 20,
+                  }}
+                >
+                  {filteredMyGames.map((game) => (
                     <TeacherGameCard
                       key={game.id}
                       game={game}
@@ -658,24 +787,25 @@ export function LibraryPage() {
                     />
                   ))}
                 </div>
-              )
-            )}
+              ))}
 
             {/* COMMUNITY TAB */}
-            {activeTab === 'community' && (
-              communityGames.length === 0 ? (
+            {activeTab === "community" &&
+              (communityGames.length === 0 ? (
                 <EmptyState
                   icon="🌐"
                   title={t.teacherLibrary.noCommunityGames}
                   description={t.teacherLibrary.noCommunityGamesDesc}
                 />
               ) : (
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-                  gap: 20,
-                }}>
-                  {communityGames.map(game => (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                    gap: 20,
+                  }}
+                >
+                  {communityGames.map((game) => (
                     <TeacherGameCard
                       key={game.id}
                       game={game}
@@ -688,24 +818,21 @@ export function LibraryPage() {
                     />
                   ))}
                 </div>
-              )
-            )}
+              ))}
 
             {/* OFFICIAL TAB */}
-            {activeTab === 'official' && (
-              filteredOfficialItems.length === 0 ? (
-                <EmptyState
-                  icon="📚"
-                  title={t.library.noResults}
-                  description=""
-                />
+            {activeTab === "official" &&
+              (filteredOfficialItems.length === 0 ? (
+                <EmptyState icon="📚" title={t.library.noResults} description="" />
               ) : (
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-                  gap: 20,
-                }}>
-                  {filteredOfficialItems.map(item => (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                    gap: 20,
+                  }}
+                >
+                  {filteredOfficialItems.map((item) => (
                     <LibraryCard
                       key={item.id}
                       item={item}
@@ -717,26 +844,29 @@ export function LibraryPage() {
                     />
                   ))}
                 </div>
-              )
-            )}
+              ))}
           </>
         )}
 
         {/* Admin Section */}
         {isAdmin && (
-          <div style={{
-            marginTop: 48,
-            padding: 24,
-            backgroundColor: "#fffbeb",
-            borderRadius: 16,
-            border: "2px solid #fbbf24",
-          }}>
-            <h3 style={{
-              margin: "0 0 12px 0",
-              fontSize: 18,
-              fontWeight: 700,
-              color: "#b45309",
-            }}>
+          <div
+            style={{
+              marginTop: 48,
+              padding: 24,
+              backgroundColor: "#fffbeb",
+              borderRadius: 16,
+              border: "2px solid #fbbf24",
+            }}
+          >
+            <h3
+              style={{
+                margin: "0 0 12px 0",
+                fontSize: 18,
+                fontWeight: 700,
+                color: "#b45309",
+              }}
+            >
               ⚙️ {t.library.adminTitle}
             </h3>
             <p style={{ margin: "0 0 16px 0", color: "#92400e", fontSize: 14 }}>
@@ -805,28 +935,37 @@ export function LibraryPage() {
 // HELPER COMPONENTS
 // ============================================
 
-function StatCard({ value, label, sublabel, color }: {
+function StatCard({
+  value,
+  label,
+  sublabel,
+  color,
+}: {
   value: number | string;
   label: string;
   sublabel?: string;
   color: string;
 }) {
   return (
-    <div style={{
-      padding: "16px 20px",
-      backgroundColor: "white",
-      borderRadius: 12,
-      border: `2px solid ${color}30`,
-      boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-    }}>
-      <div style={{
-        fontSize: 28,
-        fontWeight: 800,
-        color,
-        display: "flex",
-        alignItems: "baseline",
-        gap: 4,
-      }}>
+    <div
+      style={{
+        padding: "16px 20px",
+        backgroundColor: "white",
+        borderRadius: 12,
+        border: `2px solid ${color}30`,
+        boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 28,
+          fontWeight: 800,
+          color,
+          display: "flex",
+          alignItems: "baseline",
+          gap: 4,
+        }}
+      >
         {value}
         {sublabel && <span style={{ fontSize: 14, color: "#94a3b8" }}>{sublabel}</span>}
       </div>
@@ -835,7 +974,12 @@ function StatCard({ value, label, sublabel, color }: {
   );
 }
 
-function FilterSelect({ label, value, onChange, options }: {
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -858,7 +1002,9 @@ function FilterSelect({ label, value, onChange, options }: {
         }}
       >
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>{opt.label}</option>
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
         ))}
       </select>
     </div>
@@ -874,27 +1020,30 @@ function LoadingState() {
   );
 }
 
-function EmptyState({ icon, title, description, action }: {
+function EmptyState({
+  icon,
+  title,
+  description,
+  action,
+}: {
   icon: string;
   title: string;
   description: string;
   action?: { label: string; onClick: () => void };
 }) {
   return (
-    <div style={{
-      textAlign: "center",
-      padding: 64,
-      backgroundColor: "white",
-      borderRadius: 16,
-      boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
-    }}>
+    <div
+      style={{
+        textAlign: "center",
+        padding: 64,
+        backgroundColor: "white",
+        borderRadius: 16,
+        boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+      }}
+    >
       <div style={{ fontSize: 64, marginBottom: 16 }}>{icon}</div>
-      <h3 style={{ margin: "0 0 8px 0", fontSize: 20, fontWeight: 700, color: "#1e293b" }}>
-        {title}
-      </h3>
-      <p style={{ margin: "0 0 24px 0", fontSize: 15, color: "#64748b" }}>
-        {description}
-      </p>
+      <h3 style={{ margin: "0 0 8px 0", fontSize: 20, fontWeight: 700, color: "#1e293b" }}>{title}</h3>
+      <p style={{ margin: "0 0 24px 0", fontSize: 15, color: "#64748b" }}>{description}</p>
       {action && (
         <button
           onClick={action.onClick}

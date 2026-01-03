@@ -35,37 +35,158 @@ import type { ParseResult, ParsedQuestion } from "../utils/csvParser";
 import { saveTeacherGame } from "../services/teacherLibraryService";
 import type { NewTeacherGame } from "../types/teacherLibrary";
 
-
 // 🦁 Nombres de equipos con animales (Traffic Light - niños)
 const TEAM_ANIMALS = [
-  { emoji: '🦁', name: 'Leones', nameEn: 'Lions' },
-  { emoji: '🐯', name: 'Tigres', nameEn: 'Tigers' },
-  { emoji: '🐻', name: 'Osos', nameEn: 'Bears' },
-  { emoji: '🦅', name: 'Águilas', nameEn: 'Eagles' },
-  { emoji: '🦊', name: 'Zorros', nameEn: 'Foxes' },
-  { emoji: '🐺', name: 'Lobos', nameEn: 'Wolves' },
-  { emoji: '🦒', name: 'Jirafas', nameEn: 'Giraffes' },
-  { emoji: '🐘', name: 'Elefantes', nameEn: 'Elephants' },
-  { emoji: '🦓', name: 'Cebras', nameEn: 'Zebras' },
-  { emoji: '🦘', name: 'Canguros', nameEn: 'Kangaroos' },
+  { emoji: "🦁", name: "Leones", nameEn: "Lions" },
+  { emoji: "🐯", name: "Tigres", nameEn: "Tigers" },
+  { emoji: "🐻", name: "Osos", nameEn: "Bears" },
+  { emoji: "🦅", name: "Águilas", nameEn: "Eagles" },
+  { emoji: "🦊", name: "Zorros", nameEn: "Foxes" },
+  { emoji: "🐺", name: "Lobos", nameEn: "Wolves" },
+  { emoji: "🦒", name: "Jirafas", nameEn: "Giraffes" },
+  { emoji: "🐘", name: "Elefantes", nameEn: "Elephants" },
+  { emoji: "🦓", name: "Cebras", nameEn: "Zebras" },
+  { emoji: "🦘", name: "Canguros", nameEn: "Kangaroos" },
 ];
 
 // 🎯 Nombres de equipos profesionales (Coopetition - adolescentes/adultos)
 const TEAM_PROFESSIONAL = [
-  { emoji: '🔷', name: 'Estrategas', nameEn: 'Strategists' },
-  { emoji: '🔶', name: 'Innovadores', nameEn: 'Innovators' },
-  { emoji: '💎', name: 'Vanguardia', nameEn: 'Vanguard' },
-  { emoji: '⚡', name: 'Impulso', nameEn: 'Momentum' },
-  { emoji: '🎯', name: 'Enfoque', nameEn: 'Focus' },
-  { emoji: '🚀', name: 'Pioneros', nameEn: 'Pioneers' },
-  { emoji: '💡', name: 'Creativos', nameEn: 'Creatives' },
-  { emoji: '🔥', name: 'Impacto', nameEn: 'Impact' },
-  { emoji: '⭐', name: 'Élite', nameEn: 'Elite' },
-  { emoji: '🌟', name: 'Líderes', nameEn: 'Leaders' },
+  { emoji: "🔷", name: "Estrategas", nameEn: "Strategists" },
+  { emoji: "🔶", name: "Innovadores", nameEn: "Innovators" },
+  { emoji: "💎", name: "Vanguardia", nameEn: "Vanguard" },
+  { emoji: "⚡", name: "Impulso", nameEn: "Momentum" },
+  { emoji: "🎯", name: "Enfoque", nameEn: "Focus" },
+  { emoji: "🚀", name: "Pioneros", nameEn: "Pioneers" },
+  { emoji: "💡", name: "Creativos", nameEn: "Creatives" },
+  { emoji: "🔥", name: "Impacto", nameEn: "Impact" },
+  { emoji: "⭐", name: "Élite", nameEn: "Elite" },
+  { emoji: "🌟", name: "Líderes", nameEn: "Leaders" },
 ];
 
 interface SetupScreenProps {
   onGameCreated: (gameId: string) => void;
+}
+
+/**
+ * =========================================================
+ * ✅ Helpers de diagnóstico/encoding (best effort)
+ * - Para "fromLibrary" recibimos un string ya decodificado (no tenemos bytes).
+ * - Para "Upload CSV" sí tenemos bytes: hacemos decode robusto con TextDecoder.
+ * =========================================================
+ */
+
+// típicos cuando se ve “Ã¡”, “Â¿”, “â€””, etc.
+function hasMojibakeMarkers(text: string): boolean {
+  return /Ã|Â|â€/.test(text);
+}
+
+// caso típico: "ï¿½" (EF BF BD visto como windows-1252) o el char "�"
+function hasVisibleBadReplacement(text: string): boolean {
+  return /ï¿½/.test(text) || text.includes("�");
+}
+
+// score más alto = peor
+function scoreText(text: string): number {
+  const repl = (text.match(/�/g) || []).length;
+  const mojibake = (text.match(/Ã|Â|â€/g) || []).length;
+  const visible = (text.match(/ï¿½/g) || []).length;
+  return repl * 10 + visible * 8 + mojibake * 3;
+}
+
+// Reparación clásica: latin1-string → bytes → decode UTF-8
+// Sirve para transformar "DecÃ­" → "Decí"
+function repairLatin1ToUtf8(text: string): string {
+  const bytes = new Uint8Array([...text].map((ch) => ch.charCodeAt(0) & 0xff));
+  return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+}
+
+/**
+ * Intenta “mejorar” el string si parece mojibake.
+ * Importante: si el texto YA viene con '�' / 'ï¿½' fuerte,
+ * puede estar corrupto y no hay arreglo perfecto: por eso solo aplicamos si mejora el score.
+ */
+function maybeFixEncodingString(
+  input: string
+): { text: string; changed: boolean; reason: string } {
+  const original = input ?? "";
+  const origScore = scoreText(original);
+
+  // Si no hay señales, no tocamos nada
+  if (!hasMojibakeMarkers(original) && !hasVisibleBadReplacement(original)) {
+    return { text: original, changed: false, reason: "no_markers" };
+  }
+
+  // Si ya tiene muchos '�', sin bytes no hay magia: no intentamos "repair" a ciegas.
+  // (Evita empeorar textos que ya están dañados.)
+  const replCount = (original.match(/�/g) || []).length;
+  if (replCount >= 3 && !hasMojibakeMarkers(original)) {
+    return { text: original, changed: false, reason: "has_replacement_no_bytes" };
+  }
+
+  // Intento: repair latin1→utf8
+  let candidate = original;
+  try {
+    candidate = repairLatin1ToUtf8(original);
+  } catch {
+    candidate = original;
+  }
+  const score = scoreText(candidate);
+
+  if (score < origScore) {
+    return { text: candidate, changed: true, reason: "repair(latin1→utf8)" };
+  }
+
+  return { text: original, changed: false, reason: "no_improvement" };
+}
+
+/**
+ * ✅ Decode robusto para archivos locales (tenemos bytes).
+ * Probamos UTF-8 y fallbacks comunes (windows-1252 / iso-8859-1)
+ * y elegimos el que minimiza scoreText().
+ */
+async function decodeFileBestEffort(
+  file: File
+): Promise<{
+  text: string;
+  chosen: string;
+  candidates: Array<{ encoding: string; score: number; hasReplacement: boolean; sample: string }>;
+}> {
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+
+  const encodings = ["utf-8", "windows-1252", "iso-8859-1"] as const;
+
+  const candidates = encodings.map((enc) => {
+    let decoded = "";
+    try {
+      decoded = new TextDecoder(enc, { fatal: false }).decode(bytes);
+    } catch {
+      decoded = "";
+    }
+    const score = scoreText(decoded);
+    return {
+      encoding: enc,
+      score,
+      hasReplacement: decoded.includes("�") || /ï¿½/.test(decoded),
+      sample: decoded.slice(0, 120),
+    };
+  });
+
+  // elegir el mejor score; si empatan, priorizar utf-8
+  const sorted = [...candidates].sort((a, b) => a.score - b.score);
+  const bestScore = sorted[0]?.score ?? 0;
+  const bestEncodings = sorted.filter((c) => c.score === bestScore).map((c) => c.encoding);
+  const chosen =
+    bestEncodings.includes("utf-8") ? "utf-8" : (sorted[0]?.encoding ?? "utf-8");
+
+  let text = "";
+  try {
+    text = new TextDecoder(chosen, { fatal: false }).decode(bytes);
+  } catch {
+    text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  }
+
+  return { text, chosen, candidates };
 }
 
 export function SetupScreen({ onGameCreated }: SetupScreenProps) {
@@ -76,18 +197,20 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
   const { t: appT } = useI18n(); // Traducciones globales de la app
 
   // Estado del formulario
-  const [level] = useState<GameLevel>('primary');
-  const [ratingMode] = useState<'devices' | 'physical-cards'>('devices');
-  const [language, setLanguage] = useState<Language>(gameMode === 'coopetition' ? 'en' : 'es');
-  const [className, setClassName] = useState('');
-  const [subject, setSubject] = useState('');
+  const [level] = useState<GameLevel>("primary");
+  const [ratingMode] = useState<"devices" | "physical-cards">("devices");
+  const [language, setLanguage] = useState<Language>(
+    gameMode === "coopetition" ? "en" : "es"
+  );
+  const [className, setClassName] = useState("");
+  const [subject, setSubject] = useState("");
   const [numberOfTeams, setNumberOfTeams] = useState(6);
   const [studentsPerTeam, setStudentsPerTeam] = useState(5);
   const [csvError, setCsvError] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
 
   // Texto de estudiantes
-  const [studentsText, setStudentsText] = useState('');
+  const [studentsText, setStudentsText] = useState("");
 
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -106,8 +229,8 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
   // UI State
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
   const [isCreating, setIsCreating] = useState(false);
-  const [roomCode, setRoomCode] = useState('');
-  const [createdGameId, setCreatedGameId] = useState<string>('');
+  const [roomCode, setRoomCode] = useState("");
+  const [createdGameId, setCreatedGameId] = useState<string>("");
 
   // Estado para CSV de biblioteca
   const [libraryCSVLoaded, setLibraryCSVLoaded] = useState(false);
@@ -115,19 +238,21 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
 
   // Estado para guardar juego
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [csvContentForSave, setCsvContentForSave] = useState<string>('');
+  const [csvContentForSave, setCsvContentForSave] = useState<string>("");
   const [gameSaved, setGameSaved] = useState(false);
 
   // Estado para generador de prompts
   const [showPromptGenerator, setShowPromptGenerator] = useState(false);
-  // 🔴 PONÉ ESTE CONSOLE.LOG ACÁ
+
+  // 🔴 debug render
   console.log("🟣 SetupScreen render", {
     pathname: location.pathname,
     state: location.state,
   });
+
   // Actualizar idioma cuando cambia el modo
   useEffect(() => {
-    setLanguage(gameMode === 'coopetition' ? 'en' : 'es');
+    setLanguage(gameMode === "coopetition" ? "en" : "es");
   }, [gameMode]);
 
   // Detectar si viene de la biblioteca
@@ -137,15 +262,19 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
 
     if (fromLibrary) {
       // ✅ Leer de location.state primero, fallback a sessionStorage
-      const csvContent = state?.csvContent || sessionStorage.getItem('library_csv_content');
-      const csvFilename = state?.csvFilename || sessionStorage.getItem('library_csv_filename');
-      const csvTitle = state?.csvTitle || sessionStorage.getItem('library_csv_title');
-      const csvSubject = state?.csvSubject || sessionStorage.getItem('library_csv_subject');
+      const csvContent =
+        state?.csvContent || sessionStorage.getItem("library_csv_content");
+      const csvFilename =
+        state?.csvFilename || sessionStorage.getItem("library_csv_filename");
+      const csvTitle =
+        state?.csvTitle || sessionStorage.getItem("library_csv_title");
+      const csvSubject =
+        state?.csvSubject || sessionStorage.getItem("library_csv_subject");
 
       console.log("🟢 fromLibrary - got data:", {
         hasContent: !!csvContent,
         contentLength: csvContent?.length,
-        csvFilename
+        csvFilename,
       });
 
       if (csvSubject && !subject) {
@@ -161,16 +290,60 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
       // Limpiar state después de procesar
       window.history.replaceState({}, document.title);
     }
-  }, [location.state]);
+  }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const processLibraryCSV = async (content: string, filename: string) => {
-    console.log("🟢 processLibraryCSV start", { filename, contentLength: content.length });
+    console.log("🟢 processLibraryCSV start", {
+      filename,
+      contentLength: content.length,
+    });
 
     setIsParsing(true);
     setCsvError(null);
-    setCsvContentForSave(content); // Guardar para SaveGameModal
+
+    // ✅ Guardar para SaveGameModal (guardamos el contenido “mejorado” si mejora)
+    const probe = {
+      hasMojibake: hasMojibakeMarkers(content),
+      hasBadReplacement: hasVisibleBadReplacement(content),
+      score: scoreText(content),
+      sample: content.slice(0, 180),
+    };
+    console.log("🟡 processLibraryCSV encoding probe (before):", {
+      filename,
+      ...probe,
+    });
+
+    // ✅ Best effort: corregir solo si mejora (con string; no tenemos bytes)
+    const fixed = maybeFixEncodingString(content);
+
+    if (fixed.changed) {
+      console.log("🟠 processLibraryCSV encoding fix applied:", {
+        filename,
+        reason: fixed.reason,
+        beforeScore: scoreText(content),
+        afterScore: scoreText(fixed.text),
+      });
+    } else {
+      console.log("🟢 processLibraryCSV encoding fix not applied:", {
+        filename,
+        reason: fixed.reason,
+        score: scoreText(content),
+      });
+    }
+
+    const finalContent = fixed.text;
+
+    // ⚠️ Si sigue habiendo 'ï¿½' o '�' acá, es señal de corrupción previa (ya no es “solo decode”)
+    if (hasVisibleBadReplacement(finalContent)) {
+      console.warn(
+        "⚠️ [SetupScreen] El contenido sigue teniendo 'ï¿½' o '�' tras el best-effort. Posible corrupción previa en el CSV guardado."
+      );
+    }
+
+    setCsvContentForSave(finalContent);
 
     try {
-      const result = await parseCSV(content);
+      const result = await parseCSV(finalContent);
       console.log("🟢 parseCSV OK", {
         questions: (result as any)?.questions?.length,
         hasResult: !!result,
@@ -180,11 +353,15 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
       setShowPreview(true);
       setLibraryCSVLoaded(true);
 
-      const blob = new Blob([content], { type: "text/csv" });
+      // ✅ File para compatibilidad con tu flujo
+      const blob = new Blob([finalContent], { type: "text/csv;charset=utf-8" });
       const file = new File([blob], filename, { type: "text/csv" });
       setCsvFile(file);
 
-      console.log("🟢 File created and setCsvFile done", { name: file.name, size: file.size });
+      console.log("🟢 File created and setCsvFile done", {
+        name: file.name,
+        size: file.size,
+      });
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Error inesperado al parsear CSV";
@@ -200,14 +377,14 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
     }
   };
 
-
   const parsedNamesInfo = useMemo(() => {
     const raw = studentsText
-      .split('\n')
-      .map(s => s.trim())
+      .split("\n")
+      .map((s) => s.trim())
       .filter(Boolean);
 
-    const normalizeKey = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+    const normalizeKey = (s: string) =>
+      s.toLowerCase().replace(/\s+/g, " ").trim();
 
     const seen = new Set<string>();
     const unique: string[] = [];
@@ -233,93 +410,102 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
   }, [studentsText]);
 
   // Textos según idioma del juego (language) usando traducciones globales
-  const t = language === 'es'
-    ? {
-      title: appT.setup.title,
-      step1: appT.setup.step1,
-      step2: appT.setup.step2,
-      step3: appT.setup.step3,
-      step4: appT.setup.step4,
-      lang: appT.setup.language,
-      spanish: appT.setup.spanish,
-      english: appT.setup.english,
-      className: appT.setup.className,
-      subject: appT.setup.subject,
-      numTeams: appT.setup.numTeams,
-      studentsPerTeam: appT.setup.studentsPerTeam,
-      uploadCSV: appT.setup.uploadCSV,
-      continue: appT.common.continue,
-      back: appT.common.back,
-      createGame: appT.setup.createGame,
-      assignRandom: appT.setup.assignRandom,
-      enterNames: appT.setup.enterNames,
-      roomCode: appT.setup.roomCode,
-      shareCode: appT.setup.shareCode,
-      startGame: appT.setup.startGame,
-      totalStudents: appT.setup.totalStudents,
-      uniqueStudents: appT.setup.uniqueStudents,
-      duplicates: appT.setup.duplicates,
-      duplicatesNote: appT.setup.duplicatesNote,
-      chooseFromLibrary: appT.setup.chooseFromLibrary,
-      orUploadFile: appT.setup.orUploadFile,
-      loadedFromLibrary: appT.setup.loadedFromLibrary,
-      stage0Section: appT.setup.stage0Section,
-      stage0Enable: appT.setup.stage0Enable,
-      stage0Desc: appT.setup.stage0Desc,
-      stage0Warning: appT.setup.stage0Warning,
-      stage0MaterialType: appT.setup.stage0MaterialType,
-      stage0MaterialLink: appT.setup.stage0MaterialLink,
-      stage0MaterialText: appT.setup.stage0MaterialText,
-      stage0MaterialTitle: appT.setup.stage0MaterialTitle,
-      stage0MaterialContent: appT.setup.stage0MaterialContent,
-      stage0MaterialLinkPlaceholder: appT.setup.stage0MaterialLinkPlaceholder,
-      stage0MaterialTextPlaceholder: appT.setup.stage0MaterialTextPlaceholder,
-      stage0GeneratePrompt: appT.setup.stage0GeneratePrompt,
-    }
-    : {
-      title: 'Setup New Game',
-      step1: 'Step 1: Basic Information',
-      step2: 'Step 2: Questions',
-      step3: 'Step 3: Setup Teams',
-      step4: 'Step 4: Ready to Play!',
-      lang: 'Language',
-      spanish: 'Español',
-      english: 'English',
-      className: 'Class name',
-      subject: 'Subject',
-      numTeams: 'Number of teams',
-      studentsPerTeam: 'Students per team',
-      uploadCSV: 'Upload CSV file',
-      continue: 'Continue',
-      back: 'Back',
-      createGame: 'Create Game',
-      assignRandom: 'Assign randomly',
-      enterNames: 'Enter names (one per line)',
-      roomCode: 'Room Code',
-      shareCode: 'Share this code with your students',
-      startGame: 'Start Game',
-      totalStudents: 'Total:',
-      uniqueStudents: 'Unique:',
-      duplicates: 'Duplicates:',
-      duplicatesNote: 'Duplicates are ignored when building teams.',
-      chooseFromLibrary: 'Choose from library',
-      orUploadFile: 'Or upload your own file:',
-      loadedFromLibrary: 'Loaded from library:',
-      stage0Section: 'Stage 0: Preparation (optional)',
-      stage0Enable: 'Enable group preparation stage',
-      stage0Desc: 'Teams will have access to study material before starting the game.',
-      stage0Warning: '💡 First time playing? We recommend skipping Stage 0 and using a game from the library. Stage 0 is designed for students who already understand the game dynamics.',
-      stage0MaterialType: 'Material type',
-      stage0MaterialLink: 'External link',
-      stage0MaterialText: 'Text',
-      stage0MaterialTitle: 'Material title',
-      stage0MaterialContent: 'Content',
-      stage0MaterialLinkPlaceholder: 'https://docs.google.com/...',
-      stage0MaterialTextPlaceholder: 'Paste here the text that teams should read...',
-      stage0GeneratePrompt: 'Need to generate material? Use this prompt with ChatGPT',
-    };
+  const t =
+    language === "es"
+      ? {
+          title: appT.setup.title,
+          step1: appT.setup.step1,
+          step2: appT.setup.step2,
+          step3: appT.setup.step3,
+          step4: appT.setup.step4,
+          lang: appT.setup.language,
+          spanish: appT.setup.spanish,
+          english: appT.setup.english,
+          className: appT.setup.className,
+          subject: appT.setup.subject,
+          numTeams: appT.setup.numTeams,
+          studentsPerTeam: appT.setup.studentsPerTeam,
+          uploadCSV: appT.setup.uploadCSV,
+          continue: appT.common.continue,
+          back: appT.common.back,
+          createGame: appT.setup.createGame,
+          assignRandom: appT.setup.assignRandom,
+          enterNames: appT.setup.enterNames,
+          roomCode: appT.setup.roomCode,
+          shareCode: appT.setup.shareCode,
+          startGame: appT.setup.startGame,
+          totalStudents: appT.setup.totalStudents,
+          uniqueStudents: appT.setup.uniqueStudents,
+          duplicates: appT.setup.duplicates,
+          duplicatesNote: appT.setup.duplicatesNote,
+          chooseFromLibrary: appT.setup.chooseFromLibrary,
+          orUploadFile: appT.setup.orUploadFile,
+          loadedFromLibrary: appT.setup.loadedFromLibrary,
+          stage0Section: appT.setup.stage0Section,
+          stage0Enable: appT.setup.stage0Enable,
+          stage0Desc: appT.setup.stage0Desc,
+          stage0Warning: appT.setup.stage0Warning,
+          stage0MaterialType: appT.setup.stage0MaterialType,
+          stage0MaterialLink: appT.setup.stage0MaterialLink,
+          stage0MaterialText: appT.setup.stage0MaterialText,
+          stage0MaterialTitle: appT.setup.stage0MaterialTitle,
+          stage0MaterialContent: appT.setup.stage0MaterialContent,
+          stage0MaterialLinkPlaceholder: appT.setup.stage0MaterialLinkPlaceholder,
+          stage0MaterialTextPlaceholder: appT.setup.stage0MaterialTextPlaceholder,
+          stage0GeneratePrompt: appT.setup.stage0GeneratePrompt,
+        }
+      : {
+          title: "Setup New Game",
+          step1: "Step 1: Basic Information",
+          step2: "Step 2: Questions",
+          step3: "Step 3: Setup Teams",
+          step4: "Step 4: Ready to Play!",
+          lang: "Language",
+          spanish: "Español",
+          english: "English",
+          className: "Class name",
+          subject: "Subject",
+          numTeams: "Number of teams",
+          studentsPerTeam: "Students per team",
+          uploadCSV: "Upload CSV file",
+          continue: "Continue",
+          back: "Back",
+          createGame: "Create Game",
+          assignRandom: "Assign randomly",
+          enterNames: "Enter names (one per line)",
+          roomCode: "Room Code",
+          shareCode: "Share this code with your students",
+          startGame: "Start Game",
+          totalStudents: "Total:",
+          uniqueStudents: "Unique:",
+          duplicates: "Duplicates:",
+          duplicatesNote: "Duplicates are ignored when building teams.",
+          chooseFromLibrary: "Choose from library",
+          orUploadFile: "Or upload your own file:",
+          loadedFromLibrary: "Loaded from library:",
+          stage0Section: "Stage 0: Preparation (optional)",
+          stage0Enable: "Enable group preparation stage",
+          stage0Desc:
+            "Teams will have access to study material before starting the game.",
+          stage0Warning:
+            "💡 First time playing? We recommend skipping Stage 0 and using a game from the library. Stage 0 is designed for students who already understand the game dynamics.",
+          stage0MaterialType: "Material type",
+          stage0MaterialLink: "External link",
+          stage0MaterialText: "Text",
+          stage0MaterialTitle: "Material title",
+          stage0MaterialContent: "Content",
+          stage0MaterialLinkPlaceholder: "https://docs.google.com/...",
+          stage0MaterialTextPlaceholder:
+            "Paste here the text that teams should read...",
+          stage0GeneratePrompt:
+            "Need to generate material? Use this prompt with ChatGPT",
+        };
 
-  const handleCSVUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  /**
+   * ✅ SUBIDA LOCAL: ahora leemos BYTES y decodificamos con fallback.
+   * Esto arregla el caso “LibreOffice se ve bien pero en la app aparece Nombr�”.
+   */
+  const handleCSVUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -327,31 +513,60 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
     setLibraryCSVLoaded(false);
     setLibraryCSVTitle(null);
 
-    const reader = new FileReader();
+    setIsParsing(true);
+    setCsvError(null);
 
-    reader.onload = async (e) => {
-      const text = (e.target?.result as string) || "";
-      setCsvContentForSave(text); // Guardar para SaveGameModal
+    try {
+      const decoded = await decodeFileBestEffort(file);
 
-      setIsParsing(true);
-      setCsvError(null);
+      console.log("🧪 [SetupScreen] upload decode candidates:", {
+        fileName: file.name,
+        chosen: decoded.chosen,
+        candidates: decoded.candidates,
+      });
 
-      try {
-        const result = await parseCSV(text);
-        setParseResult(result);
-        setShowPreview(true);
-      } catch (err: unknown) {
-        const message =
-          err instanceof Error ? err.message : "Error inesperado al parsear CSV";
-        setParseResult(null);
-        setShowPreview(false);
-        setCsvError(message);
-      } finally {
-        setIsParsing(false);
+      // 1) string decodificado por bytes (robusto)
+      let text = decoded.text;
+
+      // 2) si aun así hay mojibake, intentamos reparación de string (solo si mejora)
+      const fixed = maybeFixEncodingString(text);
+      if (fixed.changed) {
+        console.log("🟠 [SetupScreen] upload encoding fix applied:", {
+          fileName: file.name,
+          reason: fixed.reason,
+          beforeScore: scoreText(text),
+          afterScore: scoreText(fixed.text),
+        });
+        text = fixed.text;
+      } else {
+        console.log("🟢 [SetupScreen] upload encoding fix not applied:", {
+          fileName: file.name,
+          reason: fixed.reason,
+          score: scoreText(text),
+        });
       }
-    };
 
-    reader.readAsText(file);
+      // ⚠️ Si sigue habiendo '�', te lo avisamos: probablemente el archivo esté realmente dañado
+      if (hasVisibleBadReplacement(text)) {
+        console.warn(
+          "⚠️ [SetupScreen] Upload: el contenido sigue teniendo 'ï¿½' o '�' tras el decode+best-effort. Recomendación: guardar el CSV como UTF-8 (LibreOffice) o convertir en batch."
+        );
+      }
+
+      setCsvContentForSave(text);
+
+      const result = await parseCSV(text);
+      setParseResult(result);
+      setShowPreview(true);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Error inesperado al parsear CSV";
+      setParseResult(null);
+      setShowPreview(false);
+      setCsvError(message);
+    } finally {
+      setIsParsing(false);
+    }
   };
 
   const assignStudentsRandomly = () => {
@@ -366,7 +581,8 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
     const newTeams: Team[] = [];
 
     // ✅ Elegir nombres según el modo de juego
-    const teamNames = gameMode === 'coopetition' ? TEAM_PROFESSIONAL : TEAM_ANIMALS;
+    const teamNames =
+      gameMode === "coopetition" ? TEAM_PROFESSIONAL : TEAM_ANIMALS;
 
     for (let i = 0; i < numberOfTeams; i++) {
       const teamId = `team${String.fromCharCode(65 + i)}`;
@@ -386,7 +602,9 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
 
       newTeams.push({
         id: teamId,
-        name: `${teamNames[i].emoji} ${language === 'es' ? teamNames[i].name : teamNames[i].nameEn}`,
+        name: `${teamNames[i].emoji} ${
+          language === "es" ? teamNames[i].name : teamNames[i].nameEn
+        }`,
         players: teamPlayers,
         totalScore: 0,
         stage0Bonus: 0,
@@ -396,17 +614,21 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
     setTeams(newTeams);
   };
 
-  const moveStudentToTeam = (studentId: string, fromTeamId: string, toTeamId: string) => {
-    const updatedTeams = teams.map(team => {
+  const moveStudentToTeam = (
+    studentId: string,
+    fromTeamId: string,
+    toTeamId: string
+  ) => {
+    const updatedTeams = teams.map((team) => {
       if (team.id === fromTeamId) {
         return {
           ...team,
-          players: team.players.filter(p => p.id !== studentId),
+          players: team.players.filter((p) => p.id !== studentId),
         };
       } else if (team.id === toTeamId) {
         const studentToMove = teams
-          .find(t => t.id === fromTeamId)
-          ?.players.find(p => p.id === studentId);
+          .find((t) => t.id === fromTeamId)
+          ?.players.find((p) => p.id === studentId);
 
         if (studentToMove) {
           return {
@@ -469,7 +691,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
       await addTeams(gameId, teams);
       await addQuestions(gameId, questions);
 
-      // El RoomCodeDisplay genera el código automáticamente
       setCurrentStep(4);
       setIsCreating(false);
 
@@ -477,7 +698,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         onGameCreated(gameId);
       }, 2000);
     } catch (error) {
-      console.error('Error creating game:', error);
+      console.error("Error creating game:", error);
       alert(appT.errors.creatingGame);
       setIsCreating(false);
     }
@@ -485,31 +706,55 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
 
   return (
     <div className="setup-screen">
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 12,
-        marginBottom: 8,
-      }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 12,
+          marginBottom: 8,
+        }}
+      >
         <span style={{ fontSize: 32 }}>{theme.icon}</span>
         <h1 style={{ margin: 0 }}>{t.title}</h1>
       </div>
-      <p style={{
-        textAlign: 'center',
-        color: theme.primary,
-        fontWeight: 600,
-        marginBottom: 24,
-        fontSize: 14,
-      }}>
+      <p
+        style={{
+          textAlign: "center",
+          color: theme.primary,
+          fontWeight: 600,
+          marginBottom: 24,
+          fontSize: 14,
+        }}
+      >
         {theme.tagline}
       </p>
 
       <div className="progress-steps">
-        <div className={`step ${currentStep >= 1 ? 'active' : ''}`} style={currentStep >= 1 ? { backgroundColor: theme.primary } : {}}>1</div>
-        <div className={`step ${currentStep >= 2 ? 'active' : ''}`} style={currentStep >= 2 ? { backgroundColor: theme.primary } : {}}>2</div>
-        <div className={`step ${currentStep >= 3 ? 'active' : ''}`} style={currentStep >= 3 ? { backgroundColor: theme.primary } : {}}>3</div>
-        <div className={`step ${currentStep >= 4 ? 'active' : ''}`} style={currentStep >= 4 ? { backgroundColor: theme.primary } : {}}>4</div>
+        <div
+          className={`step ${currentStep >= 1 ? "active" : ""}`}
+          style={currentStep >= 1 ? { backgroundColor: theme.primary } : {}}
+        >
+          1
+        </div>
+        <div
+          className={`step ${currentStep >= 2 ? "active" : ""}`}
+          style={currentStep >= 2 ? { backgroundColor: theme.primary } : {}}
+        >
+          2
+        </div>
+        <div
+          className={`step ${currentStep >= 3 ? "active" : ""}`}
+          style={currentStep >= 3 ? { backgroundColor: theme.primary } : {}}
+        >
+          3
+        </div>
+        <div
+          className={`step ${currentStep >= 4 ? "active" : ""}`}
+          style={currentStep >= 4 ? { backgroundColor: theme.primary } : {}}
+        >
+          4
+        </div>
       </div>
 
       {/* STEP 1 */}
@@ -524,7 +769,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                 <input
                   type="radio"
                   value="es"
-                  checked={language === 'es'}
+                  checked={language === "es"}
                   onChange={(e) => setLanguage(e.target.value as Language)}
                 />
                 {t.spanish}
@@ -533,7 +778,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                 <input
                   type="radio"
                   value="en"
-                  checked={language === 'en'}
+                  checked={language === "en"}
                   onChange={(e) => setLanguage(e.target.value as Language)}
                 />
                 {t.english}
@@ -547,7 +792,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
               type="text"
               value={className}
               onChange={(e) => setClassName(e.target.value)}
-              placeholder={language === 'es' ? "3°A - Matemática" : "Grade 3A - Math"}
+              placeholder={language === "es" ? "3°A - Matemática" : "Grade 3A - Math"}
             />
           </div>
 
@@ -557,7 +802,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
               type="text"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder={language === 'es' ? "Matemática" : "Mathematics"}
+              placeholder={language === "es" ? "Matemática" : "Mathematics"}
             />
           </div>
 
@@ -604,26 +849,26 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
           <div className="form-group" style={{ marginBottom: 24 }}>
             <button
               className="btn-library"
-              onClick={() => navigate('/library')}
+              onClick={() => navigate("/library")}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 gap: 8,
-                width: '100%',
-                padding: '14px 20px',
+                width: "100%",
+                padding: "14px 20px",
                 fontSize: 15,
                 fontWeight: 600,
                 borderRadius: 10,
                 border: `2px solid ${theme.primary}`,
                 background: theme.cardHoverBg,
                 color: theme.primary,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
+                cursor: "pointer",
+                transition: "all 0.2s",
               }}
               onMouseOver={(e) => {
                 e.currentTarget.style.background = theme.primaryGradient;
-                e.currentTarget.style.color = 'white';
+                e.currentTarget.style.color = "white";
               }}
               onMouseOut={(e) => {
                 e.currentTarget.style.background = theme.cardHoverBg;
@@ -633,54 +878,61 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
               📚 {t.chooseFromLibrary}
             </button>
 
-            {/* Botón Generar con IA */}
             <button
               onClick={() => setShowPromptGenerator(true)}
               style={{
-                padding: '14px 24px',
+                padding: "14px 24px",
                 fontSize: 15,
                 fontWeight: 600,
-                backgroundColor: '#f0fdf4',
-                color: '#16a34a',
-                border: '2px solid #22c55e',
+                backgroundColor: "#f0fdf4",
+                color: "#16a34a",
+                border: "2px solid #22c55e",
                 borderRadius: 12,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                cursor: "pointer",
+                transition: "all 0.2s",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 gap: 8,
               }}
               onMouseOver={(e) => {
-                e.currentTarget.style.background = 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)';
-                e.currentTarget.style.color = 'white';
+                e.currentTarget.style.background =
+                  "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)";
+                e.currentTarget.style.color = "white";
               }}
               onMouseOut={(e) => {
-                e.currentTarget.style.background = '#f0fdf4';
-                e.currentTarget.style.color = '#16a34a';
+                e.currentTarget.style.background = "#f0fdf4";
+                e.currentTarget.style.color = "#16a34a";
               }}
             >
-              🤖 {language === 'es' ? 'Generar con IA' : 'Generate with AI'}
+              🤖 {language === "es" ? "Generar con IA" : "Generate with AI"}
             </button>
           </div>
 
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 16,
-            margin: '20px 0',
-            color: '#94a3b8',
-          }}>
-            <div style={{ flex: 1, height: 1, backgroundColor: '#e2e8f0' }} />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              margin: "20px 0",
+              color: "#94a3b8",
+            }}
+          >
+            <div style={{ flex: 1, height: 1, backgroundColor: "#e2e8f0" }} />
             <span style={{ fontSize: 13, fontWeight: 500 }}>{t.orUploadFile}</span>
-            <div style={{ flex: 1, height: 1, backgroundColor: '#e2e8f0' }} />
+            <div style={{ flex: 1, height: 1, backgroundColor: "#e2e8f0" }} />
           </div>
 
           <div className="form-group">
             <label>{t.uploadCSV}</label>
             <input type="file" accept=".csv" onChange={handleCSVUpload} />
           </div>
-          {isParsing && <div style={{ marginTop: 10 }}>{language === 'es' ? 'Analizando CSV...' : 'Analyzing CSV...'}</div>}
+
+          {isParsing && (
+            <div style={{ marginTop: 10 }}>
+              {language === "es" ? "Analizando CSV..." : "Analyzing CSV..."}
+            </div>
+          )}
 
           {csvError && (
             <div style={{ marginTop: 10, color: "#c0392b" }}>
@@ -689,22 +941,24 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
           )}
 
           {libraryCSVLoaded && libraryCSVTitle && (
-            <div style={{
-              marginTop: 12,
-              padding: '12px 16px',
-              backgroundColor: theme.cardHoverBg,
-              borderRadius: 10,
-              border: `2px solid ${theme.primary}`,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-            }}>
+            <div
+              style={{
+                marginTop: 12,
+                padding: "12px 16px",
+                backgroundColor: theme.cardHoverBg,
+                borderRadius: 10,
+                border: `2px solid ${theme.primary}`,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
               <span style={{ fontSize: 20 }}>📚</span>
               <div>
                 <div style={{ fontSize: 12, color: theme.primary, fontWeight: 600 }}>
                   {t.loadedFromLibrary}
                 </div>
-                <div style={{ fontSize: 14, color: '#1e293b', fontWeight: 500 }}>
+                <div style={{ fontSize: 14, color: "#1e293b", fontWeight: 500 }}>
                   {libraryCSVTitle}
                 </div>
               </div>
@@ -713,12 +967,22 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
 
           {questions.length > 0 && (
             <div className="questions-preview">
-              <h3>✅ {questions.length} {language === 'es' ? 'preguntas cargadas' : 'questions loaded'}</h3>
+              <h3>
+                ✅ {questions.length}{" "}
+                {language === "es" ? "preguntas cargadas" : "questions loaded"}
+              </h3>
               <ul>
-                {questions.slice(0, 3).map(q => (
+                {questions.slice(0, 3).map((q) => (
                   <li key={q.id}>{q.text}</li>
                 ))}
-                {questions.length > 3 && <li>... {language === 'es' ? `y ${questions.length - 3} más` : `and ${questions.length - 3} more`}</li>}
+                {questions.length > 3 && (
+                  <li>
+                    ...{" "}
+                    {language === "es"
+                      ? `y ${questions.length - 3} más`
+                      : `and ${questions.length - 3} more`}
+                  </li>
+                )}
               </ul>
             </div>
           )}
@@ -750,39 +1014,47 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
               rows={10}
               value={studentsText}
               onChange={(e) => setStudentsText(e.target.value)}
-              placeholder={language === 'es' ? 'María\nPedro\nAna\n...' : 'John\nMary\nPeter\n...'}
+              placeholder={language === "es" ? "María\nPedro\nAna\n..." : "John\nMary\nPeter\n..."}
             />
             <small>
-              {t.totalStudents} {parsedNamesInfo.rawCount} · {t.uniqueStudents} {parsedNamesInfo.uniqueCount} · {t.duplicates} {parsedNamesInfo.duplicateCount}
-              {parsedNamesInfo.duplicateCount > 0 ? ` — ${t.duplicatesNote}` : ''}
+              {t.totalStudents} {parsedNamesInfo.rawCount} · {t.uniqueStudents}{" "}
+              {parsedNamesInfo.uniqueCount} · {t.duplicates}{" "}
+              {parsedNamesInfo.duplicateCount}
+              {parsedNamesInfo.duplicateCount > 0 ? ` — ${t.duplicatesNote}` : ""}
             </small>
             {parsedNamesInfo.duplicateCount > 0 && (
-              <div style={{ marginTop: 8, fontSize: 13, color: '#c0392b' }}>
-                <strong>{language === 'es' ? 'Duplicados detectados:' : 'Duplicates found:'}</strong>{' '}
-                {parsedNamesInfo.duplicates.slice(0, 8).join(', ')}
-                {parsedNamesInfo.duplicates.length > 8 ? '…' : ''}
+              <div style={{ marginTop: 8, fontSize: 13, color: "#c0392b" }}>
+                <strong>
+                  {language === "es" ? "Duplicados detectados:" : "Duplicates found:"}
+                </strong>{" "}
+                {parsedNamesInfo.duplicates.slice(0, 8).join(", ")}
+                {parsedNamesInfo.duplicates.length > 8 ? "…" : ""}
               </div>
             )}
           </div>
 
-          <button className="btn-secondary" onClick={assignStudentsRandomly} disabled={parsedNamesInfo.uniqueCount === 0}>
+          <button
+            className="btn-secondary"
+            onClick={assignStudentsRandomly}
+            disabled={parsedNamesInfo.uniqueCount === 0}
+          >
             {t.assignRandom}
           </button>
 
           {teams.length > 0 && (
             <div className="teams-preview">
-              <h3>✅ {language === 'es' ? 'Equipos configurados' : 'Teams configured'}</h3>
-              <p style={{ fontSize: '14px', color: '#7f8c8d', marginBottom: '15px' }}>
-                {language === 'es'
-                  ? 'Podés mover estudiantes entre equipos seleccionando el equipo destino'
-                  : 'You can move students between teams by selecting the destination team'}
+              <h3>✅ {language === "es" ? "Equipos configurados" : "Teams configured"}</h3>
+              <p style={{ fontSize: "14px", color: "#7f8c8d", marginBottom: "15px" }}>
+                {language === "es"
+                  ? "Podés mover estudiantes entre equipos seleccionando el equipo destino"
+                  : "You can move students between teams by selecting the destination team"}
               </p>
               <div className="teams-grid">
-                {teams.map(team => (
+                {teams.map((team) => (
                   <div key={team.id} className="team-card">
                     <h4>{team.name}</h4>
                     <ul>
-                      {team.players.map(p => (
+                      {team.players.map((p) => (
                         <li key={p.id} className="editable-player">
                           <span>{p.name}</span>
                           <select
@@ -794,8 +1066,10 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                               }
                             }}
                           >
-                            {teams.map(t => (
-                              <option key={t.id} value={t.id}>{t.name}</option>
+                            {teams.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
                             ))}
                           </select>
                         </li>
@@ -808,14 +1082,16 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
           )}
 
           <div className="button-group">
-            <button className="btn-secondary" onClick={() => setCurrentStep(2)}>{t.back}</button>
+            <button className="btn-secondary" onClick={() => setCurrentStep(2)}>
+              {t.back}
+            </button>
             <button
               className="btn-primary"
               onClick={handleCreateGame}
               disabled={teams.length === 0 || isCreating}
               style={{ background: theme.primaryGradient }}
             >
-              {isCreating ? '...' : t.createGame}
+              {isCreating ? "..." : t.createGame}
             </button>
           </div>
         </div>
@@ -825,36 +1101,36 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
       {currentStep === 4 && (
         <div className="step-content step-ready">
           <h2>🎉 {t.step4}</h2>
-          {/* ✅ NUEVO: Código de sala con QR */}
           <RoomCodeDisplay gameId={createdGameId} />
 
-          {/* Guardar juego en biblioteca personal */}
           {user && csvContentForSave && !gameSaved && (
-            <div style={{
-              marginBottom: 20,
-              padding: 16,
-              backgroundColor: '#f0f9ff',
-              borderRadius: 12,
-              border: '2px solid #0ea5e9',
-              textAlign: 'center',
-            }}>
+            <div
+              style={{
+                marginBottom: 20,
+                padding: 16,
+                backgroundColor: "#f0f9ff",
+                borderRadius: 12,
+                border: "2px solid #0ea5e9",
+                textAlign: "center",
+              }}
+            >
               <span style={{ fontSize: 24 }}>💾</span>
-              <p style={{ margin: '8px 0 12px', fontSize: 14, color: '#0369a1' }}>
-                {language === 'es'
-                  ? '¿Querés guardar este juego para usarlo después?'
-                  : 'Do you want to save this game for later use?'}
+              <p style={{ margin: "8px 0 12px", fontSize: 14, color: "#0369a1" }}>
+                {language === "es"
+                  ? "¿Querés guardar este juego para usarlo después?"
+                  : "Do you want to save this game for later use?"}
               </p>
               <button
                 onClick={() => setShowSaveModal(true)}
                 style={{
-                  padding: '10px 20px',
+                  padding: "10px 20px",
                   fontSize: 14,
                   fontWeight: 600,
                   borderRadius: 8,
-                  border: 'none',
-                  backgroundColor: '#0ea5e9',
-                  color: 'white',
-                  cursor: 'pointer',
+                  border: "none",
+                  backgroundColor: "#0ea5e9",
+                  color: "white",
+                  cursor: "pointer",
                 }}
               >
                 💾 {appT.teacherLibrary.saveGame}
@@ -863,19 +1139,21 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
           )}
 
           {gameSaved && (
-            <div style={{
-              marginBottom: 20,
-              padding: 16,
-              backgroundColor: '#f0fdf4',
-              borderRadius: 12,
-              border: '2px solid #22c55e',
-              textAlign: 'center',
-            }}>
+            <div
+              style={{
+                marginBottom: 20,
+                padding: 16,
+                backgroundColor: "#f0fdf4",
+                borderRadius: 12,
+                border: "2px solid #22c55e",
+                textAlign: "center",
+              }}
+            >
               <span style={{ fontSize: 24 }}>✅</span>
-              <p style={{ margin: '8px 0 0', fontSize: 14, color: '#16a34a' }}>
-                {language === 'es'
-                  ? '¡Juego guardado en tu biblioteca!'
-                  : 'Game saved to your library!'}
+              <p style={{ margin: "8px 0 0", fontSize: 14, color: "#16a34a" }}>
+                {language === "es"
+                  ? "¡Juego guardado en tu biblioteca!"
+                  : "Game saved to your library!"}
               </p>
             </div>
           )}
@@ -885,11 +1163,10 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
             onClick={async () => {
               try {
                 await startGame(createdGameId);
-                // ✅ Navegar al classroom en lugar de solo llamar onGameCreated
                 navigate(`/classroom/${createdGameId}`);
               } catch (error) {
-                console.error('Error starting game:', error);
-                alert(language === 'es' ? 'Error al iniciar el juego' : 'Error starting game');
+                console.error("Error starting game:", error);
+                alert(language === "es" ? "Error al iniciar el juego" : "Error starting game");
               }
             }}
             style={{ background: theme.primaryGradient }}
@@ -920,7 +1197,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         />
       )}
 
-      {/* Save Game Modal */}
       {showSaveModal && user && (
         <SaveGameModal
           isOpen={showSaveModal}
@@ -928,15 +1204,15 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
           csvContent={csvContentForSave}
           csvFileName={csvFile?.name}
           initialData={{
-            title: libraryCSVTitle || csvFile?.name?.replace('.csv', '') || '',
+            title: libraryCSVTitle || csvFile?.name?.replace(".csv", "") || "",
             topic: subject,
-            language: language as 'es' | 'en',
+            language: language as "es" | "en",
           }}
           onSave={async (gameData: NewTeacherGame, csvContent: string) => {
             await saveTeacherGame(
               user.uid,
-              user.displayName || 'Docente',
-              user.email || '',
+              user.displayName || "Docente",
+              user.email || "",
               gameData,
               csvContent
             );
@@ -946,7 +1222,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         />
       )}
 
-      {/* Prompt Generator Modal */}
       <PromptGeneratorModal
         isOpen={showPromptGenerator}
         onClose={() => setShowPromptGenerator(false)}

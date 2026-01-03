@@ -1,6 +1,7 @@
 // src/pages/JoinGamePage.tsx
 // Página para que los alumnos ingresen el código de sala
 // ✅ MODIFICADO: Detecta si el juego está en fase de propuestas
+// ✅ NUEVO: Soporte para reconexión de equipos
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -11,6 +12,77 @@ import {
   parseCodeFromInput,
   formatCodeForDisplay 
 } from '../services/roomCodeService';
+
+// ✅ NUEVO: Claves para localStorage
+const STORAGE_KEYS = {
+  GAME_ID: 'tlg_gameId',
+  TEAM_ID: 'tlg_teamId',
+  TEAM_NAME: 'tlg_teamName',
+  ROOM_CODE: 'tlg_roomCode',
+  JOINED_AT: 'tlg_joinedAt',
+};
+
+// ✅ NUEVO: Tipo para sesión guardada
+interface SavedSession {
+  gameId: string;
+  teamId: string;
+  teamName: string;
+  roomCode: string;
+  joinedAt: number;
+}
+
+// ✅ NUEVO: Guardar sesión en localStorage
+function saveSession(session: SavedSession) {
+  localStorage.setItem(STORAGE_KEYS.GAME_ID, session.gameId);
+  localStorage.setItem(STORAGE_KEYS.TEAM_ID, session.teamId);
+  localStorage.setItem(STORAGE_KEYS.TEAM_NAME, session.teamName);
+  localStorage.setItem(STORAGE_KEYS.ROOM_CODE, session.roomCode);
+  localStorage.setItem(STORAGE_KEYS.JOINED_AT, session.joinedAt.toString());
+}
+
+// ✅ NUEVO: Obtener sesión de localStorage
+function getSavedSession(): SavedSession | null {
+  const gameId = localStorage.getItem(STORAGE_KEYS.GAME_ID);
+  const teamId = localStorage.getItem(STORAGE_KEYS.TEAM_ID);
+  const teamName = localStorage.getItem(STORAGE_KEYS.TEAM_NAME);
+  const roomCode = localStorage.getItem(STORAGE_KEYS.ROOM_CODE);
+  const joinedAt = localStorage.getItem(STORAGE_KEYS.JOINED_AT);
+
+  if (gameId && teamId && teamName && roomCode) {
+    return {
+      gameId,
+      teamId,
+      teamName,
+      roomCode,
+      joinedAt: joinedAt ? parseInt(joinedAt, 10) : Date.now(),
+    };
+  }
+  return null;
+}
+
+// ✅ NUEVO: Limpiar sesión de localStorage
+function clearSession() {
+  localStorage.removeItem(STORAGE_KEYS.GAME_ID);
+  localStorage.removeItem(STORAGE_KEYS.TEAM_ID);
+  localStorage.removeItem(STORAGE_KEYS.TEAM_NAME);
+  localStorage.removeItem(STORAGE_KEYS.ROOM_CODE);
+  localStorage.removeItem(STORAGE_KEYS.JOINED_AT);
+}
+
+// ✅ NUEVO: Verificar si el juego sigue activo
+async function isGameActive(gameId: string): Promise<boolean> {
+  try {
+    const gameSnapshot = await get(ref(database, `games/${gameId}`));
+    if (!gameSnapshot.exists()) return false;
+    
+    const game = gameSnapshot.val();
+    // Verificar que el juego no haya terminado
+    const status = game.status?.status;
+    return status !== 'finished' && status !== 'ended';
+  } catch {
+    return false;
+  }
+}
 
 export function JoinGamePage() {
   const navigate = useNavigate();
@@ -25,26 +97,105 @@ export function JoinGamePage() {
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'code' | 'team'>('code');
   
-  // ✅ NUEVO: Estado para detectar fase del juego
+  // ✅ Estado para detectar fase del juego
   const [gamePhase, setGamePhase] = useState<'normal' | 'proposals' | 'waiting'>('normal');
+  
+  // ✅ NUEVO: Estado para reconexión
+  const [savedSession, setSavedSession] = useState<SavedSession | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [sessionValid, setSessionValid] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // ✅ NUEVO: Verificar sesión guardada al cargar
+  useEffect(() => {
+    const checkSavedSession = async () => {
+      const session = getSavedSession();
+      
+      if (session) {
+        // Verificar si el juego sigue activo
+        const isActive = await isGameActive(session.gameId);
+        
+        if (isActive) {
+          setSavedSession(session);
+          setSessionValid(true);
+        } else {
+          // Juego terminó, limpiar sesión
+          clearSession();
+          setSavedSession(null);
+          setSessionValid(false);
+        }
+      }
+      
+      setCheckingSession(false);
+    };
+    
+    checkSavedSession();
+  }, []);
+
   // Auto-focus en el input
   useEffect(() => {
-    if (step === 'code') {
+    if (step === 'code' && !checkingSession && !sessionValid) {
       inputRef.current?.focus();
     }
-  }, [step]);
+  }, [step, checkingSession, sessionValid]);
 
   // Si viene código en URL, procesarlo automáticamente
   useEffect(() => {
     const urlCode = searchParams.get('code');
-    if (urlCode) {
+    if (urlCode && !checkingSession) {
       setCode(urlCode);
       handleCodeSubmit(urlCode);
     }
-  }, [searchParams]);
+  }, [searchParams, checkingSession]);
+
+  // ✅ NUEVO: Reconectar a sesión guardada
+  const handleReconnect = async () => {
+    if (!savedSession) return;
+    
+    setLoading(true);
+    
+    try {
+      // Verificar el estado actual del juego
+      const stage0Snapshot = await get(ref(database, `games/${savedSession.gameId}/stage0`));
+      const statusSnapshot = await get(ref(database, `games/${savedSession.gameId}/status`));
+      
+      let targetRoute = `/team/${savedSession.gameId}/${savedSession.teamId}`;
+      
+      if (stage0Snapshot.exists()) {
+        const phase = stage0Snapshot.val().phase;
+        if (phase === 'collecting' || phase === 'waiting' || phase === 'curating') {
+          targetRoute = `/propose/${savedSession.gameId}/${savedSession.teamId}`;
+        }
+      }
+      
+      // Verificar si está en Stage 2
+      if (statusSnapshot.exists()) {
+        const status = statusSnapshot.val().status;
+        if (status === 'stage2') {
+          targetRoute = `/stage2/team/${savedSession.gameId}/${savedSession.teamId}`;
+        }
+      }
+      
+      navigate(targetRoute);
+    } catch (err) {
+      console.error('Error reconnecting:', err);
+      setError('No se pudo reconectar. Intentá con el código de sala.');
+      clearSession();
+      setSavedSession(null);
+      setSessionValid(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ NUEVO: Comenzar nueva sesión (ignorar guardada)
+  const handleNewSession = () => {
+    clearSession();
+    setSavedSession(null);
+    setSessionValid(false);
+    inputRef.current?.focus();
+  };
 
   // Buscar código
   const handleCodeSubmit = async (inputCode?: string) => {
@@ -80,7 +231,7 @@ export function JoinGamePage() {
     }
   };
 
-  // ✅ MODIFICADO: Cargar equipos y detectar fase del juego
+  // Cargar equipos y detectar fase del juego
   const loadTeamsAndDetectPhase = async (gId: string) => {
     // Cargar equipos
     const teamsSnapshot = await get(ref(database, `games/${gId}/teams`));
@@ -99,7 +250,7 @@ export function JoinGamePage() {
     
     setAvailableTeams(teams);
     
-    // ✅ NUEVO: Detectar fase del juego
+    // Detectar fase del juego
     const stage0Snapshot = await get(ref(database, `games/${gId}/stage0`));
     
     if (stage0Snapshot.exists()) {
@@ -107,13 +258,10 @@ export function JoinGamePage() {
       const phase = stage0Data.phase;
       
       if (phase === 'collecting') {
-        // Los equipos están enviando propuestas
         setGamePhase('proposals');
       } else if (phase === 'waiting') {
-        // Esperando que el profesor inicie
         setGamePhase('waiting');
       } else if (phase === 'curating') {
-        // Profesor está curando, equipos esperan
         setGamePhase('waiting');
       } else {
         setGamePhase('normal');
@@ -123,18 +271,28 @@ export function JoinGamePage() {
     }
   };
 
-  // ✅ MODIFICADO: Unirse al juego según la fase
+  // ✅ MODIFICADO: Unirse al juego y guardar sesión
   const handleJoinGame = () => {
     if (!gameId || !selectedTeam) return;
     
+    // Obtener nombre del equipo seleccionado
+    const team = availableTeams.find(t => t.id === selectedTeam);
+    const teamName = team?.name || selectedTeam;
+    
+    // ✅ NUEVO: Guardar sesión
+    saveSession({
+      gameId,
+      teamId: selectedTeam,
+      teamName,
+      roomCode: code,
+      joinedAt: Date.now(),
+    });
+    
     if (gamePhase === 'proposals') {
-      // Ir a la vista de propuestas
       navigate(`/propose/${gameId}/${selectedTeam}`);
     } else if (gamePhase === 'waiting') {
-      // Ir a la vista de propuestas (mostrará pantalla de espera)
       navigate(`/propose/${gameId}/${selectedTeam}`);
     } else {
-      // Flujo normal del juego
       navigate(`/team/${gameId}/${selectedTeam}`);
     }
   };
@@ -163,7 +321,7 @@ export function JoinGamePage() {
     return { ...defaultStyle, emoji: teamEmoji || defaultStyle.emoji };
   };
 
-  // ✅ NUEVO: Texto del botón según la fase
+  // Texto del botón según la fase
   const getJoinButtonText = () => {
     if (gamePhase === 'proposals') {
       return '¡Proponer consignas! 📝';
@@ -172,6 +330,24 @@ export function JoinGamePage() {
     }
     return '¡Unirme! 🎮';
   };
+
+  // ✅ NUEVO: Mostrar loading mientras verifica sesión
+  if (checkingSession) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <div style={{ textAlign: 'center', color: 'white' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+          <div style={{ fontSize: 18 }}>Cargando...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -204,20 +380,106 @@ export function JoinGamePage() {
             Juego del Semáforo
           </h1>
           <p style={{ margin: '8px 0 0', color: '#64748b', fontSize: 14 }}>
-            {step === 'code' ? 'Ingresá el código de la sala' : 'Seleccioná tu equipo'}
+            {sessionValid && step === 'code' 
+              ? '¡Bienvenido de vuelta!' 
+              : step === 'code' 
+                ? 'Ingresá el código de la sala' 
+                : 'Seleccioná tu equipo'}
           </p>
         </div>
+
+        {/* ✅ NUEVO: Opción de reconectar */}
+        {sessionValid && savedSession && step === 'code' && (
+          <div style={{
+            marginBottom: 24,
+            padding: 20,
+            backgroundColor: '#f0fdf4',
+            borderRadius: 16,
+            border: '2px solid #22c55e',
+          }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 12,
+              marginBottom: 12,
+            }}>
+              <span style={{ fontSize: 32 }}>🔄</span>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#15803d' }}>
+                  Sesión anterior encontrada
+                </div>
+                <div style={{ fontSize: 13, color: '#16a34a' }}>
+                  {savedSession.teamName}
+                </div>
+                <div style={{ fontSize: 11, color: '#22c55e', marginTop: 2 }}>
+                  Código: {savedSession.roomCode}
+                </div>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={handleReconnect}
+                disabled={loading}
+                style={{
+                  flex: 2,
+                  padding: '12px 16px',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: 'white',
+                  background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                  border: 'none',
+                  borderRadius: 10,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {loading ? 'Reconectando...' : '↩️ Volver al juego'}
+              </button>
+              
+              <button
+                onClick={handleNewSession}
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#64748b',
+                  backgroundColor: 'white',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                }}
+              >
+                Nuevo
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* STEP 1: Ingresar código */}
         {step === 'code' && (
           <>
+            {/* Separador si hay sesión guardada */}
+            {sessionValid && savedSession && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 16,
+                margin: '0 0 20px 0',
+                color: '#94a3b8',
+              }}>
+                <div style={{ flex: 1, height: 1, backgroundColor: '#e2e8f0' }} />
+                <span style={{ fontSize: 12 }}>o ingresá un código nuevo</span>
+                <div style={{ flex: 1, height: 1, backgroundColor: '#e2e8f0' }} />
+              </div>
+            )}
+
             <div style={{ marginBottom: 24 }}>
               <input
                 ref={inputRef}
                 type="text"
                 value={code}
                 onChange={(e) => {
-                  // Solo letras y números, máximo 6
                   const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
                   setCode(val);
                   setError(null);
@@ -328,7 +590,7 @@ export function JoinGamePage() {
               </span>
             </div>
 
-            {/* ✅ NUEVO: Indicador de fase de propuestas */}
+            {/* Indicador de fase de propuestas */}
             {gamePhase === 'proposals' && (
               <div style={{
                 padding: '12px 16px',
