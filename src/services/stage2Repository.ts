@@ -1,95 +1,93 @@
 // src/services/stage2Repository.ts
+// ✅ VERSIÓN COMPLETA: Todas las funciones exportadas + sin errores de build
 
-import { ref, update, get, runTransaction } from "firebase/database";
+import { ref, update, get, set, remove } from "firebase/database";
 import { database } from "../firebase.config";
 import type {
   Game,
   Team,
+  Player,
   Stage2Round,
   Stage2RespondingTeam,
   Stage2RatingTeam,
-  Stage2Phase,
-  RatingColor,
   Question,
 } from "../types/game";
 
-
 const GAMES_ROOT = "games";
 
-/* =========================================
-   HELPERS
-========================================= */
+/* =========================
+   TIPOS FALTANTES (agregados)
+========================= */
 
-function normalizeQuestions(raw: unknown): Question[] {
-  if (!raw) return [];
+type Stage2Phase =
+  | "hint"
+  | "designated"
+  | "question_revealed"
+  | "responding"
+  | "rating"
+  | "rating_reveal"
+  | "justification"
+  | "validation_response"
+  | "validation_ratings"
+  | "results";
 
+type RatingColor = "green" | "yellow" | "red";
+
+/* =========================
+   HELPERS DE NORMALIZACIÓN (locales a este archivo)
+========================= */
+
+/**
+ * Normaliza jugadores de cualquier estructura a array consistente
+ */
+function normalizePlayers(raw: unknown): Player[] {
   if (Array.isArray(raw)) {
-    return raw
-      .map((q: any, idx: number) => ({
-        id: q?.id ?? String(idx),
-        text: q?.text ?? "",
-        hint: q?.hint ?? "",
-        suggestedStage: q?.suggestedStage ?? 1,
-      }))
-      .filter((q: any) => !!q.id && !!q.text);
+    return raw.filter((p): p is Player =>
+      !!p && typeof p === "object" && !!p.id && !!p.name
+    );
   }
 
-  if (typeof raw === "object") {
-    return Object.entries(raw as Record<string, any>)
-      .map(([key, q]) => ({
-        id: q?.id ?? key,
-        text: q?.text ?? "",
-        hint: q?.hint ?? "",
-        suggestedStage: q?.suggestedStage ?? 1,
-      }))
-      .filter((q: any) => !!q.id && !!q.text);
-  }
-
-  return [];
-}
-
-function normalizeTeams(raw: unknown): Team[] {
-  if (!raw) return [];
-
-  if (Array.isArray(raw)) {
-    return (raw as any[]).filter((t) => t?.id);
-  }
-
-  if (typeof raw === "object") {
-    return Object.values(raw as Record<string, any>).filter((t) => t?.id);
+  if (raw && typeof raw === "object") {
+    return Object.values(raw).filter((p): p is Player =>
+      !!p && typeof p === "object" && !!p.id && !!p.name
+    );
   }
 
   return [];
 }
 
 /**
- * Normaliza players del equipo (array u objeto)
- * y devuelve solo los que tengan id y name.
- * - Si RTDB guardó players como objeto, usa la key como id si falta value.id.
+ * Normaliza equipos de cualquier estructura a array consistente
  */
-function normalizePlayers(team: Team): { id: string; name: string }[] {
-  const raw: unknown = (team as any).players;
+function normalizeTeams(raw: unknown): Team[] {
   if (!raw) return [];
 
-  if (Array.isArray(raw)) {
-    return raw
-      .map((p: any, idx: number) => ({
-        id: p?.id ?? String(idx),
-        name: p?.name ?? "",
-      }))
-      .filter((p) => !!p.id && !!p.name);
-  }
+  const teamsArray = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'object'
+      ? Object.values(raw as Record<string, any>)
+      : [];
 
-  if (typeof raw === "object") {
-    return Object.entries(raw as Record<string, any>)
-      .map(([key, value]) => ({
-        id: value?.id ?? key,
-        name: value?.name ?? "",
-      }))
-      .filter((p) => !!p.id && !!p.name);
-  }
+  return teamsArray
+    .filter((t): t is Team => !!t && typeof t === "object" && !!t.id)
+    .map((t) => {
+      const rawPlayers = (t as any).players || [];
 
-  return [];
+      // ✅ Normalizar jugadores consistente
+      const players = normalizePlayers(rawPlayers);
+
+      return {
+        id: t.id || "",
+        name: t.name || "",
+        players: players,
+        representativesUsed: Array.isArray(t.representativesUsed)
+          ? t.representativesUsed
+          : [],
+        totalScore: t.totalScore || 0,
+        stage1Completed: t.stage1Completed || false,
+        currentRound: t.currentRound || 0,
+      } as Team;
+    });
 }
 
 /**
@@ -97,8 +95,13 @@ function normalizePlayers(team: Team): { id: string; name: string }[] {
  * Si todos fueron usados → vuelve a permitir cualquiera (pool completo).
  */
 function selectUnusedPlayer(team: Team): { id: string; name: string } | null {
-  const players = normalizePlayers(team);
-  if (players.length === 0) return null;
+  // ✅ CORREGIDO: pasar team.players (gracias a Claude)
+  const players = normalizePlayers(team.players);
+
+  if (players.length === 0) {
+    console.warn(`⚠️ Team ${team.name} has no players`);
+    return null;
+  }
 
   const used = team.representativesUsed || [];
   const available = players.filter((p) => !used.includes(p.id));
@@ -109,18 +112,29 @@ function selectUnusedPlayer(team: Team): { id: string; name: string } | null {
 }
 
 /**
- * Marca jugador como usado en el equipo.
- * Si ya se usaron todos → resetea la lista dejando solo el nuevo.
+ * Marca un jugador como usado para un equipo
  */
 async function markPlayerAsUsed(gameId: string, teamId: string, playerId: string) {
   const teamRef = ref(database, `${GAMES_ROOT}/${gameId}/teams/${teamId}`);
   const snap = await get(teamRef);
   const team = snap.val() as Team;
 
-  const used = team?.representativesUsed || [];
-  const allPlayers = normalizePlayers(team);
+  if (!team) {
+    console.warn(`⚠️ Team ${teamId} not found when marking player as used`);
+    return;
+  }
 
-  if (allPlayers.length === 0) return;
+  // ✅ ASEGURAR ESTRUCTURA DE REPRESENTATIVESUSED
+  const used = Array.isArray(team.representativesUsed)
+    ? team.representativesUsed
+    : [];
+
+  const allPlayers = normalizePlayers(team.players);
+
+  if (allPlayers.length === 0) {
+    console.warn(`⚠️ No players found in team ${teamId} when marking player as used`);
+    return;
+  }
 
   const nextUsed =
     used.length >= allPlayers.length ? [playerId] : [...used, playerId];
@@ -130,81 +144,112 @@ async function markPlayerAsUsed(gameId: string, teamId: string, playerId: string
   });
 }
 
-/* =========================================
-   STAGE 2 CORE
-========================================= */
+/* =========================
+   FUNCIONES PÚBLICAS CRÍTICAS
+========================= */
 
 /**
- * Inicia una ronda Stage 2 (fase hint)
+ * ✅ CORREGIDO: Inicia una nueva ronda de Stage 2
+ * Retorna false si no hay más preguntas disponibles
  */
-export async function startStage2Round(gameId: string) {
-  const gameRef = ref(database, `${GAMES_ROOT}/${gameId}`);
-  const snap = await get(gameRef);
+export async function startStage2Round(gameId: string): Promise<boolean> {
+  console.log("🚀 Iniciando nueva ronda de Stage 2...");
+
+  const snap = await get(ref(database, `${GAMES_ROOT}/${gameId}`));
   const game = snap.val() as Game;
   if (!game) throw new Error("Game not found");
+  if (!game.stage2) throw new Error("Stage 2 not initialized");
 
-  const stage2 = game.stage2 || { currentRound: 0, currentQuestionIndex: 0, rounds: {} };
+  const currentRound = game.stage2.currentRound ?? 0;
 
-  const roundNumber = stage2.currentRound ?? 0;
-  const qIndex = stage2.currentQuestionIndex ?? 0;
+  // ✅ Seleccionar preguntas para Stage 2 (solo preguntas con suggestedStage === 2)
+  const allQuestions = Object.values(game.questions || {}) as Question[];
+  const stage2Questions = allQuestions.filter(q => q.suggestedStage === 2);
 
-  const questions = normalizeQuestions((game as any).questions);
-  const stage2Questions = questions.filter((q) => q.suggestedStage === 2);
+  if (stage2Questions.length === 0) {
+    throw new Error("No Stage 2 questions available");
+  }
 
-  // ✅ Si no quedan preguntas, marcar juego como completado
-  if (qIndex >= stage2Questions.length) {
-    console.log("🏆 No more Stage 2 questions - Game complete!");
+  // ✅ NUEVO: Verificar si ya se jugaron todas las preguntas
+  // currentRound es base 0, así que si currentRound >= cantidad de preguntas, ya terminamos
+  if (currentRound >= stage2Questions.length) {
+    console.log("🏁 No hay más preguntas de Stage 2. Finalizando juego...");
     
+    // Marcar el juego como finalizado
     await update(ref(database), {
       [`${GAMES_ROOT}/${gameId}/status/status`]: "game_complete",
-      [`${GAMES_ROOT}/${gameId}/stage2/phase`]: "game_complete",
+      [`${GAMES_ROOT}/${gameId}/stage2/completed`]: true,
+      [`${GAMES_ROOT}/${gameId}/stage2/completedAt`]: Date.now(),
       [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
     });
     
-    return; // ✅ Salir sin error
+    return false; // Indica que no se creó nueva ronda
   }
 
-  const question = stage2Questions[qIndex];
-  const hintDuration =
-    (game.stage2Config as any)?.hintDuration ??
-    (game.config as any)?.timers?.stage2Hint ??
-    60;
+  // ✅ Seleccionar la pregunta correspondiente a esta ronda (sin repetir)
+  const selectedQuestion = stage2Questions[currentRound];
 
+  if (!selectedQuestion?.id) {
+    throw new Error("Selected question has no ID");
+  }
+
+  // ✅ Crear estructura de nueva ronda
   const newRound: Stage2Round = {
-    roundNumber,
-    questionId: question.id,
+    roundNumber: currentRound,
+    questionId: selectedQuestion.id,
     phase: "hint",
-
-    hintStartedAt: Date.now(),
-    hintDuration,
-
-    questionRevealedAt: null,
-
+    hintRevealedAt: Date.now(),
     respondingTeam: null,
     ratingTeams: {},
-
-    ratingStartedAt: null,
-    ratingTimerActive: false,
-    ratingsRevealed: false,
-
+    justificationOrder: [],
+    currentJustificationIndex: 0,
     pointsAwarded: {},
-    timestamp: Date.now(),
+    responseValidated: null,
   };
 
-  await update(ref(database), {
-    [`${GAMES_ROOT}/${gameId}/stage2/currentRound`]: roundNumber,
-    [`${GAMES_ROOT}/${gameId}/stage2/currentQuestionIndex`]: qIndex,
-    [`${GAMES_ROOT}/${gameId}/stage2/rounds/${roundNumber}`]: newRound,
+  // ✅ Actualizar estado del juego
+  const updates: Record<string, any> = {
+    [`${GAMES_ROOT}/${gameId}/stage2/rounds/${currentRound}`]: newRound,
     [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
-  });
+  };
 
-  console.log("✅ Stage 2 round created:", roundNumber);
+  await update(ref(database), updates);
+  console.log(`✅ Stage 2 round ${currentRound + 1} of ${stage2Questions.length} created successfully`);
+  
+  return true; // Indica que se creó la ronda exitosamente
 }
 
 /**
- * Designa representantes:
- * - Responde: equipo con menor puntaje
- * - Califican: los demás (sin orden específico, calificación simultánea)
+ * ✅ NUEVA FUNCIÓN: Verifica si hay más rondas disponibles en Stage 2
+ */
+export async function hasMoreStage2Rounds(gameId: string): Promise<boolean> {
+  const snap = await get(ref(database, `${GAMES_ROOT}/${gameId}`));
+  const game = snap.val() as Game;
+  if (!game?.stage2) return false;
+
+  const currentRound = game.stage2.currentRound ?? 0;
+  const allQuestions = Object.values(game.questions || {}) as Question[];
+  const stage2Questions = allQuestions.filter(q => q.suggestedStage === 2);
+
+  // Si la ronda actual + 1 es menor que el total de preguntas, hay más rondas
+  return (currentRound + 1) < stage2Questions.length;
+}
+
+/**
+ * ✅ NUEVA FUNCIÓN: Finaliza Stage 2 manualmente
+ */
+export async function finalizeStage2(gameId: string): Promise<void> {
+  await update(ref(database), {
+    [`${GAMES_ROOT}/${gameId}/status/status`]: "game_complete",
+    [`${GAMES_ROOT}/${gameId}/stage2/completed`]: true,
+    [`${GAMES_ROOT}/${gameId}/stage2/completedAt`]: Date.now(),
+    [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
+  });
+  console.log("🏁 Stage 2 finalized manually");
+}
+
+/**
+ * Designa representantes para la ronda actual de Stage 2
  */
 export async function designateRepresentatives(gameId: string) {
   const snap = await get(ref(database, `${GAMES_ROOT}/${gameId}`));
@@ -215,27 +260,48 @@ export async function designateRepresentatives(gameId: string) {
   const round = game.stage2.rounds?.[r];
   if (!round) throw new Error("Round not found");
 
+  // ✅ NORMALIZAR EQUIPOS CON ESTRUCTURA SEGURA
   const teams = normalizeTeams((game as any).teams);
+  console.log("🔍 DESIGNATE REPRESENTATIVES - Teams normalized:", teams.map(t => ({
+    id: t.id,
+    name: t.name,
+    playersCount: t.players.length,
+    players: t.players
+  })));
+
+
+  // ✅ AGREGAR ESTE LOG:
+  console.log("DEV raw team data:", JSON.stringify(teams[0], null, 2));
   if (teams.length < 2) throw new Error("Need at least 2 teams");
-
-  console.log(
-    "DEV players per team:",
-    teams.map((t) => ({
-      team: t.name,
-      playersNormalized: normalizePlayers(t).length,
-      repsUsed: t.representativesUsed?.length ?? 0,
-    }))
-  );
-
-  // Orden por puntaje (menor primero)
+  console.log("DEV players per team:", teams.map((t) => ({
+    team: t.name,
+    playersNormalized: normalizePlayers(t.players).length,
+    repsUsed: t.representativesUsed?.length ?? 0,
+  })));
+  // Ordenar por puntaje (menor primero)
   const sorted = [...teams].sort((a, b) => (a.totalScore || 0) - (b.totalScore || 0));
 
-  // Responde el primero
+  // ✅ VALIDAR JUGADORES ANTES DE SELECCIONAR
   const respondingTeam = sorted[0];
-  const respondingPlayer = selectUnusedPlayer(respondingTeam);
+  console.log("🔍 RESPONDING TEAM:", respondingTeam.name, {
+    players: respondingTeam.players,
+    representativesUsed: respondingTeam.representativesUsed
+  });
+
+  if (respondingTeam.players.length === 0) {
+    throw new Error(`Team ${respondingTeam.name} has no players available`);
+  }
+
+  // ✅ SELECCIONAR JUGADOR CON VALIDACIÓN EXTRA
+  let respondingPlayer = selectUnusedPlayer(respondingTeam);
 
   if (!respondingPlayer) {
-    console.error("❌ respondingTeam players:", respondingTeam);
+    console.warn("⚠️ No unused player found, trying all players pool");
+    // Forzar selección de cualquier jugador si no hay disponibles
+    respondingPlayer = respondingTeam.players[0];
+  }
+
+  if (!respondingPlayer) {
     throw new Error(`No responding player available for team ${respondingTeam.name}`);
   }
 
@@ -248,35 +314,44 @@ export async function designateRepresentatives(gameId: string) {
     teamId: respondingTeam.id,
     playerId: respondingPlayer.id,
     playerName: respondingPlayer.name,
-
     helpRequested: false,
     helpStartedAt: null,
     helpDuration,
     helpRemainingSec: helpDuration,
-
     responseGiven: false,
+    helpUsed: false, // ✅ Inicializar helpUsed
   };
 
   // Califican los demás (sin orden específico)
   const raters = sorted.slice(1);
   const ratingTeams: Record<string, Stage2RatingTeam> = {};
-
+  // ✅ AGREGAR: Log de diagnóstico para TODOS los equipos
+  console.log("🔍 ALL TEAMS PLAYERS:", teams.map(t => ({
+    name: t.name,
+    playersCount: t.players?.length ?? 0,
+    rawPlayers: (game.teams as any)?.[t.id]?.players,
+  })));
   for (const team of raters) {
-    const p = selectUnusedPlayer(team);
+    if (team.players.length === 0) {
+      throw new Error(`Team ${team.name} has no players available for rating`);
+    }
+
+    let p = selectUnusedPlayer(team);
 
     if (!p) {
-      console.error("❌ ratingTeam without available player:", team);
+      console.warn(`⚠️ No unused rater for ${team.name}, using first player`);
+      p = team.players[0];
+    }
+
+    if (!p) {
       throw new Error(`No rater available for team ${team.name}`);
     }
 
-    // 🆕 Estructura simplificada (sin order, helpRequested, etc.)
     ratingTeams[team.id] = {
       teamId: team.id,
       teamName: team.name,
-
       playerId: p.id,
       playerName: p.name,
-
       rating: null,
       ratedAt: null,
       justification: null,
@@ -284,7 +359,7 @@ export async function designateRepresentatives(gameId: string) {
     };
   }
 
-  // Marcar usados
+  // ✅ MARCAR JUGADORES USADOS (con validación)
   await markPlayerAsUsed(gameId, respondingTeam.id, respondingPlayer.id);
   for (const [tid, rt] of Object.entries(ratingTeams)) {
     await markPlayerAsUsed(gameId, tid, rt.playerId);
@@ -297,7 +372,25 @@ export async function designateRepresentatives(gameId: string) {
     [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
   });
 
-  console.log("✅ Representatives designated");
+  console.log("✅ Representatives designated successfully");
+}
+
+/**
+ * Obtiene el teamId del equipo que está justificando actualmente.
+ */
+export async function getCurrentJustifyingTeamId(gameId: string): Promise<string | null> {
+  const snap = await get(ref(database, `${GAMES_ROOT}/${gameId}`));
+  const game = snap.val() as Game;
+  if (!game?.stage2) return null;
+
+  const r = game.stage2.currentRound;
+  const round = game.stage2.rounds?.[r];
+  if (!round) return null;
+
+  const order = (round as any).justificationOrder || [];
+  const currentIndex = (round as any).currentJustificationIndex ?? 0;
+
+  return order[currentIndex] ?? null;
 }
 
 /**
@@ -433,6 +526,7 @@ export async function teacherEndRespondingHelp(gameId: string) {
     [`${base}/respondingTeam/helpRequested`]: false,
     [`${base}/respondingTeam/helpStartedAt`]: null,
     [`${base}/respondingTeam/helpRemainingSec`]: 0,
+    [`${base}/respondingTeam/helpUsed`]: true, // ✅ FLAG PERMANENTE: ayuda fue usada
     [`${GAMES_ROOT}/${gameId}/updatedAt`]: now,
   });
 
@@ -537,7 +631,7 @@ export async function getRatingProgress(
 
   const raters = Object.values(round.ratingTeams || {});
   const total = raters.length;
-  const rated = raters.filter((rt) => rt.rating !== null).length;
+  const rated = Object.values(ratingTeams).filter((r: any) => !!r?.rating).length;
 
   return { rated, total };
 }
@@ -768,49 +862,18 @@ export async function advanceJustification(gameId: string): Promise<void> {
   }
 }
 
-/**
- * Obtiene el teamId del equipo que está justificando actualmente.
- */
-export async function getCurrentJustifyingTeamId(gameId: string): Promise<string | null> {
-  const snap = await get(ref(database, `${GAMES_ROOT}/${gameId}`));
-  const game = snap.val() as Game;
-  if (!game?.stage2) return null;
-
-  const r = game.stage2.currentRound;
-  const round = game.stage2.rounds?.[r];
-  if (!round) return null;
-
-  const order = (round as any).justificationOrder || [];
-  const currentIndex = (round as any).currentJustificationIndex ?? 0;
-
-  return order[currentIndex] ?? null;
-}
-/**
- * Valida si la respuesta del equipo que respondió fue correcta o incorrecta.
- * Esto lo decide el docente y determina cómo se distribuyen los puntos.
- */
-export async function validateResponse(
-  gameId: string,
-  correct: boolean
-): Promise<void> {
-  const snap = await get(ref(database, `${GAMES_ROOT}/${gameId}`));
-  const game = snap.val() as Game;
-  if (!game?.stage2) throw new Error("Stage 2 not found");
-
-  const r = game.stage2.currentRound;
-  const base = `${GAMES_ROOT}/${gameId}/stage2/rounds/${r}`;
-
-  await update(ref(database), {
-    [`${base}/responseValidated`]: correct,
-    [`${base}/phase`]: "validation_ratings",
-    [`${GAMES_ROOT}/${gameId}/updatedAt`]: Date.now(),
-  });
-
-  console.log(`✅ Response validated as: ${correct ? "CORRECT" : "INCORRECT"}`);
-}
 /* =========================================
    🆕 VALIDATION
 ========================================= */
+/**
+ * Verifica si todas las calificaciones son verdes.
+ */
+export function areAllRatingsGreen(round: Stage2Round): boolean {
+  const raters = Object.values(round.ratingTeams || {});
+  if (raters.length === 0) return false;
+
+  return raters.every(rater => rater.rating === "green");
+}
 
 /**
  * Valida (acepta o rechaza) la calificación de un equipo.
@@ -832,7 +895,6 @@ export async function validateRating(
   const rater = round.ratingTeams?.[teamId];
   if (!rater) throw new Error(`Team ${teamId} is not a rater`);
 
-
   const base = `${GAMES_ROOT}/${gameId}/stage2/rounds/${r}`;
   const now = Date.now();
 
@@ -845,16 +907,85 @@ export async function validateRating(
 }
 
 /**
+ * Valida si la respuesta fue correcta e indica si se usó ayuda.
+ * La decisión del docente sobre ayuda tiene prioridad absoluta.
+ * 
+ * ✅ NUEVO: Si todos calificaron verde, salta validation_ratings y va directo a results.
+ */
+export async function validateResponse(
+  gameId: string,
+  correct: boolean,
+  helpUsed: boolean | null
+): Promise<void> {
+  const snap = await get(ref(database, `${GAMES_ROOT}/${gameId}`));
+  const game = snap.val() as Game;
+  if (!game?.stage2) throw new Error("Stage 2 not found");
+
+  const r = game.stage2.currentRound;
+  const round = game.stage2.rounds?.[r];
+  if (!round) throw new Error("Round not found");
+
+  const base = `${GAMES_ROOT}/${gameId}/stage2/rounds/${r}`;
+  const now = Date.now();
+
+  // ✅ CORREGIDO: Asegurar que finalHelpUsed siempre sea booleano
+  const existingHelpUsed = round?.respondingTeam?.helpUsed ?? false;
+  const finalHelpUsed =
+    helpUsed === true ||
+    (helpUsed === false ? false : existingHelpUsed);
+
+  // ✅ NUEVO: Verificar si todos son verdes
+  const allGreen = areAllRatingsGreen(round);
+
+  if (allGreen && correct) {
+    // ✅ Todos verdes + respuesta correcta = auto-validar y saltar a results
+    console.log("✅ All ratings are GREEN - skipping validation_ratings");
+
+    // Auto-validar todos los verdes
+    const ratingUpdates: Record<string, any> = {};
+    const raters = Object.values(round.ratingTeams || {});
+    for (const rater of raters) {
+      ratingUpdates[`${base}/ratingTeams/${rater.teamId}/validated`] = true;
+    }
+
+    await update(ref(database), {
+      [`${base}/responseValidated`]: correct,
+      [`${base}/respondingTeam/helpUsed`]: finalHelpUsed,
+      ...ratingUpdates,
+      [`${GAMES_ROOT}/${gameId}/updatedAt`]: now,
+    });
+
+    // Calcular puntos directamente
+    await calculateAndAwardPoints(gameId);
+    return;
+  }
+
+  // Flujo normal: ir a validation_ratings
+  await update(ref(database), {
+    [`${base}/responseValidated`]: correct,
+    [`${base}/respondingTeam/helpUsed`]: finalHelpUsed,
+    [`${base}/phase`]: "validation_ratings",
+    [`${GAMES_ROOT}/${gameId}/updatedAt`]: now,
+  });
+
+  console.log(`✅ Response validated as: ${correct ? "CORRECT" : "INCORRECT"}`);
+  console.log(`✅ Help used confirmed: ${finalHelpUsed ? "YES (9 pts)" : "NO (12 pts)"}`);
+}
+
+/**
  * Verifica si todas las validaciones están completas.
- * Verde = auto-aceptado (no requiere validación manual)
- * Amarillo/Rojo = requiere validación manual (validated debe ser true o false)
+ * - Verde: automático (no requiere validación manual)
+ * - Sin calificar: automático (no requiere validación manual)
+ * - Amarillo/Rojo: requiere que validated sea true o false
  */
 export function isValidationComplete(round: Stage2Round): boolean {
   const raters = Object.values(round.ratingTeams || {});
 
   for (const rater of raters) {
-    // Verde: auto-aceptado, no necesita validación manual
-    if (rater.rating === "green") continue;
+    // Verde o sin calificar: auto-validado, no necesita validación manual
+    if (rater.rating === "green" || rater.rating === null || rater.rating === undefined) {
+      continue;
+    }
 
     // Amarillo/Rojo: debe tener validated = true o false
     if (rater.rating === "yellow" || rater.rating === "red") {
@@ -917,7 +1048,10 @@ export async function calculateAndAwardPoints(gameId: string): Promise<void> {
 
     // 1) Puntos por responder (cambio: sin ayuda = 12 pts)
     if (responding) {
-      const helpUsed = responding.helpStartedAt !== null;
+      // ✅ Determinar si se usó ayuda (con compatibilidad hacia atrás)
+      const helpUsed =
+        responding.helpUsed === true ||
+        (responding.helpUsed === undefined && responding.helpStartedAt !== null);
       const responsePoints = helpUsed ? 9 : 12; // ← CAMBIO (antes era 9 : 12)
       pointsAwarded[responding.teamId] = responsePoints;
     }
@@ -965,20 +1099,6 @@ export async function calculateAndAwardPoints(gameId: string): Promise<void> {
 
   console.log("✅ Points calculated and awarded. Phase → results");
 }
-
-/* =========================================
-   LEGACY / COMPATIBILITY
-========================================= */
-
-// ❌ OBSOLETAS (eran para calificación secuencial)
-// Las dejamos comentadas por si necesitás referencia
-
-// export async function setActiveRaterSolo(gameId: string) { ... }
-// export async function setActiveRaterWithHelp(gameId: string) { ... }
-// export async function submitActiveRaterRatingColor(...) { ... }
-// export async function advanceRaterOrFinish(gameId: string) { ... }
-// export async function getActiveRaterTeamId(gameId: string) { ... }
-// export async function setActiveRaterHelpRequested(...) { ... }
 
 /* =========================================
    UTILITIES

@@ -19,6 +19,7 @@ interface TeacherGameCardProps {
   myRating?: number | null;
   isLoading?: boolean;
   showActions?: boolean;
+  isAdmin?: boolean;  // ← NUEVO
 }
 
 export function TeacherGameCard({
@@ -33,6 +34,7 @@ export function TeacherGameCard({
   myRating,
   isLoading = false,
   showActions = true,
+  isAdmin = false,  // ← AGREGADO (Cambio 2)
 }: TeacherGameCardProps) {
   const { t } = useI18n();
   const { user } = useAuth();
@@ -398,26 +400,27 @@ export function TeacherGameCard({
                   {isPublic ? '🔒' : '🌐'}
                 </button>
               )}
-
-              {onDelete && (
-                <button
-                  onClick={handleDeleteClick}
-                  style={{
-                    padding: '10px 12px',
-                    fontSize: 14,
-                    fontWeight: 600,
-                    borderRadius: 8,
-                    border: 'none',
-                    backgroundColor: confirmDelete ? '#ef4444' : '#fee2e2',
-                    color: confirmDelete ? 'white' : '#dc2626',
-                    cursor: 'pointer',
-                  }}
-                  title={t.teacherLibrary.deleteGame}
-                >
-                  {confirmDelete ? t.common.confirm : '🗑️'}
-                </button>
-              )}
             </>
+          )}
+
+          {/* Delete - visible para owner O admin */}
+          {(isOwner || isAdmin) && onDelete && (
+            <button
+              onClick={handleDeleteClick}
+              style={{
+                padding: '10px 12px',
+                fontSize: 14,
+                fontWeight: 600,
+                borderRadius: 8,
+                border: 'none',
+                backgroundColor: confirmDelete ? '#ef4444' : (isAdmin && !isOwner ? '#fef3c7' : '#fee2e2'),
+                color: confirmDelete ? 'white' : (isAdmin && !isOwner ? '#b45309' : '#dc2626'),
+                cursor: 'pointer',
+              }}
+              title={isAdmin && !isOwner ? '🛡️ Admin: eliminar juego' : t.teacherLibrary.deleteGame}
+            >
+              {confirmDelete ? t.common.confirm : (isAdmin && !isOwner ? '🛡️' : '🗑️')}
+            </button>
           )}
 
           {/* Non-owner actions */}

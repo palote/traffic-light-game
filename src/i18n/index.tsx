@@ -3,14 +3,15 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { es } from './es';
-import type { TranslationKeys } from './es';
 import { en } from './en';
+import { pt } from './pt';
+import type { TranslationKeys } from './es';
 
 // ============================================
 // TIPOS
 // ============================================
 
-export type Language = 'es' | 'en';
+export type Language = 'es' | 'en' | 'pt';
 
 interface I18nContextType {
   language: Language;
@@ -25,7 +26,34 @@ interface I18nContextType {
 const translations: Record<Language, TranslationKeys> = {
   es,
   en,
+  pt: pt as unknown as TranslationKeys, // Cast necesario por diferencias menores
 };
+
+// ============================================
+// HELPER: idioma inicial
+// Prioridad: localStorage > navigator.language > 'en'
+// Clave: tlg_language
+// ============================================
+
+function getInitialLanguage(): Language {
+  // 1. Verificar localStorage
+  const saved = localStorage.getItem('tlg_language');
+  if (saved === 'es' || saved === 'en' || saved === 'pt') {
+    return saved;
+  }
+
+  // 2. Detectar del navegador
+  const browserLang = (navigator.language || navigator.languages?.[0] || '').toLowerCase();
+  if (browserLang.startsWith('es')) {
+    return 'es';
+  }
+  if (browserLang.startsWith('pt')) {
+    return 'pt';
+  }
+
+  // 3. Default
+  return 'en';
+}
 
 // ============================================
 // CONTEXTO
@@ -43,25 +71,16 @@ interface I18nProviderProps {
 }
 
 export function I18nProvider({ children, defaultLanguage }: I18nProviderProps) {
-  // Intentar recuperar del localStorage o usar default
   const [language, setLanguageState] = useState<Language>(() => {
     if (defaultLanguage) return defaultLanguage;
-    
-    const stored = localStorage.getItem('app_language');
-    if (stored === 'es' || stored === 'en') return stored;
-    
-    // Detectar idioma del navegador
-    const browserLang = navigator.language.split('-')[0];
-    return browserLang === 'es' ? 'es' : 'en';
+    return getInitialLanguage();
   });
 
-  // Guardar cambios en localStorage
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
-    localStorage.setItem('app_language', lang);
+    localStorage.setItem('tlg_language', lang);
   };
 
-  // Actualizar atributo lang del HTML
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
@@ -98,10 +117,29 @@ export function useI18n() {
 export function LanguageSelector({ compact = false }: { compact?: boolean }) {
   const { language, setLanguage } = useI18n();
   
+  // Ciclo de idiomas: es -> en -> pt -> es
+  const nextLanguage = (): Language => {
+    if (language === 'es') return 'en';
+    if (language === 'en') return 'pt';
+    return 'es';
+  };
+
+  const flags: Record<Language, string> = {
+    es: '🇪🇸',
+    en: '🇺🇸',
+    pt: '🇧🇷',
+  };
+
+  const labels: Record<Language, string> = {
+    es: 'ES',
+    en: 'EN',
+    pt: 'PT',
+  };
+  
   if (compact) {
     return (
       <button
-        onClick={() => setLanguage(language === 'es' ? 'en' : 'es')}
+        onClick={() => setLanguage(nextLanguage())}
         style={{
           padding: '6px 12px',
           fontSize: 14,
@@ -115,9 +153,9 @@ export function LanguageSelector({ compact = false }: { compact?: boolean }) {
           alignItems: 'center',
           gap: 6,
         }}
-        title={language === 'es' ? 'Switch to English' : 'Cambiar a Español'}
+        title="Change language"
       >
-        {language === 'es' ? '🇪🇸 ES' : '🇺🇸 EN'}
+        {flags[language]} {labels[language]}
       </button>
     );
   }
@@ -153,6 +191,21 @@ export function LanguageSelector({ compact = false }: { compact?: boolean }) {
         }}
       >
         🇺🇸 English
+      </button>
+      <button
+        onClick={() => setLanguage('pt')}
+        style={{
+          padding: '8px 16px',
+          fontSize: 14,
+          fontWeight: 600,
+          borderRadius: 8,
+          border: language === 'pt' ? '2px solid #6366f1' : '2px solid #e2e8f0',
+          backgroundColor: language === 'pt' ? '#eef2ff' : 'white',
+          color: language === 'pt' ? '#6366f1' : '#64748b',
+          cursor: 'pointer',
+        }}
+      >
+        🇧🇷 Português
       </button>
     </div>
   );

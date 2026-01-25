@@ -255,11 +255,11 @@ export function LibraryCard({ item, onUse, onDelete, onRefresh, isLoading, isAdm
         </div>
       )}
       
-      {/* CSV status button */}
-      {!hasCSV && (
+      {/* CSV status button - Reemplazar si ya existe */}
+      {isAdmin && (
         <button
           onClick={handleCSVClick}
-          disabled={isLinkingCSV || !isAdmin}
+          disabled={isLinkingCSV}
           style={{
             position: "absolute",
             top: 44,
@@ -269,13 +269,33 @@ export function LibraryCard({ item, onUse, onDelete, onRefresh, isLoading, isAdm
             fontWeight: 600,
             borderRadius: 4,
             border: "none",
-            backgroundColor: csvSuccess ? "#dcfce7" : isLinkingCSV ? "#e0e7ff" : "#fef3c7",
-            color: csvSuccess ? "#16a34a" : isLinkingCSV ? "#4f46e5" : "#b45309",
-            cursor: isAdmin && !isLinkingCSV ? "pointer" : "default",
+            backgroundColor: csvSuccess ? "#dcfce7" : isLinkingCSV ? "#e0e7ff" : hasCSV ? "#dbeafe" : "#fef3c7",
+            color: csvSuccess ? "#16a34a" : isLinkingCSV ? "#4f46e5" : hasCSV ? "#3b82f6" : "#b45309",
+            cursor: !isLinkingCSV ? "pointer" : "wait",
+          }}
+          title={hasCSV ? "Reemplazar CSV" : "Agregar CSV"}
+        >
+          {csvSuccess ? "✅ CSV" : isLinkingCSV ? "⏳..." : hasCSV ? "📊↻" : "📎 CSV"}
+        </button>
+      )}
+
+      {/* Mostrar advertencia solo para no-admin sin CSV */}
+      {!isAdmin && !hasCSV && (
+        <span
+          style={{
+            position: "absolute",
+            top: 44,
+            right: 12,
+            padding: "4px 10px",
+            fontSize: 10,
+            fontWeight: 600,
+            borderRadius: 4,
+            backgroundColor: "#fef3c7",
+            color: "#b45309",
           }}
         >
-          {csvSuccess ? "✅ CSV" : isLinkingCSV ? "⏳..." : isAdmin ? "📎 CSV" : "⚠️ Sin CSV"}
-        </button>
+          ⚠️ Sin CSV
+        </span>
       )}
 
       {/* Errors */}

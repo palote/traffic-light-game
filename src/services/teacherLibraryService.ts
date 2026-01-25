@@ -1,30 +1,30 @@
 // src/services/teacherLibraryService.ts
 // Servicio para biblioteca personal y compartida de docentes
 
-import { 
-  ref, 
-  push, 
-  set, 
-  get, 
-  update, 
+import {
+  ref,
+  push,
+  set,
+  get,
+  update,
   remove,
   query,
   orderByChild,
   equalTo,
   limitToLast,
 } from 'firebase/database';
-import { 
-  ref as storageRef, 
-  uploadString, 
+import {
+  ref as storageRef,
+  uploadString,
   getDownloadURL,
   deleteObject,
   getBlob,
 } from 'firebase/storage';
-import { database, storage } from '../firebase.config';
-import type { 
-  TeacherGame, 
-  NewTeacherGame, 
-  GameRating, 
+import { database, storage, auth } from '../firebase.config';
+import type {
+  TeacherGame,
+  NewTeacherGame,
+  GameRating,
   GameReport,
   ReportReason,
   TeacherLibraryFilters,
@@ -34,7 +34,6 @@ import { TEACHER_LIMITS } from '../types/teacherLibrary';
 // ============================================
 // CREAR / GUARDAR JUEGO
 // ============================================
-
 export async function saveTeacherGame(
   userId: string,
   userName: string,
@@ -42,6 +41,11 @@ export async function saveTeacherGame(
   gameData: NewTeacherGame,
   csvContent: string
 ): Promise<string> {
+  // ✅ DEBUG
+  console.log("🔍 saveTeacherGame called");
+  console.log("🔍 userId:", userId);
+  console.log("🔍 storagePath will be:", `teacher-games/${userId}/[gameId].csv`);
+
   // Verificar límite de juegos privados
   if (gameData.visibility === 'private') {
     const privateCount = await getPrivateGameCount(userId);
@@ -57,32 +61,51 @@ export async function saveTeacherGame(
 
   // Subir CSV a Storage
   const storagePath = `teacher-games/${userId}/${gameId}.csv`;
+  console.log("🔍 Attempting upload to:", storagePath);
+  console.log("🔍 Auth state:", auth.currentUser?.uid);
+
   const fileRef = storageRef(storage, storagePath);
-  await uploadString(fileRef, csvContent, 'raw');
+
+  try {
+    await uploadString(fileRef, csvContent, 'raw', {
+      contentType: 'text/csv;charset=utf-8'
+    });
+    console.log("✅ Upload successful");
+  } catch (uploadError: any) {
+    console.error("❌ Storage upload error:", {
+      code: uploadError.code,
+      message: uploadError.message,
+      serverResponse: uploadError.serverResponse,
+      storagePath,
+      userId,
+      authUid: auth.currentUser?.uid,
+    });
+    throw uploadError;
+  }
 
   // Contar preguntas
   const lines = csvContent.split('\n').filter(l => l.trim());
   const questionCount = Math.max(0, lines.length - 1); // -1 por header
 
-  // Crear documento
+  // Crear documento base
   const now = Date.now();
-  const game: TeacherGame = {
+  const gameBase = {
     id: gameId,
     ownerId: userId,
     ownerName: userName,
     ownerEmail: userEmail,
     visibility: gameData.visibility,
     title: gameData.title,
-    description: gameData.description,
+    description: gameData.description || '',
     gameMode: gameData.gameMode,
     language: gameData.language,
-    area: gameData.area,
-    subject: gameData.subject,
-    grade: gameData.grade,
-    level: gameData.level,
-    topic: gameData.topic,
-    mainContents: gameData.mainContents,
-    mainSkills: gameData.mainSkills,
+    area: gameData.area || '',
+    subject: gameData.subject || '',
+    grade: gameData.grade || '',
+    level: gameData.level || '',
+    topic: gameData.topic || '',
+    mainContents: gameData.mainContents || '',
+    mainSkills: gameData.mainSkills || '',
     storagePath,
     questionCount,
     ratingSum: 0,
@@ -93,8 +116,13 @@ export async function saveTeacherGame(
     reportCount: 0,
     createdAt: now,
     updatedAt: now,
-    ...(gameData.visibility === 'public' ? { publishedAt: now } : {}),
   };
+
+  // Agregar publishedAt solo si es público
+  const game: TeacherGame = {
+    ...gameBase,
+    ...(gameData.visibility === 'public' ? { publishedAt: now } : {}),
+  } as TeacherGame;
 
   await set(newGameRef, game);
 
@@ -115,7 +143,7 @@ export async function saveTeacherGame(
 export async function getMyGames(userId: string): Promise<TeacherGame[]> {
   const userGamesRef = ref(database, `userGames/${userId}`);
   const snapshot = await get(userGamesRef);
-  
+
   if (!snapshot.exists()) return [];
 
   const gameIds = Object.keys(snapshot.val());
@@ -134,14 +162,14 @@ export async function getMyGames(userId: string): Promise<TeacherGame[]> {
 export async function getCommunityGames(filters?: Partial<TeacherLibraryFilters>): Promise<TeacherGame[]> {
   const gamesRef = ref(database, 'teacherGames');
   const snapshot = await get(gamesRef);
-  
+
   if (!snapshot.exists()) return [];
 
   const allGames = Object.values(snapshot.val()) as TeacherGame[];
-  
+
   // Filtrar solo públicos y no reportados excesivamente
-  let games = allGames.filter(g => 
-    g.visibility === 'public' && 
+  let games = allGames.filter(g =>
+    g.visibility === 'public' &&
     g.reportCount < 5 // Ocultar si tiene muchos reportes
   );
 
@@ -164,7 +192,7 @@ export async function getCommunityGames(filters?: Partial<TeacherLibraryFilters>
     }
     if (filters.search) {
       const search = filters.search.toLowerCase();
-      games = games.filter(g => 
+      games = games.filter(g =>
         g.title.toLowerCase().includes(search) ||
         g.description.toLowerCase().includes(search) ||
         g.topic.toLowerCase().includes(search) ||
@@ -180,7 +208,7 @@ export async function getCommunityGames(filters?: Partial<TeacherLibraryFilters>
   } else if (sortBy === 'popular') {
     games.sort((a, b) => b.timesUsed - a.timesUsed);
   } else {
-    games.sort((a, b) => b.publishedAt! - a.publishedAt!);
+    games.sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0));
   }
 
   return games;
@@ -204,8 +232,16 @@ export async function updateTeacherGame(
   if (!game) throw new Error('Juego no encontrado');
   if (game.ownerId !== userId) throw new Error('No tenés permiso para editar este juego');
 
-  const updateData: Partial<TeacherGame> = {
-    ...updates,
+  // ✅ NUEVO: Limpiar undefined - Firebase no los acepta
+  const cleanUpdates: Record<string, any> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (value !== undefined) {
+      cleanUpdates[key] = value;
+    }
+  }
+
+  const updateData: Record<string, any> = {
+    ...cleanUpdates,
     updatedAt: Date.now(),
   };
 
@@ -215,7 +251,7 @@ export async function updateTeacherGame(
   }
 
   await update(ref(database, `teacherGames/${gameId}`), updateData);
-  
+
   // Actualizar índice si cambia visibilidad
   if (updates.visibility && updates.visibility !== game.visibility) {
     await update(ref(database, `userGames/${userId}/${gameId}`), {
@@ -224,10 +260,18 @@ export async function updateTeacherGame(
   }
 }
 
-export async function deleteTeacherGame(gameId: string, userId: string): Promise<void> {
+export async function deleteTeacherGame(
+  gameId: string,
+  oderId: string,
+  isAdmin: boolean = false  // ← NUEVO parámetro
+): Promise<void> {
   const game = await getGameById(gameId);
   if (!game) throw new Error('Juego no encontrado');
-  if (game.ownerId !== userId) throw new Error('No tenés permiso para eliminar este juego');
+
+  // Permitir si es owner O si es admin
+  if (game.ownerId !== oderId && !isAdmin) {
+    throw new Error('No tenés permiso para eliminar este juego');
+  }
 
   // Eliminar CSV de Storage
   try {
@@ -239,8 +283,12 @@ export async function deleteTeacherGame(gameId: string, userId: string): Promise
 
   // Eliminar de la base de datos
   await remove(ref(database, `teacherGames/${gameId}`));
-  await remove(ref(database, `userGames/${userId}/${gameId}`));
-  
+
+  // Si es el owner, también eliminar de userGames
+  // Si es admin borrando juego de otro, eliminar de userGames del owner original
+  const ownerToClean = game.ownerId;
+  await remove(ref(database, `userGames/${ownerToClean}/${gameId}`));
+
   // Eliminar ratings asociados
   const ratingsSnap = await get(ref(database, `gameRatings/${gameId}`));
   if (ratingsSnap.exists()) {
@@ -322,7 +370,8 @@ export async function getTeacherGameCSV(game: TeacherGame): Promise<File> {
 
 export async function rateGame(
   gameId: string,
-  oderId: string,
+  userId: string,
+  userEmail: string, // ← PARÁMETRO AGREGADO
   stars: number,
   comment?: string
 ): Promise<void> {
@@ -331,22 +380,23 @@ export async function rateGame(
   const game = await getGameById(gameId);
   if (!game) throw new Error('Juego no encontrado');
   if (game.visibility !== 'public') throw new Error('Solo se pueden calificar juegos públicos');
-  if (game.ownerId === oderId) throw new Error('No podés calificar tu propio juego');
+  if (game.ownerId === userId) throw new Error('No podés calificar tu propio juego');
 
   // Verificar si ya votó
-  const existingRating = await get(ref(database, `gameRatings/${gameId}/${oderId}`));
+  const existingRating = await get(ref(database, `gameRatings/${gameId}/${userId}`));
   const hadPreviousRating = existingRating.exists();
   const previousStars = hadPreviousRating ? (existingRating.val() as GameRating).stars : 0;
 
   // Guardar rating
   const rating: GameRating = {
-    oderId,
+    userId,  // ← CORRECTO
+    userEmail,
     gameId,
     stars,
-    comment,
     createdAt: Date.now(),
+    ...(comment ? { comment } : {}),
   };
-  await set(ref(database, `gameRatings/${gameId}/${oderId}`), rating);
+  await set(ref(database, `gameRatings/${gameId}/${userId}`), rating);
 
   // Actualizar promedio del juego
   let newSum = game.ratingSum;
@@ -361,6 +411,7 @@ export async function rateGame(
 
   const newAvg = newCount > 0 ? newSum / newCount : 0;
 
+  // ✅ CORREGIDO: La ruta debe ser `teacherGames`, no `games`
   await update(ref(database, `teacherGames/${gameId}`), {
     ratingSum: newSum,
     ratingCount: newCount,
@@ -396,7 +447,7 @@ export async function reportGame(
   const reportRef = ref(database, `gameReports/${gameId}/${userId}`);
   const report: GameReport = {
     id: `${gameId}_${userId}`,
-    oderId: userId,
+    userId: userId,
     gameId,
     reason,
     details,
@@ -418,7 +469,7 @@ export async function reportGame(
 async function getPrivateGameCount(userId: string): Promise<number> {
   const userGamesRef = ref(database, `userGames/${userId}`);
   const snapshot = await get(userGamesRef);
-  
+
   if (!snapshot.exists()) return 0;
 
   const games = Object.values(snapshot.val()) as Array<{ visibility: string }>;
@@ -432,11 +483,11 @@ export async function getGameStats(userId: string): Promise<{
   avgRating: number;
 }> {
   const games = await getMyGames(userId);
-  
+
   const privateCount = games.filter(g => g.visibility === 'private').length;
   const publicCount = games.filter(g => g.visibility === 'public').length;
   const totalUses = games.reduce((sum, g) => sum + (g.timesUsed || 0), 0);
-  
+
   const publicGames = games.filter(g => g.visibility === 'public' && g.ratingCount > 0);
   const avgRating = publicGames.length > 0
     ? publicGames.reduce((sum, g) => sum + g.ratingAvg, 0) / publicGames.length

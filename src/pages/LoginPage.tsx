@@ -9,7 +9,48 @@ import { useI18n, LanguageSelector } from "../i18n";
 export function LoginPage() {
   const navigate = useNavigate();
   const { user, loginWithGoogle, loading } = useAuth();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+
+  // Traducciones locales
+  const pageTexts = {
+    title: language === 'es' 
+      ? 'El Juego del Semáforo' 
+      : language === 'pt' 
+      ? 'O Jogo do Semáforo' 
+      : 'Traffic Light Game',
+    subtitle: language === 'es'
+      ? 'Juego educativo de competencia colaborativa'
+      : language === 'pt'
+      ? 'Jogo educativo de competição colaborativa'
+      : 'Collaborative competition educational game',
+    features: {
+      title: language === 'es' 
+        ? '✨ Características' 
+        : language === 'pt' 
+        ? '✨ Recursos' 
+        : '✨ Features',
+      items: language === 'es' 
+        ? [
+            'Creá juegos interactivos de preguntas',
+            'Competencia por equipos',
+            'Puntuación en tiempo real',
+            'Biblioteca de preguntas incluida',
+          ]
+        : language === 'pt'
+        ? [
+            'Crie jogos interativos de perguntas',
+            'Competição por equipes',
+            'Pontuação em tempo real',
+            'Biblioteca de perguntas incluída',
+          ]
+        : [
+            'Create interactive quiz games',
+            'Team-based competition',
+            'Real-time scoring',
+            'Question library included',
+          ],
+    },
+  };
 
   // Redirigir si ya está autenticado
   useEffect(() => {
@@ -75,21 +116,23 @@ export function LoginPage() {
           🚦
         </div>
 
+        {/* Título principal en el idioma seleccionado */}
         <h1 style={{
           margin: "0 0 8px 0",
           fontSize: 28,
           fontWeight: 800,
           color: "#1e293b",
         }}>
-          Traffic Light Game
+          {pageTexts.title}
         </h1>
 
+        {/* Subtítulo */}
         <p style={{
           margin: "0 0 32px 0",
           fontSize: 14,
           color: "#64748b",
         }}>
-          {t.auth.loginSubtitle}
+          {pageTexts.subtitle}
         </p>
 
         {/* Google Login Button */}
@@ -168,7 +211,7 @@ export function LoginPage() {
             color: "#475569",
             marginBottom: 12,
           }}>
-            ✨ Features
+            {pageTexts.features.title}
           </div>
           <ul style={{
             margin: 0,
@@ -177,10 +220,9 @@ export function LoginPage() {
             color: "#64748b",
             lineHeight: 1.8,
           }}>
-            <li>Create interactive quiz games</li>
-            <li>Team-based competition</li>
-            <li>Real-time scoring</li>
-            <li>Question library included</li>
+            {pageTexts.features.items.map((item, index) => (
+              <li key={index}>{item}</li>
+            ))}
           </ul>
         </div>
       </div>

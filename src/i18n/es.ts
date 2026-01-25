@@ -16,6 +16,7 @@ export const es = {
     back: "Atrás",
     next: "Siguiente",
     continue: "Continuar",
+    continueVerb: "Continuar",
     close: "Cerrar",
     search: "Buscar",
     filter: "Filtrar",
@@ -23,6 +24,15 @@ export const es = {
     yes: "Sí",
     no: "No",
     or: "o",
+
+    // Extras
+    retry: "Reintentar",
+    ok: "OK",
+    copy: "Copiar",
+
+    // Plurales usados en UI
+    teams: "equipos",
+    questions: "preguntas",
   },
 
   // ============================================
@@ -41,14 +51,103 @@ export const es = {
   // ============================================
   dashboard: {
     title: "Panel del Docente",
-    welcome: "¡Hola",
+    welcome: "¡Hola!",
+    teacherFallbackName: "Docente",
+
     createGame: "Crear nuevo juego",
+    createGameDesc: "Armá equipos y consignas para empezar a jugar en minutos.",
+
     library: "Biblioteca de preguntas",
+    libraryDesc: "Explorá juegos oficiales y de la comunidad e importalos al instante.",
+
     myGames: "Mis juegos",
+    active: "activos",
+
     noGames: "No tenés juegos activos",
     startFirst: "¡Creá tu primer juego!",
+
     selectGameMode: "Seleccioná el modo de juego",
     selectGameModeSubtitle: "Elegí según la edad de tus estudiantes",
+
+    // Games list
+    loadingGames: "Cargando juegos...",
+    noGamesCreated: "Todavía no creaste ningún juego.",
+    finishedGames: "juegos finalizados",
+    finishedGames: "juegos finalizados",
+    unnamedGame: "Juego sin nombre",
+
+    // Current mode panel
+    currentMode: "Modo actual",
+
+    // Footer
+    aboutThisProject: "Sobre este proyecto",
+
+    // Status labels (GameCard)
+    status: {
+      finished: "Finalizado",
+      stage0Proposals: "Stage 0 — Propuestas",
+      collectingProposals: "Recibiendo propuestas",
+      curatingProposals: "Curando propuestas",
+      stage1Playing: "Stage 1 — En juego",
+      transitionStage2: "Preparando Stage 2",
+      stage2Playing: "Stage 2 — En juego",
+      preparing: "Preparando",
+    },
+
+    // Relative time (GameCard)
+    time: {
+      minutesAgo: (n: number) => `hace ${n} min`,
+      hoursAgo: (n: number) => `hace ${n} h`,
+      daysAgo: (n: number) => `hace ${n} d`,
+    },
+  },
+
+  // ============================================
+  // JOIN (ALUMNOS)  ✅ ÚNICA DEFINICIÓN
+  // ============================================
+  join: {
+    appTitle: "Juego del Semáforo",
+
+    // Texto superior
+    welcomeBack: "¡Bienvenido de vuelta!",
+    enterRoomCode: "Ingresá el código de la sala",
+    selectTeam: "Seleccioná tu equipo",
+
+    // Sesión guardada
+    previousSessionFound: "Sesión anterior encontrada",
+    codeLabel: "Código",
+    reconnecting: "Reconectando...",
+    goBackToGame: "↩️ Volver al juego",
+    newSession: "Nuevo",
+
+    // Separador
+    orEnterNewCode: "o ingresá un código nuevo",
+
+    // Errores
+    couldntReconnect: "No se pudo reconectar. Intentá con el código de sala.",
+    codeMustBe6: "El código debe tener 6 caracteres",
+    invalidCode: "Código inválido",
+    lookupError: "Error al buscar el código. Intentá de nuevo.",
+    noTeamsConfigured: "Este juego no tiene equipos configurados",
+
+    // Botones / acciones
+    searching: "Buscando...",
+    findRoom: "Buscar sala →",
+    codeOnTeacherScreen: "El código está en la pantalla del docente",
+
+    // Banners de fase
+    proposalsActive: "Etapa de propuestas activa",
+    proposalsDesc: "Tu equipo va a crear consignas para el juego",
+    waitingTeacher: "Esperando al profesor",
+    waitingDesc: "El juego está siendo preparado",
+
+    // Botón volver
+    changeCode: "← Cambiar código",
+
+    // Texto del botón según fase
+    joinProposals: "¡Proponer consignas! 📝",
+    joinWaiting: "Entrar a la sala 🚪",
+    joinNormal: "¡Unirme! 🎮",
   },
 
   // ============================================
@@ -78,23 +177,24 @@ export const es = {
     step2: "Paso 2: Preguntas",
     step3: "Paso 3: Configurar Equipos",
     step4: "Paso 4: ¡Listo para Jugar!",
-    
+
     // Step 1
     language: "Idioma",
     spanish: "Español",
-    english: "English",
+    english: "Inglés",
     className: "Nombre de la clase",
     classNamePlaceholder: "3°A - Matemática",
     subject: "Materia",
     subjectPlaceholder: "Matemática",
     numTeams: "Cantidad de equipos",
     studentsPerTeam: "Alumnos por equipo",
-    
+
     // Stage 0
     stage0Section: "Etapa 0: Preparación (opcional)",
     stage0Enable: "Habilitar etapa de preparación grupal",
     stage0Desc: "Los equipos tendrán acceso a material de estudio antes de comenzar el juego.",
-    stage0Warning: "💡 ¿Primera vez jugando? Recomendamos saltar la Etapa 0 y usar un juego de la biblioteca. La Etapa 0 está pensada para estudiantes que ya conocen la dinámica del juego.",
+    stage0Warning:
+      "💡 ¿Primera vez jugando? Recomendamos saltar la Etapa 0 y usar un juego de la biblioteca. La Etapa 0 está pensada para estudiantes que ya conocen la dinámica del juego.",
     stage0MaterialType: "Tipo de material",
     stage0MaterialLink: "Link externo",
     stage0MaterialText: "Texto",
@@ -103,7 +203,7 @@ export const es = {
     stage0MaterialLinkPlaceholder: "https://docs.google.com/...",
     stage0MaterialTextPlaceholder: "Pegá aquí el texto que los equipos deben leer...",
     stage0GeneratePrompt: "¿Necesitás generar material? Usá este prompt con ChatGPT",
-    
+
     // Step 2
     chooseFromLibrary: "Elegir de la biblioteca",
     orUploadFile: "O subir archivo propio:",
@@ -111,7 +211,7 @@ export const es = {
     loadedFromLibrary: "Cargado desde biblioteca:",
     questionsLoaded: "preguntas cargadas",
     analyzing: "Analizando CSV...",
-    
+
     // Step 3
     enterNames: "Ingresá los nombres (uno por línea)",
     assignRandom: "Asignar aleatoriamente",
@@ -122,7 +222,7 @@ export const es = {
     duplicatesFound: "Duplicados detectados:",
     teamsConfigured: "Equipos configurados",
     moveStudentsHint: "Podés mover estudiantes entre equipos seleccionando el equipo destino",
-    
+
     // Step 4
     roomCode: "Código de sala",
     shareCode: "Compartí este código con tus estudiantes",
@@ -138,7 +238,7 @@ export const es = {
     title: "Biblioteca",
     pageTitle: "Bancos de Preguntas",
     pageSubtitle: "Explorá preguntas organizadas por nivel, área y materia.",
-    
+
     // Filters
     game: "Juego",
     grade: "Grado",
@@ -147,8 +247,8 @@ export const es = {
     searchPlaceholder: "Buscar por título, tema o contenido...",
     showing: "Mostrando",
     of: "de",
-    items: "items",
-    
+    items: "ítems",
+
     // Card
     use: "Usar",
     moreInfo: "Más info",
@@ -158,32 +258,147 @@ export const es = {
     questions: "preguntas",
     noFile: "Sin archivo",
     loading: "Cargando...",
-    
+
     // Stats
     withFile: "con archivo",
-    
+
     // Empty
-    noResults: "No se encontraron items con los filtros seleccionados.",
-    
+    noResults: "No se encontraron ítems con los filtros seleccionados.",
+
     // Admin
     adminTitle: "Administración",
     adminDesc: "Como administrador, podés subir nuevos bancos de preguntas.",
     uploadSingle: "Subir individual",
-    bulkUpload: "Bulk upload",
+    bulkUpload: "Carga masiva",
   },
 
   // ============================================
-  // STAGE 0
+  // STAGE 0 - PROPUESTAS DE CONSIGNAS
   // ============================================
   stage0: {
+    // Títulos
     title: "Etapa 0: Preparación",
     subtitle: "Lean el material antes de comenzar el juego",
+    teacherTitle: "Panel Etapa 0",
+    teacherSubtitle: "Revisá las propuestas de los equipos",
+
+    // Material
     teamName: "Equipo:",
     materialTitle: "Material de estudio",
     openLink: "Abrir material",
-    waiting: "Esperando que el docente inicie el juego...",
     noMaterial: "El docente no ha cargado material de preparación.",
     readCarefully: "Lean con atención, este contenido les ayudará en el juego.",
+
+    // Fases
+    phaseReading: "Fase: Lectura",
+    phaseProposing: "Fase: Propuestas",
+    phaseReviewing: "Fase: Revisión",
+    phaseResults: "Fase: Resultados",
+
+    // Acciones del docente
+    startProposals: "Iniciar propuestas",
+    startReview: "Iniciar revisión",
+    finishAndStart: "Finalizar y comenzar Etapa 1",
+
+    // Propuestas - Formulario
+    proposalsTitle: "Proponer Consignas",
+    proposalsSubtitle: "Propongan consignas basadas en el material",
+    proposalCount: "propuestas",
+    addProposal: "Agregar consigna",
+    proposalType: "Tipo de consigna",
+    questionText: "Tu consigna",
+    questionPlaceholder: "Escribí la consigna que proponés...",
+    hintLabel: "Pista para responder (opcional)",
+    hintPlaceholder: "Una pista que ayude a pensar la respuesta...",
+    relatedTopicLabel: "¿Con qué tema se relaciona?",
+    relatedTopicPlaceholder: "Ej: Ciclo del agua, Fracciones...",
+    submittedByLabel: "¿Quién la propone? (opcional)",
+    submittedByPlaceholder: "Nombre del integrante...",
+    submit: "Enviar consigna",
+
+    // Tipos de propuesta
+    typeComprehension: "📝 Comprensión",
+    typeComprehensionDesc: "¿Qué significa...? / Explicá con tus palabras...",
+    typeRelation: "🔗 Relación con otros temas",
+    typeRelationDesc: "¿Cómo se conecta con...? / ¿Qué similitudes hay con...?",
+    typeApplication: "🌍 Aplicación práctica",
+    typeApplicationDesc: "¿Dónde se ve en la vida real? / ¿Cómo usarías...?",
+    typeAnalysis: "🤔 Análisis / Opinión",
+    typeAnalysisDesc: "¿Por qué crees que...? / ¿Qué pasaría si...?",
+    typeProduction: "💡 Producción",
+    typeProductionDesc: "Dibujá / Representá / Ordená los pasos...",
+
+    // Estado de propuestas
+    pending: "Pendiente",
+    approved: "Aprobada",
+    rejected: "Rechazada",
+    edited: "Editada",
+
+    // Equipo listo
+    markReady: "Terminamos de proponer",
+    unmarkReady: "Queremos seguir proponiendo",
+    teamReady: "¡Equipo listo!",
+    waitingReview: "Esperando que el docente revise las propuestas...",
+    waiting: "Esperando que el docente inicie el juego...",
+
+    // Timer
+    timeRemaining: "Tiempo restante",
+
+    // Resultados
+    resultsTitle: "Resultados Etapa 0",
+    approvedCount: "consignas aprobadas",
+    bonusPoints: "puntos bonus",
+    waitingStart: "Esperando que el docente inicie Etapa 1...",
+
+    // Errores
+    errorEmpty: "Escribí una consigna",
+    errorRelated: "Indicá con qué tema se relaciona",
+    maxReached: "Ya enviaron el máximo de consignas",
+
+    // Panel docente - Filtros
+    filterAll: "Todas",
+    filterPending: "Pendientes",
+    filterApproved: "Aprobadas",
+    filterRejected: "Rechazadas",
+    allTeams: "Todos los equipos",
+
+    // Panel docente - Stats
+    totalProposals: "Total propuestas",
+    pendingCount: "Pendientes",
+    approvedCountLabel: "Aprobadas",
+    rejectedCount: "Rechazadas",
+    teamsReady: "Equipos listos",
+
+    // Panel docente - Acciones
+    proposedBy: "Propuesto por",
+    relatedTo: "Relacionado con",
+    hint: "Pista",
+    approve: "Aprobar",
+    reject: "Rechazar",
+    edit: "Editar",
+    saveEdit: "Guardar",
+    cancelEdit: "Cancelar",
+    bonusLabel: "Puntos bonus",
+
+    // Panel docente - Vacío
+    noProposals: "No hay propuestas todavía",
+    noProposalsFiltered: "No hay propuestas con estos filtros",
+
+    // Panel docente - Confirmaciones
+    pendingWarning: "Hay propuestas pendientes de revisar",
+    confirmStart: "¿Iniciar Etapa 1? Los puntos bonus se aplicarán automáticamente.",
+
+    // Guardar en biblioteca
+    saveToLibrary: "Guardar en mi biblioteca",
+    savedToLibrary: "¡Guardada en biblioteca!",
+
+    // Setup
+    enableProposals: "Habilitar propuestas de consignas",
+    enableProposalsDesc:
+      "Los equipos podrán proponer consignas basadas en el material. Vos decidís cuáles aprobar y cuántos puntos asignar.",
+    maxProposalsPerTeam: "Máx. consignas por equipo",
+    timeLimitOptional: "Tiempo límite (opcional)",
+    noLimit: "Sin límite",
   },
 
   // ============================================
@@ -219,6 +434,10 @@ export const es = {
     uploadCSV: "Subí un archivo CSV con preguntas.",
     assignStudents: "Asigná los estudiantes a los equipos.",
     enterStudentNames: "Primero ingresá los nombres de los estudiantes.",
+
+    deletingGame: "Error al eliminar el juego.",
+    notAuthorized: "No tenés permisos para hacer esto.",
+    notFound: "No encontrado.",
   },
 
   // ============================================
@@ -231,6 +450,29 @@ export const es = {
     "6°": "6° Primaria",
     "7°": "7° Primaria",
     secondary: "Secundario",
+  },
+
+  // ============================================
+  // CSV PARSER (warnings/errors por code)
+  // ============================================
+  csv: {
+    warnings: {
+      noValidHeadersFallback:
+        "ℹ️ Este CSV no tenía encabezados válidos. Se interpretaron columnas por posición y se generaron IDs si faltaban.",
+      encodingIssuesPossible:
+        "⚠️ El archivo puede tener problemas de encoding (acentos incorrectos). Considerá guardarlo como UTF-8.",
+      repeatedHeaderIgnored: "Fila {{rowNumber}}: encabezado repetido (se ignoró).",
+      missingQuestionTextIgnored: "Fila {{rowNumber}}: sin texto de pregunta (se ignoró).",
+      invalidSuggestedStageDefaulted:
+        "Fila {{rowNumber}}: suggestedStage inválido (\"{{value}}\"). Se usó Stage {{defaultStage}}.",
+    },
+    errors: {
+      emptyCsvFile: "El archivo CSV está vacío.",
+      noValidQuestionsFound: "No se encontraron preguntas válidas en el CSV.",
+      papaparseError: "Error al leer el CSV: {{message}} (fila {{row}}).",
+      cannotReadCsv: "No se pudo leer el CSV: {{message}}.",
+      cannotReadCsvFallback: "No se pudo leer el CSV (fallback): {{message}}.",
+    },
   },
 
   // ============================================
@@ -267,8 +509,8 @@ export const es = {
     preparingRound: "Preparando la siguiente ronda...",
     viewTeam: "Ver Equipo",
     viewClassroom: "Vista Aula",
-    startingStage2: "Iniciando Stage 2...",
-    errorStartingStage2: "Error al iniciar Stage 2",
+    startingStage2: "Iniciando Etapa 2...",
+    errorStartingStage2: "Error al iniciar Etapa 2",
     resetConfirm: "¿Resetear TODOS los equipos a ronda 1? Perderán todo el progreso.",
     resetSuccess: "Juego reseteado. Todos los equipos vuelven a ronda 1.",
     resetError: "Error al resetear el juego",
@@ -288,7 +530,7 @@ export const es = {
   // ADMIN
   // ============================================
   admin: {
-    title: "Admin Metrics",
+    title: "Métricas de administración",
     downloadExcel: "Descargar Excel",
     teachers: "Docentes",
     totalSessions: "Sesiones totales",
@@ -300,7 +542,7 @@ export const es = {
     lastLogin: "Último login",
     lastAccess: "Último acceso",
     noData: "No hay datos de docentes todavía",
-    backToSetup: "Volver a Setup",
+    backToSetup: "Volver a Configuración",
     accessDenied: "Acceso denegado",
     authDisabled: "El sistema de autenticación está desactivado.",
     enableAuth: "Activá VITE_AUTH_REQUIRED=true para acceder a métricas.",
@@ -308,7 +550,7 @@ export const es = {
     verifyingPermissions: "Verificando permisos de administrador...",
     restrictedAccess: "Acceso restringido",
     adminsOnly: "Esta página es solo para administradores.",
-    
+
     // Upload page
     uploadTitle: "Subir nuevo CSV",
     bankTitle: "Título del banco de preguntas",
@@ -336,13 +578,13 @@ export const es = {
     myGames: "Mis Juegos",
     community: "Comunidad",
     official: "Biblioteca Oficial",
-    
+
     // Stats
     privateGames: "Juegos privados",
     publicGames: "Juegos públicos",
     totalUses: "Usos totales",
     avgRating: "Rating promedio",
-    
+
     // Actions
     saveGame: "Guardar juego",
     editGame: "Editar juego",
@@ -351,13 +593,13 @@ export const es = {
     makePublic: "Hacer público",
     makePrivate: "Hacer privado",
     useGame: "Usar este juego",
-    
+
     // Visibility
     private: "Privado",
     public: "Público",
     onlyYou: "Solo vos podés ver este juego",
     everyoneCanSee: "Visible para toda la comunidad",
-    
+
     // Rating
     rate: "Calificar",
     ratings: "calificaciones",
@@ -365,7 +607,7 @@ export const es = {
     yourRating: "Tu calificación",
     thankYou: "¡Gracias por calificar!",
     cantRateOwn: "No podés calificar tu propio juego",
-    
+
     // Report
     report: "Reportar",
     reportGame: "Reportar juego",
@@ -378,27 +620,27 @@ export const es = {
     reportDetails: "Detalles (opcional)",
     reportSubmitted: "Reporte enviado. Gracias por ayudar a mantener la comunidad.",
     alreadyReported: "Ya reportaste este juego",
-    
+
     // Copy
     copySuccess: "¡Juego copiado a tu biblioteca!",
     copyAsPrivate: "Se guardó como privado. Podés editarlo y publicarlo cuando quieras.",
-    
+
     // Limits
     privateLimitReached: "Alcanzaste el límite de juegos privados",
     privateLimitDesc: "Hacé público algún juego o eliminá uno para crear más.",
-    
+
     // Empty states
     noMyGames: "Todavía no guardaste ningún juego",
     noMyGamesDesc: "Creá un juego y guardalo para usarlo después",
     noCommunityGames: "No hay juegos de la comunidad con estos filtros",
     noCommunityGamesDesc: "Probá cambiar los filtros o sé el primero en compartir",
-    
+
     // Sort
     sortBy: "Ordenar por",
     recent: "Más recientes",
     rating: "Mejor calificados",
     popular: "Más usados",
-    
+
     // Form
     gameTitle: "Título del juego",
     gameTitlePlaceholder: "Ej: Quiz de Fracciones",
@@ -406,17 +648,17 @@ export const es = {
     gameDescriptionPlaceholder: "Describí de qué trata el juego y para quién está pensado...",
     selectVisibility: "¿Querés compartirlo con la comunidad?",
     visibilityNote: "Podés cambiar la visibilidad después",
-    
+
     // Confirmations
     confirmDelete: "¿Estás seguro de eliminar este juego?",
     confirmDeleteDesc: "Esta acción no se puede deshacer.",
     confirmMakePublic: "¿Publicar este juego?",
     confirmMakePublicDesc: "Será visible para todos los docentes de la comunidad.",
-    
+
     // Author
     by: "por",
     you: "vos",
-    
+
     // Usage
     timesUsed: "veces usado",
     timesCopied: "veces copiado",
@@ -428,30 +670,30 @@ export const es = {
   promptGenerator: {
     title: "Generador de Consignas con IA",
     subtitle: "Creá un prompt optimizado para generar consignas educativas",
-    
+
     // Steps
     step1: "Nivel y Configuración",
     step2: "¿Sobre qué tema?",
     step3: "Ajustes Avanzados",
-    
+
     // Level
     level: "Nivel educativo",
     primary: "Primaria",
     secondary: "Secundaria",
     grade: "Grado/Año",
-    
+
     // Language
     promptLanguage: "Idioma del juego",
     spanish: "Español",
-    english: "English",
-    
+    english: "Inglés",
+
     // Categories
     category: "Categoría de contenido",
     subject: "Materia curricular",
     history: "Hecho histórico",
     book: "Libro",
     fun: "Película/Serie",
-    
+
     // Selection
     selectSubject: "Seleccioná una materia",
     selectEvent: "Seleccioná un hecho histórico",
@@ -459,7 +701,7 @@ export const es = {
     selectMedia: "Seleccioná una película o serie",
     other: "Otro (especificar)",
     customPlaceholder: "Escribí el tema...",
-    
+
     // Filters for lists
     showAll: "Mostrar todos",
     forPrimary: "Para primaria",
@@ -470,12 +712,12 @@ export const es = {
     movies: "Películas",
     series: "Series",
     documentaries: "Documentales",
-    
+
     // Advanced settings
     advancedSettings: "Ajustes avanzados",
     totalQuestions: "Cantidad de consignas",
-    stage1Production: "% Producción en Stage 1",
-    stage2Production: "% Producción en Stage 2",
+    stage1Production: "% Producción en Etapa 1",
+    stage2Production: "% Producción en Etapa 2",
     subtopicsInclude: "Subtemas a INCLUIR",
     subtopicsExclude: "Subtemas a EXCLUIR",
     subtopicsPlaceholder: "Separar con comas...",
@@ -483,20 +725,22 @@ export const es = {
     practical: "Más prácticas",
     analytical: "Más analíticas",
     mixed: "Mixtas",
-    
+
     // Stage explanation
-    stageExplanation: "¿Qué son Stage 1 y Stage 2?",
-    stage1Title: "Stage 1 - Preparación Interna",
-    stage1Desc: "NO es competitivo. Cada equipo trabaja internamente para nivelarse. Las consignas son introductorias y diagnósticas. Los errores son oportunidades de aprendizaje grupal.",
-    stage2Title: "Stage 2 - Competencia Colaborativa",
-    stage2Desc: "Competencia entre equipos. Consignas más desafiantes y de producción. Se aplica el conocimiento construido en Stage 1. Colaboración interna + competencia externa.",
-    
+    stageExplanation: "¿Qué son Etapa 1 y Etapa 2?",
+    stage1Title: "Etapa 1 - Preparación Interna",
+    stage1Desc:
+      "NO es competitivo. Cada equipo trabaja internamente para nivelarse. Las consignas son introductorias y diagnósticas. Los errores son oportunidades de aprendizaje grupal.",
+    stage2Title: "Etapa 2 - Competencia Colaborativa",
+    stage2Desc:
+      "Competencia entre equipos. Consignas más desafiantes y de producción. Se aplica el conocimiento construido en Etapa 1. Colaboración interna + competencia externa.",
+
     // Actions
     generatePrompt: "Generar Prompt",
     copyToClipboard: "Copiar al portapapeles",
     openInGemini: "Abrir en Gemini",
     copied: "¡Copiado!",
-    
+
     // Presets
     savedPresets: "Configuraciones guardadas",
     savePreset: "Guardar configuración",
@@ -507,142 +751,15 @@ export const es = {
     noPresets: "No hay configuraciones guardadas",
     maxPresetsReached: "Máximo 5 configuraciones. Se eliminará la más antigua.",
     presetSaved: "¡Configuración guardada!",
-    
+
     // Preview
     previewTitle: "Vista previa del prompt",
     promptReady: "Tu prompt está listo",
-    promptReadyDesc: "Copialo y pegalo en Gemini, ChatGPT u otro asistente de IA para generar las consignas.",
-    
+    promptReadyDesc:
+      "Copialo y pegalo en Gemini, ChatGPT u otro asistente de IA para generar las consignas.",
+
     // Validation
     selectContent: "Seleccioná un contenido para continuar",
-  },
-
-  // ============================================
-  // STAGE 0 - PROPUESTAS DE CONSIGNAS
-  // ============================================
-  stage0: {
-    // Títulos
-    title: "Etapa 0: Preparación",
-    subtitle: "Lean el material antes de comenzar el juego",
-    teacherTitle: "Panel Stage 0",
-    teacherSubtitle: "Revisá las propuestas de los equipos",
-    
-    // Material
-    teamName: "Equipo:",
-    materialTitle: "Material de estudio",
-    openLink: "Abrir material",
-    noMaterial: "El docente no ha cargado material de preparación.",
-    readCarefully: "Lean con atención, este contenido les ayudará en el juego.",
-    
-    // Fases
-    phaseReading: "Fase: Lectura",
-    phaseProposing: "Fase: Propuestas",
-    phaseReviewing: "Fase: Revisión",
-    phaseResults: "Fase: Resultados",
-    
-    // Acciones del docente
-    startProposals: "Iniciar propuestas",
-    startReview: "Iniciar revisión",
-    finishAndStart: "Finalizar y comenzar Stage 1",
-    
-    // Propuestas - Formulario
-    proposalsTitle: "Proponer Consignas",
-    proposalsSubtitle: "Propongan consignas basadas en el material",
-    proposalCount: "propuestas",
-    addProposal: "Agregar consigna",
-    proposalType: "Tipo de consigna",
-    questionText: "Tu consigna",
-    questionPlaceholder: "Escribí la consigna que proponés...",
-    hintLabel: "Pista para responder (opcional)",
-    hintPlaceholder: "Una pista que ayude a pensar la respuesta...",
-    relatedTopicLabel: "¿Con qué tema se relaciona?",
-    relatedTopicPlaceholder: "Ej: Ciclo del agua, Fracciones...",
-    submittedByLabel: "¿Quién la propone? (opcional)",
-    submittedByPlaceholder: "Nombre del integrante...",
-    submit: "Enviar consigna",
-    
-    // Tipos de propuesta
-    typeComprehension: "📝 Comprensión",
-    typeComprehensionDesc: "¿Qué significa...? / Explicá con tus palabras...",
-    typeRelation: "🔗 Relación con otros temas",
-    typeRelationDesc: "¿Cómo se conecta con...? / ¿Qué similitudes hay con...?",
-    typeApplication: "🌍 Aplicación práctica",
-    typeApplicationDesc: "¿Dónde se ve en la vida real? / ¿Cómo usarías...?",
-    typeAnalysis: "🤔 Análisis / Opinión",
-    typeAnalysisDesc: "¿Por qué crees que...? / ¿Qué pasaría si...?",
-    typeProduction: "💡 Producción",
-    typeProductionDesc: "Dibujá / Representá / Ordená los pasos...",
-    
-    // Estado de propuestas
-    pending: "Pendiente",
-    approved: "Aprobada",
-    rejected: "Rechazada",
-    edited: "Editada",
-    
-    // Equipo listo
-    markReady: "Terminamos de proponer",
-    unmarkReady: "Queremos seguir proponiendo",
-    teamReady: "¡Equipo listo!",
-    waitingReview: "Esperando que el docente revise las propuestas...",
-    waiting: "Esperando que el docente inicie el juego...",
-    
-    // Timer
-    timeRemaining: "Tiempo restante",
-    
-    // Resultados
-    resultsTitle: "Resultados Stage 0",
-    approvedCount: "consignas aprobadas",
-    bonusPoints: "puntos bonus",
-    waitingStart: "Esperando que el docente inicie Stage 1...",
-    
-    // Errores
-    errorEmpty: "Escribí una consigna",
-    errorRelated: "Indicá con qué tema se relaciona",
-    maxReached: "Ya enviaron el máximo de consignas",
-    
-    // Panel docente - Filtros
-    filterAll: "Todas",
-    filterPending: "Pendientes",
-    filterApproved: "Aprobadas",
-    filterRejected: "Rechazadas",
-    allTeams: "Todos los equipos",
-    
-    // Panel docente - Stats
-    totalProposals: "Total propuestas",
-    pendingCount: "Pendientes",
-    approvedCountLabel: "Aprobadas",
-    rejectedCount: "Rechazadas",
-    teamsReady: "Equipos listos",
-    
-    // Panel docente - Acciones
-    proposedBy: "Propuesto por",
-    relatedTo: "Relacionado con",
-    hint: "Pista",
-    approve: "Aprobar",
-    reject: "Rechazar",
-    edit: "Editar",
-    saveEdit: "Guardar",
-    cancelEdit: "Cancelar",
-    bonusLabel: "Puntos bonus",
-    
-    // Panel docente - Vacío
-    noProposals: "No hay propuestas todavía",
-    noProposalsFiltered: "No hay propuestas con estos filtros",
-    
-    // Panel docente - Confirmaciones
-    pendingWarning: "Hay propuestas pendientes de revisar",
-    confirmStart: "¿Iniciar Stage 1? Los puntos bonus se aplicarán automáticamente.",
-    
-    // Guardar en biblioteca
-    saveToLibrary: "Guardar en mi biblioteca",
-    savedToLibrary: "¡Guardada en biblioteca!",
-    
-    // Setup
-    enableProposals: "Habilitar propuestas de consignas",
-    enableProposalsDesc: "Los equipos podrán proponer consignas basadas en el material. Vos decidís cuáles aprobar y cuántos puntos asignar.",
-    maxProposalsPerTeam: "Máx. consignas por equipo",
-    timeLimitOptional: "Tiempo límite (opcional)",
-    noLimit: "Sin límite",
   },
 
   // ============================================
@@ -651,6 +768,53 @@ export const es = {
   protectedRoute: {
     verifyingSession: "Verificando sesión...",
   },
-};
+  // ============================================
+  // REFERRAL PAGE
+  // ============================================
+  referral: {
+    title: "Referir a un colega",
+    subtitle: "Ayudanos a crecer compartiendo el Juego del Semáforo con otros educadores",
+    referredName: "Nombre del colega",
+    referredEmail: "Email del colega",
+    referredSchool: "Escuela/Institución",
+    message: "Mensaje personal (opcional)",
+    messagePlaceholder: "¿Por qué creés que le interesaría?",
+    submit: "Enviar referido",
+    sending: "Enviando...",
+    successTitle: "¡Gracias por tu referido!",
+    successMessage: "Vamos a contactar a tu colega. Cuando se registre, recibirás tu recompensa.",
+    rewards: "Tu recompensa",
+    rewardsDetail: "🎴 Kit de tarjetas PDF + 🌟 Insignia de colaborador",
+    errorMessage: "Hubo un error. Por favor intentá de nuevo.",
+    backToDashboard: "Volver al inicio",
+  },
+
+  // ============================================
+  // WEBINAR PAGE
+  // ============================================
+  webinar: {
+    title: "Registro para Webinar",
+    noWebinar: "No hay webinars programados",
+    noWebinarDesc: "Volvé pronto para ver los próximos eventos.",
+    dateLabel: "Fecha y hora",
+    name: "Tu nombre",
+    email: "Tu email",
+    school: "Escuela/Institución",
+    experience: "Experiencia con el Juego del Semáforo",
+    experienceNone: "Nunca lo usé",
+    experienceExplored: "Lo exploré un poco",
+    experienceUsed: "Ya lo usé en clase",
+    experienceRegular: "Lo uso regularmente",
+    questions: "¿Qué te gustaría aprender? (opcional)",
+    questionsPlaceholder: "Temas que te interesen o dudas que tengas...",
+    submit: "Registrarme",
+    sending: "Registrando...",
+    successTitle: "¡Registro confirmado!",
+    successMessage: "Te enviamos un email con los detalles del webinar.",
+    successReminder: "📅 Agregá el evento a tu calendario",
+    errorMessage: "Hubo un error. Por favor intentá de nuevo.",
+    backToDashboard: "Volver al inicio",
+  },
+} as const;
 
 export type TranslationKeys = typeof es;

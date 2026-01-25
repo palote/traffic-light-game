@@ -1,8 +1,8 @@
 // src/contexts/AuthContext.tsx
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, useRef } from "react";
 
-import type { User } from "firebase/auth"; // ✅ type-only import
+import type { User } from "firebase/auth";
 
 import {
   onAuthStateChanged,
@@ -16,30 +16,22 @@ import {
 import { auth, database } from "../firebase.config";
 import { ref, get } from "firebase/database";
 
-// ✅ Métricas docentes (Realtime DB) — no toca lógica del juego
 import { startTeacherSession, endTeacherSession } from "../services/metricsService";
 
 export type AuthContextValue = {
   user: User | null;
   loading: boolean;
   authRequired: boolean;
-
-  // ✅ NUEVO: admin flag (para dashboard /admin/metrics)
   isAdmin: boolean;
   adminLoading: boolean;
-
-  // email/password
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-
-  // social login
   loginWithGoogle: () => Promise<void>;
 };
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-// ✅ Hook cómodo (no rompe nada existente)
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
@@ -49,7 +41,6 @@ export function useAuth(): AuthContextValue {
 function getAuthRequiredFlag(): boolean {
   return true;
 }
-
 
 function formatFirebaseError(err: unknown): string {
   const anyErr = err as any;
@@ -69,13 +60,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // ✅ Métricas
   const [sessionId, setSessionId] = useState<string | null>(null);
-
-  // ✅ Admin flag
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminLoading, setAdminLoading] = useState(false);
+
+  // Refs para acceder en event listeners
+  const userRef = useRef<User | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+
+  // Mantener refs sincronizados
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
 
   // -----------------------
   // Auth State
@@ -94,7 +94,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(u);
       setLoading(false);
 
-      // ✅ Métricas: iniciar sesión
       if (u) {
         try {
           const sid = await startTeacherSession(u);
@@ -112,7 +111,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [authRequired]);
 
   // -----------------------
-  // Admin flag (aislado)
+  // Tracking de cierre de pestaña/navegador
+  // -----------------------
+  useEffect(() => {
+    if (!authRequired) return;
+
+    const handleBeforeUnload = () => {
+      const uid = userRef.current?.uid;
+      const sid = sessionIdRef.current;
+
+      if (uid && sid) {
+        // Usar sendBeacon para envío asíncrono confiable
+        const url = `https://traffic-ligths-game-default-rtdb.firebaseio.com/metrics/teachers/${uid}/sessions/${sid}.json`;
+        const now = Date.now();
+        
+        // Leer loginAt del sessionStorage para calcular duración
+        const loginAtStr = sessionStorage.getItem(`session_loginAt_${sid}`);
+        const loginAt = loginAtStr ? parseInt(loginAtStr, 10) : null;
+        const durationSec = loginAt ? Math.max(0, Math.floor((now - loginAt) / 1000)) : null;
+
+        const data = JSON.stringify({
+          logoutAt: now,
+          ...(durationSec !== null ? { durationSec } : {}),
+        });
+
+        // sendBeacon es más confiable que fetch en beforeunload
+        navigator.sendBeacon(url, data);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      // Opcional: también trackear cuando la pestaña se oculta por mucho tiempo
+      if (document.visibilityState === "hidden") {
+        // Guardar timestamp para detectar sesiones abandonadas
+        const sid = sessionIdRef.current;
+        if (sid) {
+          sessionStorage.setItem(`session_lastVisible_${sid}`, Date.now().toString());
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [authRequired]);
+
+  // -----------------------
+  // Guardar loginAt en sessionStorage para cálculo de duración
+  // -----------------------
+  useEffect(() => {
+    if (sessionId) {
+      // Guardar el momento de inicio para calcular duración en beforeunload
+      const now = Date.now();
+      sessionStorage.setItem(`session_loginAt_${sessionId}`, now.toString());
+    }
+  }, [sessionId]);
+
+  // -----------------------
+  // Admin flag
   // -----------------------
   useEffect(() => {
     let cancelled = false;
@@ -171,13 +231,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     if (!authRequired) return;
 
-    // ✅ Métricas: cerrar sesión antes de salir
     try {
       if (user?.uid && sessionId) {
         await endTeacherSession(user.uid, sessionId);
       }
     } catch (e) {
       console.warn("⚠️ metrics endTeacherSession failed:", e);
+    }
+
+    // Limpiar sessionStorage
+    if (sessionId) {
+      sessionStorage.removeItem(`session_loginAt_${sessionId}`);
+      sessionStorage.removeItem(`session_lastVisible_${sessionId}`);
     }
 
     await signOut(auth);

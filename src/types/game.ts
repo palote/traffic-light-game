@@ -239,8 +239,14 @@ export interface Stage2RespondingTeam {
   helpRequested: boolean;
   helpStartedAt: number | null;
   helpDuration: number;
-
-  helpRemainingSec: number | null;
+  
+  // ✅ CORREGIDO: helpRemainingSec debe ser number (no null)
+  // - Cuando no hay tiempo restante, es 0
+  // - Cuando no hay ayuda activa, es helpDuration (ej: 60)
+  helpRemainingSec: number;
+  
+  // ✅ CLAVE: indica si el docente CONFIRMÓ que usaron ayuda
+  helpUsed?: boolean; // ? = opcional (para compatibilidad con rondas antiguas)
 
   responseGiven: boolean;
 }

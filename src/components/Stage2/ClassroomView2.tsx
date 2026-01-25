@@ -1,5 +1,9 @@
 // src/components/Stage2/ClassroomViewImproved.tsx
-// Versión mejorada del ClassroomView para Stage 2 con panel de progreso
+// Versión corregida: "Ronda X de Y" calculado dinámicamente
+// ✅ Actualizado con:
+//   - Tarea 5: Leyenda de colores (🟩🟨🟥⬜)
+//   - Tarea 6: Estado "Pendiente" por equipo
+//   - Validación global con validateAllRatings (según Claude)
 
 import { useEffect, useMemo, useState } from "react";
 import { ref, onValue, update } from "firebase/database";
@@ -13,6 +17,7 @@ import {
   getRoundSummary,
 } from "../../services/stage2ResultsHelpers";
 import { useAuth } from "../../hooks/useAuth";
+import { useI18n } from "../../i18n";
 import type { Game, Team, Question } from "../../types/game";
 import {
   startStage2Round,
@@ -35,13 +40,13 @@ import {
   validateResponse,
   isValidationComplete,
   calculateAndAwardPoints,
+  validateAllRatings, // ✅ Importado
 } from "../../services/stage2Repository";
 import {
   startCountdownMusic,
   stopCountdownMusic,
   pauseCountdownMusic,
 } from "../../hooks/useCountdownMusic";
-
 
 interface ClassroomViewProps {
   gameId: string;
@@ -52,10 +57,69 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
   const [now, setNow] = useState(() => Date.now());
   const [ratingProgress, setRatingProgress] = useState<{ rated: number; total: number } | null>(null);
   const [currentJustifyingTeamId, setCurrentJustifyingTeamId] = useState<string | null>(null);
-
-  // 🆕 Toggle para mostrar/ocultar panel de progreso
   const [showProgressPanel, setShowProgressPanel] = useState(true);
   const { logout, authRequired } = useAuth();
+  const { language } = useI18n();
+  const [helpConfirmed, setHelpConfirmed] = useState<boolean | null>(null);
+
+  // --- INICIO: ColorLegend (Tarea 5) ---
+  const ColorLegend = () => {
+    const legendTexts = {
+      green: language === 'es' ? 'Correcto' : language === 'pt' ? 'Correto' : 'Correct',
+      yellow: language === 'es' ? 'Parcial' : language === 'pt' ? 'Parcial' : 'Partial',
+      red: language === 'es' ? 'Incorrecto' : language === 'pt' ? 'Incorreto' : 'Incorrect',
+      noRating: language === 'es' ? 'Sin calificar' : language === 'pt' ? 'Sem avaliar' : 'Not rated',
+    };
+
+    return (
+      <div style={{
+        display: 'flex',
+        gap: '16px',
+        padding: '10px 16px',
+        backgroundColor: '#f0f9ff',
+        borderRadius: '10px',
+        fontSize: '14px',
+        marginBottom: '20px',
+        flexWrap: 'wrap',
+        border: '1px solid #bae6fd'
+      }}>
+        <span>🟩 {legendTexts.green}</span>
+        <span>🟨 {legendTexts.yellow}</span>
+        <span>🟥 {legendTexts.red}</span>
+        <span>⬜ {legendTexts.noRating}</span>
+      </div>
+    );
+  };
+  // --- FIN: ColorLegend ---
+
+  // Textos ya existentes (mantenidos)
+  const colorTexts = useMemo(() => ({
+    green: language === 'es' ? 'Verde (correcto)' :
+      language === 'pt' ? 'Verde (correto)' :
+        'Green (correct)',
+    yellow: language === 'es' ? 'Amarillo (parcial)' :
+      language === 'pt' ? 'Amarelo (parcial)' :
+        'Yellow (partial)',
+    red: language === 'es' ? 'Rojo (incorrecto)' :
+      language === 'pt' ? 'Vermelho (incorreto)' :
+        'Red (incorrect)',
+  }), [language]);
+
+  // --- NUEVO: Texto de estado de calificación (Tarea 6) ---
+  const ratingStatusText = useMemo(() => ({
+    rated: language === 'es' ? 'Calificó' : language === 'pt' ? 'Avaliou' : 'Rated',
+    pending: language === 'es' ? '⏳ Pendiente' : language === 'pt' ? '⏳ Pendente' : '⏳ Pending',
+  }), [language]);
+
+  // ✅ PASO 1: Calcular total de rondas dinámicamente
+  const stage2Questions = useMemo(() => {
+    if (!game?.questions) return [];
+    const questions = Object.values(game.questions);
+    return questions.filter((q: any) => q.suggestedStage === 2);
+  }, [game?.questions]);
+
+  const totalStage2Rounds = stage2Questions.length;
+  const currentRoundNumber = (game?.stage2?.currentRound ?? 0) + 1;
 
   // 1) Suscripción al juego
   useEffect(() => {
@@ -65,11 +129,11 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
     });
     return () => unsub();
   }, [gameId]);
-  // ✅ MÉTRICA: último acceso del docente a este juego (1 sola vez por carga)
+
+  // ✅ MÉTRICA: último acceso del docente
   useEffect(() => {
     const u = auth.currentUser;
     if (!u?.uid) return;
-
     markGameAccess(u.uid, gameId).catch((e) => {
       console.warn("⚠️ metrics markGameAccess failed:", e);
     });
@@ -108,24 +172,25 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
   const safePhase = round?.phase ?? null;
   const responding = round?.respondingTeam ?? null;
 
-  // Actualizar progreso de calificaciones
+  // ✅ ACTUALIZADO: Suscripción en tiempo real a ratingTeams
   useEffect(() => {
-    if (safePhase !== "rating") {
+    if (safePhase !== "rating" || !round) {
       setRatingProgress(null);
       return;
     }
-    const fetchProgress = async () => {
-      try {
-        const progress = await getRatingProgress(gameId);
-        setRatingProgress(progress);
-      } catch (e) {
-        console.error("Error fetching rating progress:", e);
-      }
-    };
-    fetchProgress();
-    const interval = setInterval(fetchProgress, 2000);
-    return () => clearInterval(interval);
-  }, [gameId, safePhase]);
+
+    const roundIndex = game.stage2?.currentRound ?? 0;
+    const ratingTeamsRef = ref(database, `games/${gameId}/stage2/rounds/${roundIndex}/ratingTeams`);
+
+    const unsub = onValue(ratingTeamsRef, (snapshot) => {
+      const ratingTeams = snapshot.val() || {};
+      const total = Object.keys(ratingTeams).length;
+      const rated = Object.values(ratingTeams).filter((r: any) => !!r?.rating).length;
+      setRatingProgress({ rated, total });
+    });
+
+    return () => unsub();
+  }, [gameId, safePhase, game.stage2?.currentRound, round]);
 
   // Cargar equipo que justifica actualmente
   useEffect(() => {
@@ -187,6 +252,13 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
     return Math.max(0, duration - elapsed);
   }, [round, safePhase, now, game]);
 
+  // ✅ Inicializar override de ayuda
+  useEffect(() => {
+    if (responding && helpConfirmed === null) {
+      setHelpConfirmed(!!responding.helpUsed);
+    }
+  }, [responding, helpConfirmed]);
+
   // Returns tempranos
   if (!game) {
     return <div style={{ padding: 40 }}>⏳ Cargando juego…</div>;
@@ -238,7 +310,10 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
 
   return (
     <div style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }}>
-      {/* Header */}
+      {/* ✅ Mostrar leyenda en fases relevantes */}
+      {(safePhase === 'rating' || safePhase === 'rating_reveal' || safePhase === 'validation_ratings') && <ColorLegend />}
+
+      {/* Header - ✅ CORREGIDO CON RONDAS DINÁMICAS */}
       <div
         style={{
           display: "flex",
@@ -249,7 +324,23 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
           flexWrap: "wrap",
         }}
       >
-        <h1 style={{ margin: 0, fontSize: 28 }}>🎯 ETAPA 2 - Vista del Aula</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <h1 style={{ margin: 0, fontSize: 28 }}>
+            🎯 ETAPA 2
+          </h1>
+
+          <div style={{
+            backgroundColor: "#e3f2fd",
+            padding: "8px 20px",
+            borderRadius: 24,
+            fontSize: 18,
+            fontWeight: 700,
+            color: "#1976d2",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+          }}>
+            Ronda {currentRoundNumber} de {totalStage2Rounds || '?'}
+          </div>
+        </div>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <button
@@ -288,116 +379,81 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
         </div>
       </div>
 
-
       {/* 🆕 PANEL DE PROGRESO DE EQUIPOS */}
       {showProgressPanel && (
         <Stage2ProgressPanel game={game} round={round} />
       )}
 
-      {/* PANEL PRIORITARIO: AYUDA DOCENTE (solo en responding) */}
+      {/* PANEL PRIORITARIO: AYUDA DOCENTE */}
       {safePhase === "responding" && responding && respondingHelpHasState && (
         <div
           style={{
-            marginBottom: 16,
-            padding: 16,
-            border: "2px solid #FF5722",
-            borderRadius: 8,
-            backgroundColor: "#fff3e0",
+            padding: 20,
+            border: "2px solid #fbbf24",
+            borderRadius: 12,
+            backgroundColor: "#fffbeb",
+            marginBottom: 24,
           }}
         >
-          <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 18 }}>
-            🤝 AYUDA (control docente)
-          </div>
-
-          {respondingHelpRequested ? (
-            <div style={{ marginBottom: 8 }}>
-              🆘 <b>{responding.playerName}</b> pidió ayuda y se reúne con su equipo.
-            </div>
+          <h3 style={{ margin: "0 0 12px 0", color: "#d97706" }}>
+            🆘 Ayuda Docente Solicitada
+          </h3>
+          <p>
+            El equipo <strong>{responding.teamName}</strong> solicitó ayuda.
+          </p>
+          {respondingHelpRunning ? (
+            <p>
+              ⏳ Tiempo restante: <strong>{respondingHelpRemaining} seg</strong>
+            </p>
           ) : (
-            <div style={{ marginBottom: 8, opacity: 0.8 }}>(No hay pedido activo)</div>
+            <p>Esperando tu acción.</p>
           )}
-
-          <div style={{ marginBottom: 12, fontSize: 18 }}>
-            ⏱️ Tiempo restante:{" "}
-            <b style={{ fontSize: 24 }}>{respondingHelpRemaining ?? "—"}</b> s{" "}
-            {respondingHelpRemaining === 0 && (
-              <span style={{ marginLeft: 10, fontWeight: 700, color: "#F44336" }}>
-                ⏰ TERMINÓ
-              </span>
+          <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
+            {!respondingHelpRunning && (
+              <button
+                onClick={() => teacherStartRespondingHelp(gameId)}
+                style={{
+                  padding: "10px 16px",
+                  backgroundColor: "#f59e0b",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                }}
+              >
+                ▶️ Iniciar Ayuda
+              </button>
             )}
-          </div>
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button
-              disabled={
-                !respondingHelpRequested && !((responding as any)?.helpRemainingSec > 0)
-              }
-              onClick={async () => {
-                await teacherStartRespondingHelp(gameId);
-
-                await startCountdownMusic(
-                  (responding as any)?.helpDuration ?? 60,
-                  () =>
-                    respondingHelpRemaining ??
-                    (responding as any)?.helpRemainingSec ??
-                    (responding as any)?.helpDuration ??
-                    60
-                );
-              }}
-
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#4CAF50",
-                color: "white",
-                border: "none",
-                borderRadius: 6,
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              ▶️ INICIAR / REANUDAR
-            </button>
-
-            <button
-              disabled={!respondingHelpRunning}
-              onClick={async () => {
-                await teacherPauseRespondingHelp(gameId);
-                pauseCountdownMusic();
-              }}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#FF9800",
-                color: "white",
-                border: "none",
-                borderRadius: 6,
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              ⏸️ PAUSAR
-            </button>
-
-            <button
-              disabled={
-                !respondingHelpRunning &&
-                !(((responding as any)?.helpRemainingSec ?? null) != null)
-              }
-              onClick={async () => {
-                await teacherEndRespondingHelp(gameId);
-                stopCountdownMusic();
-              }}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#F44336",
-                color: "white",
-                border: "none",
-                borderRadius: 6,
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              ⏹️ TERMINAR
-            </button>
+            {respondingHelpRunning && (
+              <>
+                <button
+                  onClick={() => teacherPauseRespondingHelp(gameId)}
+                  style={{
+                    padding: "10px 16px",
+                    backgroundColor: "#f97316",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                  }}
+                >
+                  ⏸ Pausar
+                </button>
+                <button
+                  onClick={() => teacherEndRespondingHelp(gameId)}
+                  style={{
+                    padding: "10px 16px",
+                    backgroundColor: "#dc2626",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                  }}
+                >
+                  ✅ Finalizar
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -449,269 +505,221 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
         )}
       </div>
 
-
       {/* PANEL: CALIFICACIÓN SIMULTÁNEA */}
       {safePhase === "rating" && (
-        <div style={{
-          marginBottom: 16,
-          padding: 16,
-          border: "2px solid #4CAF50",
-          borderRadius: 8,
-          backgroundColor: "#e8f5e9",
-        }}>
-          <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 18 }}>
-            🎨 CALIFICACIÓN EN CURSO
-          </div>
-
-          <div style={{ marginBottom: 12, fontSize: 16 }}>
-            📊 Calificaron: <b>{ratingProgress?.rated ?? 0}</b> de <b>{ratingProgress?.total ?? 0}</b> equipos
-          </div>
-
-          {round.ratingTimerActive && ratingTimeRemaining !== null && (
-            <div style={{ marginBottom: 12, fontSize: 16 }}>
-              ⏱️ Tiempo: <b>{ratingTimeRemaining}</b> s
-            </div>
+        <div
+          style={{
+            padding: 20,
+            border: "1px solid #ddd",
+            borderRadius: 8,
+            marginBottom: 20,
+            backgroundColor: "white",
+          }}
+        >
+          <h3 style={{ margin: "0 0 16px 0" }}>⭐ Calificación Simultánea</h3>
+          {ratingProgress && (
+            <p style={{ fontSize: 16, marginBottom: 16 }}>
+              Equipos que calificaron: <strong>{ratingProgress.rated} de {ratingProgress.total}</strong>
+            </p>
           )}
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            {!round.ratingTimerActive ? (
+          {/* ✅ NUEVO: Estado de calificación por equipo (Tarea 6) */}
+          <div style={{ marginTop: 16, padding: 12, backgroundColor: '#f8fafc', borderRadius: 8 }}>
+            <h4 style={{ margin: '0 0 12px 0', fontSize: 16, color: '#1e293b' }}>
+              {language === 'es' ? 'Estado de calificación por equipo' :
+                language === 'pt' ? 'Estado de avaliação por equipe' :
+                  'Team rating status'}
+            </h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {teamsSorted.map(team => {
+                const ratingEntry = round.ratingTeams?.[team.id];
+                const hasRated = !!ratingEntry?.rating;
+                const rating = ratingEntry?.rating;
+
+                return (
+                  <div key={team.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15 }}>
+                    <strong>{team.name}:</strong>
+                    {hasRated ? (
+                      <>
+                        {rating === 'green' ? '🟩' : rating === 'yellow' ? '🟨' : '🟥'}
+                        <span style={{ color: '#4b5563', fontSize: 14 }}>{ratingStatusText.rated}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>⬜</span>
+                        <span style={{ color: '#dc2626', fontWeight: 600, fontSize: 14 }}>{ratingStatusText.pending}</span>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              onClick={() => startRatingPhase(gameId)}
+              disabled={round.phase !== "rating"}
+              style={{
+                padding: "10px 16px",
+                backgroundColor: "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: 6,
+                cursor: "pointer",
+                opacity: round.phase !== "rating" ? 0.5 : 1,
+              }}
+            >
+              ▶️ Iniciar Calificación
+            </button>
+            {round.ratingTimerActive && (
+              <>
+                <button
+                  onClick={() => teacherPauseRatingTimer(gameId)}
+                  style={{
+                    padding: "10px 16px",
+                    backgroundColor: "#f97316",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                  }}
+                >
+                  ⏸ Pausar Temporizador
+                </button>
+                <button
+                  onClick={() => teacherStopRatingTimer(gameId)}
+                  style={{
+                    padding: "10px 16px",
+                    backgroundColor: "#dc2626",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                  }}
+                >
+                  ✅ Finalizar Calificación
+                </button>
+              </>
+            )}
+            {!round.ratingTimerActive && round.ratingStartedAt && (
               <button
-                onClick={() => teacherStartRatingTimer(gameId)}
+                onClick={() => finalizeRatings(gameId)}
                 style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#2196F3",
+                  padding: "10px 16px",
+                  backgroundColor: "#10b981",
                   color: "white",
                   border: "none",
                   borderRadius: 6,
                   cursor: "pointer",
                 }}
               >
-                ⏱️ ACTIVAR TIMER
+                ✅ Revelar Calificaciones
               </button>
-            ) : (
-              <>
-                <button onClick={() => teacherPauseRatingTimer(gameId)}>⏸️ PAUSAR</button>
-                <button onClick={() => teacherStopRatingTimer(gameId)}>⏹️ DETENER</button>
-              </>
             )}
-
-            <button
-              onClick={() => finalizeRatings(gameId)}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#4CAF50",
-                color: "white",
-                fontWeight: 700,
-                border: "none",
-                borderRadius: 6,
-                cursor: "pointer",
-              }}
-            >
-              ✅ FINALIZAR Y REVELAR
-            </button>
           </div>
         </div>
       )}
 
       {/* PANEL: REVELACIÓN DE CALIFICACIONES */}
       {safePhase === "rating_reveal" && (
-        <div style={{
-          marginBottom: 16,
-          padding: 16,
-          border: "2px solid #2196F3",
-          borderRadius: 8,
-        }}>
-          <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 18 }}>
-            📊 CALIFICACIONES REVELADAS
+        <div
+          style={{
+            padding: 20,
+            border: "1px solid #ddd",
+            borderRadius: 8,
+            marginBottom: 20,
+            backgroundColor: "white",
+          }}
+        >
+          <h3 style={{ margin: "0 0 16px 0" }}>👁️‍🗨️ Calificaciones Reveladas</h3>
+          <div style={{ marginTop: 16, padding: 12, backgroundColor: '#f8fafc', borderRadius: 8 }}>
+            <h4 style={{ margin: '0 0 12px 0', fontSize: 16, color: '#1e293b' }}>
+              {language === 'es' ? 'Calificaciones por equipo' :
+                language === 'pt' ? 'Avaliações por equipe' :
+                  'Team ratings'}
+            </h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {teamsSorted.map(team => {
+                const ratingEntry = round.ratingTeams?.[team.id];
+                const rating = ratingEntry?.rating;
+                const hasRated = !!rating;
+
+                return (
+                  <div key={team.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15 }}>
+                    <strong>{team.name}:</strong>
+                    {hasRated ? (
+                      <>
+                        {rating === 'green' ? '🟩' : rating === 'yellow' ? '🟨' : '🟥'}
+                        <span style={{ color: '#4b5563', fontSize: 14 }}>{ratingStatusText.rated}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>⬜</span>
+                        <span style={{ color: '#dc2626', fontWeight: 600, fontSize: 14 }}>{ratingStatusText.pending}</span>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 12,
-            marginBottom: 16,
-          }}>
-            {Object.entries(round.ratingTeams || {}).map(([teamId, rater]: [string, any]) => {
-              const colorEmoji =
-                rater.rating === "green" ? "🟩" :
-                  rater.rating === "yellow" ? "🟨" :
-                    rater.rating === "red" ? "🟥" : "⬜";
-
-              return (
-                <div
-                  key={teamId}
-                  style={{
-                    padding: 16,
-                    border: "1px solid #ddd",
-                    borderRadius: 8,
-                    backgroundColor: "white",
-                    textAlign: "center",
-                  }}
-                >
-                  <div style={{ fontWeight: 700, marginBottom: 4 }}>{rater.teamName}</div>
-                  <div style={{ fontSize: 12, marginBottom: 8, opacity: 0.7 }}>{rater.playerName}</div>
-                  <div style={{ fontSize: 40 }}>{colorEmoji}</div>
-                </div>
-              );
-            })}
-          </div>
-
           <button
             onClick={() => startJustificationPhase(gameId)}
             style={{
-              padding: "12px 24px",
-              backgroundColor: "#2196F3",
+              marginTop: 16,
+              padding: "10px 16px",
+              backgroundColor: "#8b5cf6",
               color: "white",
-              fontWeight: 700,
               border: "none",
               borderRadius: 6,
               cursor: "pointer",
             }}
           >
-            ➡️ IR A JUSTIFICACIONES
+            ➡️ Iniciar Justificación
           </button>
         </div>
       )}
 
-      {/* PANEL: JUSTIFICACIÓN SECUENCIAL */}
-      {safePhase === "justification" && currentJustifyingTeamId && (
-        <div style={{
-          marginBottom: 16,
-          padding: 16,
-          border: "2px solid #FF9800",
-          borderRadius: 8,
-          backgroundColor: "#fff3e0",
-        }}>
-          <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 18 }}>
-            📝 JUSTIFICACIONES
-          </div>
-
-          {(() => {
-            const currentRater = round.ratingTeams?.[currentJustifyingTeamId];
-            const order = (round as any).justificationOrder || [];
-            const currentIndex = (round as any).currentJustificationIndex ?? 0;
-
-            if (!currentRater) return <div>⚠️ Error</div>;
-
-            const colorEmoji =
-              currentRater.rating === "yellow" ? "🟨 AMARILLO" :
-                currentRater.rating === "red" ? "🟥 ROJO" : "—";
-
-            return (
-              <div>
-                <div style={{
-                  padding: 16,
-                  backgroundColor: "white",
-                  borderRadius: 8,
-                  marginBottom: 12,
-                }}>
-                  <div style={{ fontSize: 14, marginBottom: 8 }}>
-                    Turno {currentIndex + 1} de {order.length}
-                  </div>
-                  <div style={{ fontSize: 20, fontWeight: 700 }}>
-                    {currentRater.teamName} - {currentRater.playerName}
-                  </div>
-                  <div style={{ fontSize: 16, marginTop: 8 }}>
-                    Calificó: {colorEmoji}
-                  </div>
-                </div>
-
-                {currentRater.justification && (
-                  <div style={{
-                    padding: 12,
-                    backgroundColor: "white",
-                    borderRadius: 4,
-                    marginBottom: 12,
-                    fontSize: 14,
-                  }}>
-                    <strong>Justificación escrita:</strong> {currentRater.justification}
-                  </div>
-                )}
-
-                <button
-                  onClick={() => advanceJustification(gameId)}
-                  style={{
-                    padding: "12px 24px",
-                    fontSize: 16,
-                    backgroundColor: "#FF9800",
-                    color: "white",
-                    fontWeight: 700,
-                    border: "none",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                  }}
-                >
-                  {currentIndex < order.length - 1
-                    ? "➡️ SIGUIENTE"
-                    : "✅ TERMINAR JUSTIFICACIONES"
-                  }
-                </button>
-              </div>
-            );
-          })()}
-        </div>
-      )}
-
-      {/* PANEL: VALIDACIÓN DE RESPUESTA */}
+      {/* PANEL: VALIDACIÓN DE RESPUESTA CON OVERRIDE DE AYUDA */}
       {safePhase === "validation_response" && (
-        <div style={{
-          marginBottom: 16,
-          padding: 16,
-          border: "2px solid #FF5722",
-          borderRadius: 8,
-        }}>
-          <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 18 }}>
-            ⚖️ VALIDACIÓN DE LA RESPUESTA
-          </div>
-
-          <div style={{
-            padding: 16,
-            backgroundColor: "#fff3e0",
+        <div
+          style={{
+            padding: 20,
+            border: "1px solid #ddd",
             borderRadius: 8,
-            marginBottom: 16,
-          }}>
-            <p><strong>Equipo:</strong> {teamsSorted.find((t) => t.id === responding?.teamId)?.name ?? "—"}</p>
-            <p><strong>Representante:</strong> {responding?.playerName ?? "—"}</p>
-            <p><strong>Ayuda usada:</strong> {responding?.helpStartedAt ? "Sí (9 pts)" : "No (12 pts)"}</p>
-          </div>
-
-          <p style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>
-            ¿La respuesta fue correcta?
-          </p>
-
-          <div style={{ display: "flex", gap: 12 }}>
+            marginBottom: 20,
+            backgroundColor: "white",
+          }}
+        >
+          <h3 style={{ margin: "0 0 16px 0" }}>✅ Validación de Respuesta</h3>
+          <p>¿La respuesta del equipo es correcta?</p>
+          <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
             <button
               onClick={() => validateResponse(gameId, true)}
               style={{
-                flex: 1,
-                padding: 16,
-                fontSize: 18,
-                backgroundColor: "#4CAF50",
+                padding: "10px 16px",
+                backgroundColor: "#10b981",
                 color: "white",
                 border: "none",
-                borderRadius: 8,
+                borderRadius: 6,
                 cursor: "pointer",
-                fontWeight: 700,
               }}
             >
-              ✅ CORRECTA
+              ✅ Correcta
             </button>
-
             <button
               onClick={() => validateResponse(gameId, false)}
               style={{
-                flex: 1,
-                padding: 16,
-                fontSize: 18,
-                backgroundColor: "#F44336",
+                padding: "10px 16px",
+                backgroundColor: "#ef4444",
                 color: "white",
                 border: "none",
-                borderRadius: 8,
+                borderRadius: 6,
                 cursor: "pointer",
-                fontWeight: 700,
               }}
             >
-              ❌ INCORRECTA
+              ❌ Incorrecta
             </button>
           </div>
         </div>
@@ -719,149 +727,306 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
 
       {/* PANEL: VALIDACIÓN DE CALIFICACIONES */}
       {safePhase === "validation_ratings" && (
-        <div style={{
-          marginBottom: 16,
-          padding: 16,
-          border: "2px solid #9C27B0",
-          borderRadius: 8,
-        }}>
-          <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 18 }}>
-            ⚖️ VALIDACIÓN DE CALIFICACIONES
+        <div
+          style={{
+            padding: 20,
+            border: "1px solid #ddd",
+            borderRadius: 8,
+            marginBottom: 20,
+            backgroundColor: "white",
+          }}
+        >
+          <h3 style={{ margin: "0 0 16px 0" }}>⚖️ VALIDAR CALIFICACIONES</h3>
+
+          {/* Info de la respuesta */}
+          <div style={{
+            padding: 12,
+            backgroundColor: round.responseValidated ? "#dcfce7" : "#fee2e2",
+            borderRadius: 8,
+            marginBottom: 20,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}>
+            <span style={{ fontSize: 24 }}>
+              {round.responseValidated ? "✅" : "❌"}
+            </span>
+            <span style={{ fontSize: 16, fontWeight: 600 }}>
+              {language === 'es'
+                ? `La respuesta fue marcada como ${round.responseValidated ? "CORRECTA" : "INCORRECTA"}`
+                : language === 'pt'
+                  ? `A resposta foi marcada como ${round.responseValidated ? "CORRETA" : "INCORRETA"}`
+                  : `The response was marcada como ${round.responseValidated ? "CORRECT" : "INCORRECT"}`
+              }
+            </span>
           </div>
 
-          {/* Cartel pedagógico si hay rojo */}
-          {Object.values(round.ratingTeams || {}).some((rt: any) => rt.rating === "red") && (
-            <div style={{
-              marginBottom: 16,
-              padding: 16,
-              backgroundColor: "#fff3cd",
-              border: "2px solid #ff9800",
-              borderRadius: 8,
-            }}>
-              <div style={{ fontWeight: 700, marginBottom: 8, color: "#ff6f00" }}>
-                ⚠️ Hay calificación(es) ROJA(s)
-              </div>
-              <div style={{ fontSize: 14 }}>
-                • Rojo aceptado = respuesta incorrecta detectada (12 pts)<br />
-                • Los demás podrían recibir 0 pts
-              </div>
-            </div>
-          )}
+          {/* Tarjetas de validación por equipo */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {Object.entries(round.ratingTeams || {}).map(([teamId, rater]) => {
+              const team = teamsSorted.find(t => t.id === teamId);
+              if (!team) return null;
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {(() => {
-              const ratersArray = Object.entries(round.ratingTeams || {});
-              const sortedRaters = ratersArray.sort(([, a], [, b]) => {
-                const colorOrder: Record<string, number> = { red: 0, yellow: 1, green: 2 };
-                return (colorOrder[(a as any).rating] ?? 3) - (colorOrder[(b as any).rating] ?? 3);
-              });
+              const rating = (rater as any).rating;
+              const validated = (rater as any).validated;
+              const playerName = (rater as any).playerName || "—";
+              const responseCorrect = round.responseValidated === true;
 
-              return sortedRaters.map(([teamId, rater]: [string, any]) => {
-                const colorEmoji =
-                  rater.rating === "green" ? "🟩" :
-                    rater.rating === "yellow" ? "🟨" :
-                      rater.rating === "red" ? "🟥" : "⬜";
+              // Determinar el estado y los puntos
+              let ratingIcon = "⬜";
+              let ratingText = language === 'es' ? "Sin calificar" : language === 'pt' ? "Sem avaliar" : "Not rated";
+              let isAutomatic = true;
+              let automaticPoints = 0;
+              let acceptPoints = 0;
+              let showWarning = false;
 
-                const isValidated = rater.validated !== null && rater.validated !== undefined;
-                const pts = rater.rating === "red" ? "12" : rater.rating === "yellow" ? "10" : "5";
+              if (rating === "green") {
+                ratingIcon = "🟩";
+                ratingText = language === 'es' ? "Verde" : language === 'pt' ? "Verde" : "Green";
+                isAutomatic = true;
+                automaticPoints = responseCorrect ? 5 : 0;
+              } else if (rating === "yellow") {
+                ratingIcon = "🟨";
+                ratingText = language === 'es' ? "Amarillo" : language === 'pt' ? "Amarelo" : "Yellow";
+                isAutomatic = false;
+                acceptPoints = 10;
+              } else if (rating === "red") {
+                ratingIcon = "🟥";
+                ratingText = language === 'es' ? "Rojo" : language === 'pt' ? "Vermelho" : "Red";
+                isAutomatic = false;
+                acceptPoints = 12;
+                showWarning = responseCorrect; // Advertencia si respuesta fue correcta
+              } else {
+                // Sin calificar
+                isAutomatic = true;
+                automaticPoints = 0;
+              }
 
-                return (
-                  <div
-                    key={teamId}
-                    style={{
-                      padding: 16,
-                      border: "1px solid #ddd",
-                      borderRadius: 8,
-                      backgroundColor: "white",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div>
-                        <div style={{ fontSize: 16, fontWeight: 700 }}>
-                          {rater.teamName} - {rater.playerName}
-                        </div>
-                        {rater.justification && (
-                          <div style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>
-                            "{rater.justification}"
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 32 }}>{colorEmoji}</div>
+              // Mensaje automático según contexto
+              let automaticMessage = "";
+              if (isAutomatic) {
+                if (!rating) {
+                  automaticMessage = language === 'es'
+                    ? "No calificó → 0 pts"
+                    : language === 'pt'
+                      ? "Não avaliou → 0 pts"
+                      : "Did not rate → 0 pts";
+                } else if (rating === "green" && responseCorrect) {
+                  automaticMessage = language === 'es'
+                    ? "Calificó Verde, respuesta correcta → 5 pts"
+                    : language === 'pt'
+                      ? "Avaliou Verde, resposta correta → 5 pts"
+                      : "Rated Green, correct response → 5 pts";
+                } else if (rating === "green" && !responseCorrect) {
+                  automaticMessage = language === 'es'
+                    ? "Calificó Verde, respuesta incorrecta → 0 pts"
+                    : language === 'pt'
+                      ? "Avaliou Verde, resposta incorreta → 0 pts"
+                      : "Rated Green, incorrect response → 0 pts";
+                }
+              }
+
+              return (
+                <div
+                  key={teamId}
+                  style={{
+                    padding: 16,
+                    backgroundColor: validated === true ? "#f0fdf4" : validated === false ? "#fef2f2" : "#f8fafc",
+                    borderRadius: 12,
+                    border: `2px solid ${validated === true ? "#22c55e" : validated === false ? "#ef4444" : "#e2e8f0"}`,
+                  }}
+                >
+                  {/* Header del equipo */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                    <span style={{ fontSize: 24 }}>{ratingIcon}</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 16 }}>{team.name}</div>
+                      <div style={{ fontSize: 13, color: "#64748b" }}>{playerName}</div>
                     </div>
-
-                    {!isValidated ? (
-                      <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-                        <button
-                          onClick={() => validateRating(gameId, teamId, true)}
-                          style={{
-                            flex: 1,
-                            padding: 10,
-                            backgroundColor: "#4CAF50",
-                            color: "white",
-                            border: "none",
-                            borderRadius: 6,
-                            cursor: "pointer",
-                            fontWeight: 600,
-                          }}
-                        >
-                          ✅ ACEPTAR ({pts} pts)
-                        </button>
-                        <button
-                          onClick={() => validateRating(gameId, teamId, false)}
-                          style={{
-                            flex: 1,
-                            padding: 10,
-                            backgroundColor: "#F44336",
-                            color: "white",
-                            border: "none",
-                            borderRadius: 6,
-                            cursor: "pointer",
-                            fontWeight: 600,
-                          }}
-                        >
-                          ❌ RECHAZAR
-                        </button>
-                      </div>
-                    ) : (
-                      <div style={{
-                        marginTop: 12,
-                        padding: 10,
-                        backgroundColor: rater.validated ? "#e8f5e9" : "#ffebee",
-                        borderRadius: 6,
-                        textAlign: "center",
-                        fontWeight: 600,
-                      }}>
-                        {rater.validated ? `✅ Aceptado (${pts} pts)` : "❌ Rechazado"}
-                      </div>
-                    )}
+                    <div style={{ marginLeft: "auto", fontSize: 14, fontWeight: 600, color: "#475569" }}>
+                      {ratingText}
+                    </div>
                   </div>
-                );
-              });
-            })()}
+
+                  {/* Advertencia para rojo + respuesta correcta */}
+                  {showWarning && (
+                    <div style={{
+                      padding: 10,
+                      backgroundColor: "#fef3c7",
+                      borderRadius: 8,
+                      marginBottom: 12,
+                      fontSize: 13,
+                      color: "#92400e",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}>
+                      <span>⚠️</span>
+                      <span>
+                        {language === 'es'
+                          ? "La respuesta fue aceptada como correcta. Esta calificación roja normalmente no debería aceptarse."
+                          : language === 'pt'
+                            ? "A resposta foi aceita como correta. Esta avaliação vermelha normalmente não deveria ser aceita."
+                            : "The response was accepted as correct. This red rating normally should not be accepted."
+                        }
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Contenido según si es automático o requiere validación */}
+                  {isAutomatic ? (
+                    <div style={{
+                      padding: 10,
+                      backgroundColor: "#e0f2fe",
+                      borderRadius: 8,
+                      fontSize: 14,
+                      color: "#0369a1",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}>
+                      <span>ℹ️</span>
+                      <span>{automaticMessage}</span>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", gap: 10 }}>
+                      {validated === null || validated === undefined ? (
+                        <>
+                          <button
+                            onClick={() => validateRating(gameId, teamId, true)}
+                            style={{
+                              flex: 1,
+                              padding: "10px 16px",
+                              backgroundColor: "#22c55e",
+                              color: "white",
+                              border: "none",
+                              borderRadius: 8,
+                              cursor: "pointer",
+                              fontWeight: 600,
+                              fontSize: 14,
+                            }}
+                          >
+                            ✅ Aceptar ({acceptPoints} pts)
+                          </button>
+                          <button
+                            onClick={() => validateRating(gameId, teamId, false)}
+                            style={{
+                              flex: 1,
+                              padding: "10px 16px",
+                              backgroundColor: "#ef4444",
+                              color: "white",
+                              border: "none",
+                              borderRadius: 8,
+                              cursor: "pointer",
+                              fontWeight: 600,
+                              fontSize: 14,
+                            }}
+                          >
+                            ❌ Rechazar
+                          </button>
+                        </>
+                      ) : (
+                        <div style={{
+                          padding: 10,
+                          backgroundColor: validated ? "#dcfce7" : "#fee2e2",
+                          borderRadius: 8,
+                          fontSize: 14,
+                          color: validated ? "#166534" : "#991b1b",
+                          fontWeight: 600,
+                          width: "100%",
+                          textAlign: "center",
+                        }}>
+                          {validated
+                            ? `✅ Aceptado (+${acceptPoints} pts)`
+                            : "❌ Rechazado (0 pts)"
+                          }
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
-          {isValidationComplete(round) && (
+          {/* Botón para calcular puntos y avanzar */}
+          <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
             <button
               onClick={() => calculateAndAwardPoints(gameId)}
+              disabled={!isValidationComplete(round)}
               style={{
-                marginTop: 16,
-                width: "100%",
-                padding: 16,
-                fontSize: 18,
-                backgroundColor: "#9C27B0",
+                flex: 1,
+                padding: "14px 24px",
+                backgroundColor: isValidationComplete(round) ? "#6366f1" : "#94a3b8",
                 color: "white",
                 border: "none",
                 borderRadius: 8,
-                cursor: "pointer",
+                cursor: isValidationComplete(round) ? "pointer" : "not-allowed",
                 fontWeight: 700,
+                fontSize: 16,
               }}
             >
-              💰 CONFIRMAR PUNTOS Y VER RESULTADOS
+              🏆 Calcular Puntos y Ver Resultados
             </button>
-          )}
+          </div>
+
+          {/* Botones globales (secundarios) */}
+          <div style={{
+            marginTop: 16,
+            paddingTop: 16,
+            borderTop: "1px solid #e2e8f0",
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap"
+          }}>
+            <span style={{ fontSize: 13, color: "#64748b", alignSelf: "center" }}>
+              Acciones rápidas:
+            </span>
+            <button
+              onClick={() => validateAllRatings(gameId, true, "yellow")}
+              style={{
+                padding: "8px 14px",
+                backgroundColor: "#fef3c7",
+                color: "#92400e",
+                border: "1px solid #fcd34d",
+                borderRadius: 6,
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              🟨 Aceptar Amarillos
+            </button>
+            <button
+              onClick={() => validateAllRatings(gameId, true, "red")}
+              style={{
+                padding: "8px 14px",
+                backgroundColor: "#fee2e2",
+                color: "#991b1b",
+                border: "1px solid #fca5a5",
+                borderRadius: 6,
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              🟥 Aceptar Rojos
+            </button>
+            <button
+              onClick={() => validateAllRatings(gameId, false)}
+              style={{
+                padding: "8px 14px",
+                backgroundColor: "#f1f5f9",
+                color: "#475569",
+                border: "1px solid #cbd5e1",
+                borderRadius: 6,
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              ❌ Rechazar Pendientes
+            </button>
+          </div>
         </div>
       )}
-
       {/* CONTROLES DOCENTE */}
       <div style={{
         marginTop: 20,
@@ -873,111 +1038,122 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
         flexWrap: "wrap"
       }}>
         <span style={{ fontWeight: 700, alignSelf: "center" }}>🎮 Controles:</span>
-
-        {safePhase === "hint" && (
-          <button
-            onClick={() => designateRepresentatives(gameId)}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#2196F3",
-              color: "white",
-              border: "none",
-              borderRadius: 6,
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
-          >
-            🎲 DESIGNAR REPRESENTANTES
-          </button>
-        )}
-
-        {safePhase === "designated" && (
-          <button
-            onClick={async () => {
-              await setStage2Phase(gameId, "question_revealed");
-              setTimeout(() => setStage2Phase(gameId, "responding"), 2000);
-            }}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#9C27B0",
-              color: "white",
-              border: "none",
-              borderRadius: 6,
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
-          >
-            👁️ REVELAR PREGUNTA
-          </button>
-        )}
-
-        {safePhase === "responding" && (
-          <button
-            onClick={async () => {
-              await setRespondingResponseGiven(gameId, true);
-              await startRatingPhase(gameId);
-            }}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#4CAF50",
-              color: "white",
-              border: "none",
-              borderRadius: 6,
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
-          >
-            ✅ RESPUESTA COMPLETA → CALIFICACIÓN
-          </button>
-        )}
-
         <button
           onClick={() => setStage2Phase(gameId, "hint")}
           style={{
-            padding: "10px 20px",
-            backgroundColor: "#757575",
-            color: "white",
+            padding: "8px 12px",
+            backgroundColor: "#cbd5e1",
             border: "none",
-            borderRadius: 6,
+            borderRadius: 4,
             cursor: "pointer",
           }}
         >
-          🧪 VOLVER A HINT
+          Hint
+        </button>
+        <button
+          onClick={() => setStage2Phase(gameId, "designated")}
+          style={{
+            padding: "8px 12px",
+            backgroundColor: "#cbd5e1",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+          }}
+        >
+          Designar
+        </button>
+        <button
+          onClick={() => setStage2Phase(gameId, "rating")}
+          style={{
+            padding: "8px 12px",
+            backgroundColor: "#cbd5e1",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+          }}
+        >
+          Rating
+        </button>
+        <button
+          onClick={() => setStage2Phase(gameId, "rating_reveal")}
+          style={{
+            padding: "8px 12px",
+            backgroundColor: "#cbd5e1",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+          }}
+        >
+          Reveal
+        </button>
+        <button
+          onClick={() => setStage2Phase(gameId, "justification")}
+          style={{
+            padding: "8px 12px",
+            backgroundColor: "#cbd5e1",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+          }}
+        >
+          Justify
+        </button>
+        <button
+          onClick={() => setStage2Phase(gameId, "validation_ratings")}
+          style={{
+            padding: "8px 12px",
+            backgroundColor: "#cbd5e1",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+          }}
+        >
+          Validate
+        </button>
+        <button
+          onClick={() => setStage2Phase(gameId, "results")}
+          style={{
+            padding: "8px 12px",
+            backgroundColor: "#cbd5e1",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+          }}
+        >
+          Results
         </button>
       </div>
 
-      {/* RESULTADOS */}
+      {/* ========== FASE: RESULTS ========== */}
       {safePhase === "results" && (
         <div style={{
-          marginTop: 20,
           padding: 20,
-          border: "2px solid #FFD700",
-          borderRadius: 12,
-          backgroundColor: "#fffde7",
+          border: "1px solid #ddd",
+          borderRadius: 8,
+          marginBottom: 20,
+          backgroundColor: "white",
         }}>
-          <h2 style={{ fontSize: 28, marginBottom: 20, textAlign: "center" }}>
-            🏁 RESULTADOS DE LA RONDA
-          </h2>
-
           {/* Ganador */}
           {(() => {
-            const maxRoundPoints = Math.max(...roundRanking.map(r => r.roundPoints), 0);
-            const winners = roundRanking.filter(r => r.roundPoints === maxRoundPoints);
+            const maxPoints = Math.max(...roundRanking.map(r => r.roundPoints), 0);
+            const winners = roundRanking.filter(r => r.roundPoints === maxPoints);
 
             return (
               <div style={{
-                padding: 20,
-                backgroundColor: "#FFD700",
-                borderRadius: 12,
-                marginBottom: 20,
+                background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+                borderRadius: 16,
+                padding: 32,
                 textAlign: "center",
+                color: "white",
+                boxShadow: "0 8px 32px rgba(245, 158, 11, 0.4)",
+                marginBottom: 24,
               }}>
-                <div style={{ fontSize: 48 }}>🏆</div>
-                <div style={{ fontSize: 24, fontWeight: 700 }}>
-                  {winners.length > 1 ? "GANADORES" : "GANADOR"}
+                <div style={{ fontSize: 64, marginBottom: 8 }}>🏆</div>
+                <div style={{ fontSize: 20, opacity: 0.9 }}>
+                  {winners.length > 1 ? "GANADORES" : "GANADOR"} DE LA RONDA
                 </div>
                 {winners.map(w => (
-                  <div key={w.teamId} style={{ fontSize: 28, fontWeight: 700 }}>
+                  <div key={w.teamId} style={{ fontSize: 32, fontWeight: 800, marginTop: 8 }}>
                     {w.teamName} 👑
                   </div>
                 ))}
@@ -986,79 +1162,112 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
           })()}
 
           {/* Puntos de la ronda */}
-          <div style={{ marginBottom: 20 }}>
-            <h3>📊 Puntos ganados</h3>
+          <div style={{
+            backgroundColor: "white",
+            borderRadius: 16,
+            padding: 24,
+            marginBottom: 20,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+            border: "1px solid #e2e8f0",
+          }}>
+            <h3 style={{ margin: "0 0 16px 0", fontSize: 22, fontWeight: 700, color: "#1e293b" }}>📊 Puntos de la Ronda</h3>
             {roundRanking.map((r) => (
               <div
                 key={r.teamId}
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  padding: 12,
-                  backgroundColor: "white",
-                  borderRadius: 6,
+                  alignItems: "center",
+                  padding: 16,
+                  backgroundColor: "#f8fafc",
+                  borderRadius: 8,
                   marginBottom: 8,
                 }}
               >
-                <span style={{ fontWeight: 700 }}>{r.teamName}</span>
+                <span style={{ fontWeight: 600 }}>{r.teamName}</span>
                 <span style={{
-                  fontWeight: 700,
-                  color: r.roundPoints > 0 ? "#4CAF50" : "#999"
+                  fontWeight: 800,
+                  fontSize: 20,
+                  color: r.roundPoints > 0 ? "#22c55e" : "#94a3b8"
                 }}>
-                  +{r.roundPoints} pts
+                  +{r.roundPoints}
                 </span>
               </div>
             ))}
           </div>
 
-          {/* Botón siguiente ronda */}
-          <button
-            onClick={async () => {
-              const nextQIndex = (game.stage2?.currentQuestionIndex ?? 0) + 1;
-              const nextRound = (game.stage2?.currentRound ?? 0) + 1;
+          {/* ✅ CORREGIDO: Verificar si hay más preguntas antes de mostrar botones */}
+          {(() => {
+            const allQuestions = Object.values(game.questions || {}) as any[];
+            const stage2Questions = allQuestions.filter(q => q.suggestedStage === 2);
+            const currentRoundNum = game.stage2?.currentRound ?? 0;
+            const hasMoreRounds = (currentRoundNum + 1) < stage2Questions.length;
 
-              await update(ref(database), {
-                [`games/${gameId}/stage2/currentQuestionIndex`]: nextQIndex,
-                [`games/${gameId}/stage2/currentRound`]: nextRound,
-                [`games/${gameId}/updatedAt`]: Date.now(),
-              });
+            return hasMoreRounds ? (
+              <button
+                onClick={async () => {
+                  const nextRound = currentRoundNum + 1;
 
-              await startStage2Round(gameId);
-            }}
-            style={{
-              width: "100%",
-              padding: 16,
-              fontSize: 20,
-              backgroundColor: "#2196F3",
-              color: "white",
-              border: "none",
-              borderRadius: 8,
-              cursor: "pointer",
-              fontWeight: 700,
-            }}
-          >
-            ➡️ SIGUIENTE RONDA
-          </button>
+                  await update(ref(database), {
+                    [`games/${gameId}/stage2/currentRound`]: nextRound,
+                    [`games/${gameId}/updatedAt`]: Date.now(),
+                  });
+
+                  await startStage2Round(gameId);
+                }}
+                style={{
+                  padding: "16px 32px",
+                  fontSize: 18,
+                  fontWeight: 700,
+                  backgroundColor: "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 12,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 16px rgba(59, 130, 246, 0.4)",
+                  transition: "all 0.2s",
+                  width: "100%",
+                  justifyContent: "center"
+                }}
+              >
+                ➡️ SIGUIENTE RONDA ({currentRoundNum + 2} de {stage2Questions.length})
+              </button>
+            ) : (
+              <button
+                onClick={async () => {
+                  await update(ref(database), {
+                    [`games/${gameId}/status/status`]: "game_complete",
+                    [`games/${gameId}/stage2/completed`]: true,
+                    [`games/${gameId}/stage2/completedAt`]: Date.now(),
+                    [`games/${gameId}/updatedAt`]: Date.now(),
+                  });
+                }}
+                style={{
+                  padding: "16px 32px",
+                  fontSize: 18,
+                  fontWeight: 700,
+                  backgroundColor: "#22c55e",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 12,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 16px rgba(34, 197, 94, 0.4)",
+                  transition: "all 0.2s",
+                  width: "100%",
+                  justifyContent: "center"
+                }}
+              >
+                🏆 FINALIZAR JUEGO
+              </button>
+            );
+          })()}
         </div>
       )}
 
       {/* Representantes info */}
       {responding && safePhase !== "results" && (
-        <div style={{
-          marginTop: 20,
-          padding: 16,
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          backgroundColor: "white",
-        }}>
-          <h3 style={{ margin: "0 0 12px 0" }}>👥 Representantes</h3>
-          <p>
-            <strong>🎤 Responde:</strong> {responding.playerName} ({teamsSorted.find((t) => t.id === responding.teamId)?.name})
-          </p>
-          <div style={{ fontSize: 14, opacity: 0.8 }}>
-            <strong>🎨 Califican:</strong>{" "}
-            {Object.values(round.ratingTeams || {}).map((rt: any) => rt.teamName).join(", ")}
-          </div>
+        <div style={{ marginTop: 20, fontSize: 14, color: "#64748b" }}>
+          👤 Representantes: {responding.players?.map(p => p.name).join(", ") || "No asignados"}
         </div>
       )}
     </div>

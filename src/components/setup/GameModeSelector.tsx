@@ -14,34 +14,47 @@ export function GameModeSelector({ onSelect }: GameModeSelectorProps) {
   const { theme } = useGameMode();
   const { language } = useI18n();
 
+  console.log('🔍 GameModeSelector language:', language); //
   const t = {
-    title: language === 'es' 
-      ? '¿Cómo vas a obtener las consignas del juego?' 
-      : 'How will you get the game questions?',
-    
+    title: language === 'es'
+      ? '¿Cómo vas a obtener las consignas del juego?'
+      : language === 'pt'
+        ? 'Como você vai obter as perguntas do jogo?'
+        : 'How will you get the game questions?',
+
     teacherCreates: {
-      title: language === 'es' ? 'Yo las preparo' : 'I prepare them',
+      title: language === 'es' ? 'Yo las preparo' : language === 'pt' ? 'Eu preparo' : 'I prepare them',
       description: language === 'es'
         ? 'Creás las consignas con IA, manualmente o desde la biblioteca'
-        : 'Create questions with AI, manually, or from the library',
+        : language === 'pt'
+          ? 'Crie perguntas com IA, manualmente ou da biblioteca'
+          : 'Create questions with AI, manually, or from the library',
       bullets: language === 'es'
         ? ['Primera vez con el juego', 'Cualquier tema', 'Control total del contenido']
-        : ['First time playing', 'Any topic', 'Full content control'],
+        : language === 'pt'
+          ? ['Primeira vez jogando', 'Qualquer tema', 'Controle total do conteúdo']
+          : ['First time playing', 'Any topic', 'Full content control'],
     },
-    
+
     studentsPropose: {
-      title: language === 'es' ? 'Los equipos proponen' : 'Teams propose',
+      title: language === 'es' ? 'Los equipos proponen' : language === 'pt' ? 'Equipes propõem' : 'Teams propose',
       description: language === 'es'
         ? 'Los equipos elaboran consignas basadas en el material. Vos curás y organizás el juego.'
-        : 'Teams create questions based on materials. You curate and organize the game.',
+        : language === 'pt'
+          ? 'As equipes criam perguntas baseadas no material. Você cura e organiza o jogo.'
+          : 'Teams create questions based on materials. You curate and organize the game.',
       bullets: language === 'es'
         ? ['Grupos con experiencia en el juego', 'Temas integradores o de cierre', 'Profundiza la comprensión']
-        : ['Groups with game experience', 'Integration or closing topics', 'Deepens understanding'],
+        : language === 'pt'
+          ? ['Grupos com experiência no jogo', 'Temas de integração ou fechamento', 'Aprofunda a compreensão']
+          : ['Groups with game experience', 'Integration or closing topics', 'Deepens understanding'],
     },
-    
+
     tip: language === 'es'
       ? '💡 Tip: La modalidad "Los equipos proponen" es ideal para repasos, cierres de unidad, o cuando querés que los alumnos profundicen creando, no solo respondiendo.'
-      : '💡 Tip: "Teams propose" mode is ideal for reviews, unit closures, or when you want students to deepen understanding by creating, not just answering.',
+      : language === 'pt'
+        ? '💡 Dica: O modo "Equipes propõem" é ideal para revisões, fechamentos de unidade, ou quando você quer que os alunos aprofundem criando, não apenas respondendo.'
+        : '💡 Tip: "Teams propose" mode is ideal for reviews, unit closures, or when you want students to deepen understanding by creating, not just answering.',
   };
 
   const cardStyle = (isHovered: boolean): React.CSSProperties => ({
@@ -55,8 +68,8 @@ export function GameModeSelector({ onSelect }: GameModeSelectorProps) {
     cursor: 'pointer',
     transition: 'all 0.3s ease',
     transform: isHovered ? 'translateY(-4px)' : 'none',
-    boxShadow: isHovered 
-      ? `0 12px 24px ${theme.primary}30` 
+    boxShadow: isHovered
+      ? `0 12px 24px ${theme.primary}30`
       : '0 4px 12px rgba(0,0,0,0.05)',
   });
 
@@ -121,7 +134,7 @@ export function GameModeSelector({ onSelect }: GameModeSelectorProps) {
           }}>
             📝
           </div>
-          
+
           <h2 style={{
             margin: '0 0 8px 0',
             fontSize: 22,
@@ -130,7 +143,7 @@ export function GameModeSelector({ onSelect }: GameModeSelectorProps) {
           }}>
             {t.teacherCreates.title}
           </h2>
-          
+
           <p style={{
             margin: '0 0 16px 0',
             fontSize: 14,
@@ -139,7 +152,7 @@ export function GameModeSelector({ onSelect }: GameModeSelectorProps) {
           }}>
             {t.teacherCreates.description}
           </p>
-          
+
           <ul style={{
             margin: 0,
             padding: '0 0 0 20px',
@@ -182,7 +195,7 @@ export function GameModeSelector({ onSelect }: GameModeSelectorProps) {
           }}>
             👥
           </div>
-          
+
           <h2 style={{
             margin: '0 0 8px 0',
             fontSize: 22,
@@ -191,7 +204,7 @@ export function GameModeSelector({ onSelect }: GameModeSelectorProps) {
           }}>
             {t.studentsPropose.title}
           </h2>
-          
+
           <p style={{
             margin: '0 0 16px 0',
             fontSize: 14,
@@ -200,7 +213,7 @@ export function GameModeSelector({ onSelect }: GameModeSelectorProps) {
           }}>
             {t.studentsPropose.description}
           </p>
-          
+
           <ul style={{
             margin: 0,
             padding: '0 0 0 20px',

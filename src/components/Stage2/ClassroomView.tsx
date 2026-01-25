@@ -345,24 +345,25 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
     };
   }, []);
 
-  // Progreso de calificaciones
+  // Progreso de calificaciones - SUSCRIPCIÓN EN TIEMPO REAL
   useEffect(() => {
-    if (safePhase !== "rating") {
+    if (safePhase !== "rating" || !game?.stage2) {
       setRatingProgress(null);
       return;
     }
-    const fetchProgress = async () => {
-      try {
-        const progress = await getRatingProgress(gameId);
-        setRatingProgress(progress);
-      } catch (e) {
-        console.error("Error fetching rating progress:", e);
-      }
-    };
-    fetchProgress();
-    const interval = setInterval(fetchProgress, 2000);
-    return () => clearInterval(interval);
-  }, [gameId, safePhase]);
+
+    const roundIndex = game.stage2.currentRound ?? 0;
+    const ratingTeamsRef = ref(database, `games/${gameId}/stage2/rounds/${roundIndex}/ratingTeams`);
+
+    const unsub = onValue(ratingTeamsRef, (snapshot) => {
+      const ratingTeams = snapshot.val() || {};
+      const total = Object.keys(ratingTeams).length;
+      const rated = Object.values(ratingTeams).filter((r: any) => !!r?.rating).length;
+      setRatingProgress({ rated, total });
+    });
+
+    return () => unsub();
+  }, [gameId, safePhase, game?.stage2?.currentRound]);
 
   // Justificación actual
   useEffect(() => {
@@ -459,7 +460,7 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
     );
   }
 
-if (!game.stage2) {
+  if (!game.stage2) {
     return (
       <div style={styles.container}>
         <div style={styles.header}>
@@ -510,7 +511,7 @@ if (!game.stage2) {
           <div>
             <h1 style={styles.headerTitle}>🎯 ETAPA 2 - Vista del Aula</h1>
             <p style={styles.headerSubtitle}>
-              Ronda {game.stage2.currentRound + 1} • Fase: {safePhase}
+              Ronda {(game.stage2?.currentRound ?? 0) + 1} de {Object.values(game.questions || {}).filter((q: any) => q.suggestedStage === 2).length} • Fase: {safePhase}
             </p>
           </div>
 
@@ -974,13 +975,39 @@ if (!game.stage2) {
             {Object.entries(round.ratingTeams || {})
               .sort(([, a], [, b]) => {
                 const order: Record<string, number> = { red: 0, yellow: 1, green: 2 };
-                return (order[(a as any).rating] ?? 3) - (order[(b as any).rating] ?? 3);
+                const aRating = (a as any).rating;
+                const bRating = (b as any).rating;
+                // Sin calificar va al final
+                if (!aRating) return 1;
+                if (!bRating) return -1;
+                return (order[aRating] ?? 3) - (order[bRating] ?? 3);
               })
               .map(([teamId, rater]: [string, any]) => {
-                const colorMap: Record<string, string> = { green: "#22c55e", yellow: "#eab308", red: "#ef4444" };
-                const color = colorMap[rater.rating] ?? "#94a3b8";
+                const rating = rater.rating;
+                const hasRated = !!rating;
+
+                // ✅ FIX: Si no calificó, mostrar blanco
+                const colorMap: Record<string, string> = {
+                  green: "#22c55e",
+                  yellow: "#eab308",
+                  red: "#ef4444"
+                };
+                const color = hasRated ? (colorMap[rating] ?? "#94a3b8") : "#e2e8f0"; // Gris claro si no calificó
+
                 const isValidated = rater.validated !== null && rater.validated !== undefined;
-                const pts = rater.rating === "red" ? "12" : rater.rating === "yellow" ? "10" : "5";
+
+                // ✅ FIX: Puntos según calificación
+                const pts = rating === "red" ? "12" : rating === "yellow" ? "10" : rating === "green" ? "5" : "0";
+
+                // ✅ FIX: Emoji según calificación
+                const ratingEmoji = rating === "green" ? "🟩" :
+                  rating === "yellow" ? "🟨" :
+                    rating === "red" ? "🟥" : "⬜";
+
+                // ✅ FIX: Texto de la calificación
+                const ratingText = rating === "green" ? "Verde" :
+                  rating === "yellow" ? "Amarillo" :
+                    rating === "red" ? "Rojo" : "Sin calificar";
 
                 return (
                   <div key={teamId} style={styles.ratingCard(color, rater.validated)}>
@@ -994,12 +1021,28 @@ if (!game.stage2) {
                           </div>
                         )}
                       </div>
-                      <div style={styles.colorDot(color)}>
-                        {rater.rating === "green" ? "🟩" : rater.rating === "yellow" ? "🟨" : "🟥"}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: "#475569" }}>{ratingText}</span>
+                        <div style={styles.colorDot(color)}>
+                          {ratingEmoji}
+                        </div>
                       </div>
                     </div>
 
-                    {!isValidated ? (
+                    {/* ✅ FIX: Si no calificó, no mostrar botones */}
+                    {!hasRated ? (
+                      <div style={{
+                        marginTop: 16,
+                        padding: 12,
+                        backgroundColor: "#f1f5f9",
+                        borderRadius: 8,
+                        textAlign: "center",
+                        color: "#64748b",
+                        fontWeight: 600,
+                      }}>
+                        ⬜ No calificó → 0 pts
+                      </div>
+                    ) : !isValidated ? (
                       <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
                         <button
                           onClick={() => { play("correct"); validateRating(gameId, teamId, true); }}
@@ -1096,25 +1139,47 @@ if (!game.stage2) {
             ))}
           </div>
 
-          {/* Siguiente ronda */}
-          <button
-            onClick={async () => {
-              play("transition");
-              const nextQIndex = (game.stage2?.currentQuestionIndex ?? 0) + 1;
-              const nextRound = (game.stage2?.currentRound ?? 0) + 1;
+          {/* ✅ CORREGIDO: Verificar si hay más preguntas antes de mostrar botones */}
+          {(() => {
+            const allQuestions = Object.values(game.questions || {}) as any[];
+            const stage2Questions = allQuestions.filter(q => q.suggestedStage === 2);
+            const currentRoundNum = game.stage2?.currentRound ?? 0;
+            const hasMoreRounds = (currentRoundNum + 1) < stage2Questions.length;
 
-              await update(ref(database), {
-                [`games/${gameId}/stage2/currentQuestionIndex`]: nextQIndex,
-                [`games/${gameId}/stage2/currentRound`]: nextRound,
-                [`games/${gameId}/updatedAt`]: Date.now(),
-              });
+            return hasMoreRounds ? (
+              <button
+                onClick={async () => {
+                  play("transition");
+                  const nextRound = currentRoundNum + 1;
 
-              await startStage2Round(gameId);
-            }}
-            style={{ ...styles.primaryBtn("#3b82f6"), width: "100%", justifyContent: "center" }}
-          >
-            ➡️ SIGUIENTE RONDA
-          </button>
+                  await update(ref(database), {
+                    [`games/${gameId}/stage2/currentRound`]: nextRound,
+                    [`games/${gameId}/updatedAt`]: Date.now(),
+                  });
+
+                  await startStage2Round(gameId);
+                }}
+                style={{ ...styles.primaryBtn("#3b82f6"), width: "100%", justifyContent: "center" }}
+              >
+                ➡️ SIGUIENTE RONDA ({currentRoundNum + 2} de {stage2Questions.length})
+              </button>
+            ) : (
+              <button
+                onClick={async () => {
+                  play("roundComplete");
+                  await update(ref(database), {
+                    [`games/${gameId}/status/status`]: "game_complete",
+                    [`games/${gameId}/stage2/completed`]: true,
+                    [`games/${gameId}/stage2/completedAt`]: Date.now(),
+                    [`games/${gameId}/updatedAt`]: Date.now(),
+                  });
+                }}
+                style={{ ...styles.primaryBtn("#22c55e"), width: "100%", justifyContent: "center" }}
+              >
+                🏆 FINALIZAR JUEGO
+              </button>
+            );
+          })()}
         </div>
       )}
 

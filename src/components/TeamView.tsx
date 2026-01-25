@@ -1,11 +1,10 @@
 // src/components/TeamView.tsx
-// CON SONIDOS INTEGRADOS 🔊
-
+// CON SONIDOS INTEGRADOS 🔊 + INTERNACIONALIZACIÓN 🌐
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { ref, update } from 'firebase/database';
-import { database } from '../firebase.config';
+import { ref as storageRef, getBlob } from 'firebase/storage';
+import { database, storage } from '../firebase.config';
 import type { Team, Round, Rating, RatingColor } from '../types/game';
-
 import {
   subscribeToGame,
   setRoundHasResponded,
@@ -19,45 +18,167 @@ import {
   markPointsAsConfirmed,
   areAllTeamsStage1Complete,
 } from '../services/gameRepository';
-
-import { useSound } from '../hooks/useSound'; // 🔊 NUEVO
-
+import { useSound } from '../hooks/useSound';
+import { useI18n } from '../i18n';
 import './TeamView.css';
 
+// ============================================
+// TRADUCCIONES
+// ============================================
+const getTeamViewTexts = (lang: 'es' | 'en' | 'pt') => ({
+  stage1Complete: {
+    title: lang === 'es' ? '✅ Este equipo terminó Stage 1' : lang === 'pt' ? '✅ Esta equipe terminou a Etapa 1' : '✅ This team finished Stage 1',
+    waiting: lang === 'es' ? '⏳ Esperando a que los demás equipos terminen...' : lang === 'pt' ? '⏳ Aguardando as outras equipes terminarem...' : '⏳ Waiting for other teams to finish...',
+  },
+  header: {
+    stage: lang === 'es' ? 'Etapa 1' : lang === 'pt' ? 'Etapa 1' : 'Stage 1',
+    round: lang === 'es' ? 'Ronda' : lang === 'pt' ? 'Rodada' : 'Round',
+    of: lang === 'es' ? 'de' : lang === 'pt' ? 'de' : 'of',
+  },
+  pedagogicalReminder: lang === 'es'
+    ? 'Si alguien está teniendo dificultades sostenidas, es un buen momento para pausar y reforzar la comprensión como equipo.'
+    : lang === 'pt'
+      ? 'Se alguém está tendo dificuldades constantes, é um bom momento para pausar e reforçar a compreensão como equipe.'
+      : 'If someone is having sustained difficulties, it\'s a good time to pause and reinforce understanding as a team.',
+  question: {
+    title: lang === 'es' ? '📝 PREGUNTA DE ESTA RONDA:' : lang === 'pt' ? '📝 PERGUNTA DESTA RODADA:' : '📝 THIS ROUND\'S QUESTION:',
+    supportMaterial: lang === 'es' ? '📄 Material de apoyo' : lang === 'pt' ? '📄 Material de apoio' : '📄 Support material',
+  },
+  response: {
+    isAnswering: lang === 'es' ? 'está respondiendo la pregunta en voz alta.' : lang === 'pt' ? 'está respondendo a pergunta em voz alta.' : 'is answering the question out loud.',
+    thePlayer: lang === 'es' ? 'El jugador' : lang === 'pt' ? 'O jogador' : 'The player',
+    captain: lang === 'es' ? 'Capitán del dispositivo:' : lang === 'pt' ? 'Capitão do dispositivo:' : 'Device captain:',
+    teamListens: lang === 'es' ? 'El resto del equipo escucha con atención para poder calificar después.' : lang === 'pt' ? 'O resto da equipe ouve com atenção para poder avaliar depois.' : 'The rest of the team listens carefully to rate afterwards.',
+    tip: lang === 'es' ? 'Tip: Presten atención a si la respuesta es completa y correcta.' : lang === 'pt' ? 'Dica: Prestem atenção se a resposta é completa e correta.' : 'Tip: Pay attention to whether the answer is complete and correct.',
+    alreadyMarked: lang === 'es' ? '✅ Ya marcado' : lang === 'pt' ? '✅ Já marcado' : '✅ Already marked',
+    markAnswered: lang === 'es' ? '✅ YA RESPONDIÓ (pasar a calificar)' : lang === 'pt' ? '✅ JÁ RESPONDEU (passar a avaliar)' : '✅ ANSWERED (proceed to rate)',
+  },
+  rating: {
+    phase1Title: lang === 'es' ? '💬 FASE 1: CALIFICAR LA RESPUESTA' : lang === 'pt' ? '💬 FASE 1: AVALIAR A RESPOSTA' : '💬 PHASE 1: RATE THE ANSWER',
+    phase1Subtitle: lang === 'es' ? 'Cada uno califica en orden, de menor a mayor puntaje' : lang === 'pt' ? 'Cada um avalia em ordem, do menor ao maior pontuação' : 'Each one rates in order, from lowest to highest score',
+    green: lang === 'es' ? 'VERDE' : lang === 'pt' ? 'VERDE' : 'GREEN',
+    greenShort: lang === 'es' ? 'Verde' : lang === 'pt' ? 'Verde' : 'Green',
+    greenDesc: lang === 'es' ? 'La respuesta es correcta y no quiero agregar nada' : lang === 'pt' ? 'A resposta está correta e não quero adicionar nada' : 'The answer is correct and I don\'t want to add anything',
+    yellow: lang === 'es' ? 'AMARILLO' : lang === 'pt' ? 'AMARELO' : 'YELLOW',
+    yellowShort: lang === 'es' ? 'Amarillo' : lang === 'pt' ? 'Amarelo' : 'Yellow',
+    yellowDesc: lang === 'es' ? 'La respuesta es correcta pero hay algo importante que deseo agregar o relacionar' : lang === 'pt' ? 'A resposta está correta mas há algo importante que desejo adicionar ou relacionar' : 'The answer is correct but there\'s something important I want to add or relate',
+    red: lang === 'es' ? 'ROJO' : lang === 'pt' ? 'VERMELHO' : 'RED',
+    redShort: lang === 'es' ? 'Rojo' : lang === 'pt' ? 'Vermelho' : 'Red',
+    redDesc: lang === 'es' ? 'La respuesta es incorrecta y voy a explicar exactamente por qué' : lang === 'pt' ? 'A resposta está incorreta e vou explicar exatamente por quê' : 'The answer is incorrect and I will explain exactly why',
+    yourTurn: lang === 'es' ? '⬅️ TU TURNO 🔥' : lang === 'pt' ? '⬅️ SUA VEZ 🔥' : '⬅️ YOUR TURN 🔥',
+    waitYourTurn: lang === 'es' ? '⏳ Esperá - Pronto será tu turno' : lang === 'pt' ? '⏳ Aguarde - Logo será sua vez' : '⏳ Wait - Soon it will be your turn',
+    waiting: lang === 'es' ? '⏳ Esperando...' : lang === 'pt' ? '⏳ Aguardando...' : '⏳ Waiting...',
+    rated: lang === 'es' ? 'calificaron' : lang === 'pt' ? 'avaliaram' : 'rated',
+  },
+  validation: {
+    phase2Title: lang === 'es' ? '💬 FASE 2: VALIDAR JUSTIFICACIONES' : lang === 'pt' ? '💬 FASE 2: VALIDAR JUSTIFICATIVAS' : '💬 PHASE 2: VALIDATE JUSTIFICATIONS',
+    phase2Subtitle: lang === 'es' ? 'Solo los votos amarillos y rojos necesitan justificación' : lang === 'pt' ? 'Apenas os votos amarelos e vermelhos precisam de justificativa' : 'Only yellow and red votes need justification',
+    progress: lang === 'es' ? 'Progreso de validación:' : lang === 'pt' ? 'Progresso de validação:' : 'Validation progress:',
+    validated: lang === 'es' ? 'validados' : lang === 'pt' ? 'validados' : 'validated',
+    accepted: lang === 'es' ? '✅ Aceptado' : lang === 'pt' ? '✅ Aceito' : '✅ Accepted',
+    rejected: lang === 'es' ? '❌ Rechazado' : lang === 'pt' ? '❌ Rejeitado' : '❌ Rejected',
+    isJustifying: lang === 'es' ? 'está justificando su voto.' : lang === 'pt' ? 'está justificando seu voto.' : 'is justifying their vote.',
+    listenAndDecide: lang === 'es' ? 'Escuchen con atención y decidan en equipo:' : lang === 'pt' ? 'Ouçam com atenção e decidam em equipe:' : 'Listen carefully and decide as a team:',
+    reject: lang === 'es' ? '❌ Rechazar' : lang === 'pt' ? '❌ Rejeitar' : '❌ Reject',
+    accept: lang === 'es' ? '✅ Aceptar' : lang === 'pt' ? '✅ Aceitar' : '✅ Accept',
+    waitingPrevious: lang === 'es' ? '⏳ Esperando validar primero a los anteriores...' : lang === 'pt' ? '⏳ Aguardando validar primeiro os anteriores...' : '⏳ Waiting to validate previous ones first...',
+    autoAccepted: lang === 'es' ? '✅ Aceptado automáticamente' : lang === 'pt' ? '✅ Aceito automaticamente' : '✅ Automatically accepted',
+    pointsConfirmed: lang === 'es' ? '✅ Los puntos de esta ronda ya fueron confirmados' : lang === 'pt' ? '✅ Os pontos desta rodada já foram confirmados' : '✅ This round\'s points have already been confirmed',
+    nextRound: lang === 'es' ? '▶️ Pasar a la siguiente ronda' : lang === 'pt' ? '▶️ Passar para a próxima rodada' : '▶️ Go to next round',
+    confirming: lang === 'es' ? '⏳ Confirmando...' : lang === 'pt' ? '⏳ Confirmando...' : '⏳ Confirming...',
+    confirmAndAdvance: lang === 'es' ? '✅ Confirmar puntos y avanzar' : lang === 'pt' ? '✅ Confirmar pontos e avançar' : '✅ Confirm points and advance',
+  },
+  pedagogicalTip: lang === 'es'
+    ? 'Recuerden: Lo importante no es ganar puntos, sino aprender juntos'
+    : lang === 'pt'
+      ? 'Lembrem: O importante não é ganhar pontos, mas aprender juntos'
+      : 'Remember: The important thing is not to win points, but to learn together',
+  ranking: lang === 'es' ? '📊 Ranking de' : lang === 'pt' ? '📊 Ranking de' : '📊 Ranking of',
+  modal: {
+    title: lang === 'es' ? '📄 Material de apoyo' : lang === 'pt' ? '📄 Material de apoio' : '📄 Support material',
+    loading: lang === 'es' ? '⏳ Cargando material...' : lang === 'pt' ? '⏳ Carregando material...' : '⏳ Loading material...',
+    close: lang === 'es' ? 'Cerrar' : lang === 'pt' ? 'Fechar' : 'Close',
+  },
+  errors: {
+    savingRating: lang === 'es' ? 'Error al guardar la calificación' : lang === 'pt' ? 'Erro ao salvar a avaliação' : 'Error saving rating',
+    markingResponse: lang === 'es' ? 'Error al marcar "ya respondió".' : lang === 'pt' ? 'Erro ao marcar "já respondeu".' : 'Error marking "already answered".',
+    phase1First: lang === 'es' ? 'Primero deben calificar todos (Fase 1).' : lang === 'pt' ? 'Primeiro todos devem avaliar (Fase 1).' : 'Everyone must rate first (Phase 1).',
+    phase2First: lang === 'es' ? 'Debés completar la validación (Fase 2) antes de confirmar puntos.' : lang === 'pt' ? 'Você deve completar a validação (Fase 2) antes de confirmar pontos.' : 'You must complete validation (Phase 2) before confirming points.',
+    confirmingPoints: lang === 'es' ? 'Error al confirmar puntos. Intentá de nuevo.' : lang === 'pt' ? 'Erro ao confirmar pontos. Tente novamente.' : 'Error confirming points. Try again.',
+    loadingMaterial: lang === 'es' ? 'Error al cargar el material. Intentá de nuevo.' : lang === 'pt' ? 'Erro ao carregar o material. Tente novamente.' : 'Error loading material. Try again.',
+  },
+});
+
+// ============================================
+// INTERFACE
+// ============================================
 interface TeamViewProps {
   gameId: string;
   team: Team;
   currentRound: Round;
   currentQuestion: string;
   totalStage1Questions: number;
+  sourceTextPath?: string | null;
 }
 
+// ============================================
+// COMPONENTE
+// ============================================
 export function TeamView({
   gameId,
   team,
   currentRound,
   currentQuestion,
   totalStage1Questions,
+  sourceTextPath,
 }: TeamViewProps) {
+  // i18n
+  const { language } = useI18n();
+  const texts = getTeamViewTexts(language as 'es' | 'en' | 'pt');
+
+  // Estado
   const [validations, setValidations] = useState<{ [playerId: string]: boolean }>({});
   const [allValidated, setAllValidated] = useState(false);
   const [liveRatings, setLiveRatings] = useState<{ [playerId: string]: Rating }>({});
   const [lastRoundPoints, setLastRoundPoints] = useState<{ [playerId: string]: number }>({});
   const [phase, setPhase] = useState<'response' | 'rating' | 'validation'>('response');
   const [hasResponded, setHasResponded] = useState(false);
-
   const [isConfirmingPoints, setIsConfirmingPoints] = useState(false);
   const [pointsAlreadyConfirmed, setPointsAlreadyConfirmed] = useState(false);
   const [showPedagogicalTip, setShowPedagogicalTip] = useState(false);
 
-  const prevPhaseRef = useRef<string | null>(null); // 🔊 Para detectar cambios de fase
+  // Material complementario
+  const [showMaterialModal, setShowMaterialModal] = useState(false);
+  const [materialContent, setMaterialContent] = useState<string | null>(null);
+  const [loadingMaterial, setLoadingMaterial] = useState(false);
 
-  const { play } = useSound(); // 🔊 NUEVO
-
+  const prevPhaseRef = useRef<string | null>(null);
+  const { play } = useSound();
   const displayRoundNumber = currentRound?.roundNumber ?? 0;
 
   // =========================
-  // Verificar si los puntos ya fueron confirmados (1-shot)
+  // Cargar material complementario
+  // =========================
+  const handleOpenMaterial = async () => {
+    if (!sourceTextPath) return;
+    setShowMaterialModal(true);
+    if (materialContent) return;
+    setLoadingMaterial(true);
+    try {
+      const txtRef = storageRef(storage, sourceTextPath);
+      const blob = await getBlob(txtRef);
+      const text = await blob.text();
+      setMaterialContent(text);
+    } catch (error) {
+      console.error('Error loading material:', error);
+      setMaterialContent(texts.errors.loadingMaterial);
+    } finally {
+      setLoadingMaterial(false);
+    }
+  };
+
+  // =========================
+  // Verificar si los puntos ya fueron confirmados
   // =========================
   useEffect(() => {
     const checkConfirmation = async () => {
@@ -69,37 +190,42 @@ export function TeamView({
     checkConfirmation();
   }, [gameId, team.id, currentRound?.roundNumber]);
 
+  // Sincronización con Firebase - FUENTE DE VERDAD ÚNICA
   useEffect(() => {
     const unsubscribe = subscribeToGame(gameId, (game) => {
       if (!game?.teams) return;
-
       const teamData = (game.teams as any)?.[team.id];
       if (!teamData) return;
-
       const rn = teamData.currentRound ?? 0;
       const round: any = teamData.stage1Rounds?.[rn] ?? teamData.stage1Rounds?.[String(rn)];
-
       if (!round) return;
+      const ratings = round.ratings || {};
+      const responded = round.hasResponded === true;
 
-      setLiveRatings(round.ratings || {});
+      // ✅ CORREGIDO: usar setLiveRatings
+      setLiveRatings(ratings);
       setLastRoundPoints(round.pointsAwarded || {});
-      setHasResponded(round.hasResponded === true);
+      setHasResponded(responded);
       setPointsAlreadyConfirmed(round.pointsConfirmed === true);
+
+      // Solo leer validaciones para ratings que tienen campo 'userValidated'
+      const validationsFromFirebase: { [playerId: string]: boolean } = {};
+      for (const [playerId, rating] of Object.entries(ratings)) {
+        const r = rating as any;
+        if (r?.userValidated !== undefined) {
+          validationsFromFirebase[playerId] = r.userValidated === true;
+        }
+      }
+      setValidations(validationsFromFirebase);
     });
 
     return () => unsubscribe();
-  }, [gameId, team.id, currentRound?.roundNumber]);
+  }, [gameId, team.id]);
 
-  // =========================
-  // Reset al cambiar de ronda
-  // =========================
+  // Reset valores puramente locales al cambiar de ronda
   useEffect(() => {
-    setValidations({});
     setAllValidated(false);
-    setLastRoundPoints({});
-    setHasResponded(false);
-    setPhase('response');
-    setLiveRatings({});
+    // NO resetear hasResponded, liveRatings, validations - vienen de Firebase
   }, [currentRound?.roundNumber]);
 
   // =========================
@@ -117,10 +243,8 @@ export function TeamView({
   }, [ratersInOrder, liveRatings]);
 
   const currentRater = currentRaterIndex >= 0 ? ratersInOrder[currentRaterIndex] : null;
-
   const ratingsCount = Object.keys(liveRatings).length;
   const totalRaters = ratersInOrder.length;
-  const ratingProgress = `${ratingsCount} de ${totalRaters} calificaron`;
 
   // =========================
   // Cambio automático de fase
@@ -130,12 +254,10 @@ export function TeamView({
       setPhase('response');
       return;
     }
-
     if (totalRaters === 0) {
       setPhase('rating');
       return;
     }
-
     if (ratingsCount === totalRaters && ratingsCount > 0) {
       setPhase('validation');
     } else {
@@ -143,7 +265,7 @@ export function TeamView({
     }
   }, [hasResponded, ratingsCount, totalRaters]);
 
-  // 🔊 Sonido al cambiar de fase
+  // Sonido al cambiar de fase
   useEffect(() => {
     if (phase && prevPhaseRef.current && phase !== prevPhaseRef.current) {
       if (phase === 'rating') {
@@ -160,20 +282,17 @@ export function TeamView({
   // =========================
   useEffect(() => {
     if (phase !== 'validation') return;
-
     setValidations((prev) => {
       const next = { ...prev };
       for (const [playerId, rating] of Object.entries(liveRatings)) {
         if (rating?.color === 'green' && next[playerId] === undefined) {
           next[playerId] = true;
-          validateRating(gameId, team.id, currentRound?.roundNumber ?? 0, playerId, true)
-            .catch(() => { });
+          validateRating(gameId, team.id, currentRound?.roundNumber ?? 0, playerId, true).catch(() => { });
         }
       }
       return next;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, liveRatings, gameId, team.id, displayRoundNumber]);
+  }, [phase, liveRatings, gameId, team.id, currentRound?.roundNumber]);
 
   // =========================
   // allValidated: solo amarillo/rojo requieren validación
@@ -182,12 +301,10 @@ export function TeamView({
     const needValidation = Object.entries(liveRatings).filter(
       ([, rating]) => rating.color === 'yellow' || rating.color === 'red'
     );
-
     if (needValidation.length === 0) {
       setAllValidated(true);
       return;
     }
-
     const allDone = needValidation.every(([playerId]) => validations[playerId] !== undefined);
     setAllValidated(allDone);
   }, [validations, liveRatings]);
@@ -195,52 +312,50 @@ export function TeamView({
   // =========================
   // Handlers
   // =========================
-  
-  // 🔊 Handler con sonido para calificación
   const handleRating = async (playerId: string, playerName: string, color: RatingColor) => {
     const targetRoundNumber = currentRound?.roundNumber ?? 0;
-
     const rating: Rating = {
       playerId,
       playerName,
       color,
       validated: true,
     };
-
     try {
-      play('rating'); // 🔊 Sonido al calificar
+      play('rating');
       await addRating(gameId, team.id, targetRoundNumber, rating);
-      play('correct'); // 🔊 Sonido de confirmación
+      play('correct');
     } catch (error) {
       console.error('Error adding rating:', error);
-      play('incorrect'); // 🔊 Sonido de error
-      alert('Error al guardar la calificación');
+      play('incorrect');
+      alert(texts.errors.savingRating);
     }
   };
 
-  // 🔊 Handler con sonido para validación
   const handleSetValidation = async (playerId: string, value: boolean) => {
-    play('click'); // 🔊 Sonido de click
+    play('click');
     setValidations((prev) => ({ ...prev, [playerId]: value }));
     try {
-      await validateRating(gameId, team.id, displayRoundNumber, playerId, value);
-      play(value ? 'correct' : 'incorrect'); // 🔊 Sonido según resultado
+      // Guardar como 'userValidated' para distinguir de 'validated' por defecto
+      const roundNumber = currentRound?.roundNumber ?? 0;
+      await update(ref(database, `games/${gameId}/teams/${team.id}/stage1Rounds/${roundNumber}/ratings/${playerId}`), {
+        userValidated: value
+      });
+      play(value ? 'correct' : 'incorrect');
     } catch (error) {
       console.error('Error validating rating:', error);
       play('incorrect');
     }
   };
 
-  // 🔊 Handler con sonido para marcar respuesta
   const handleMarkResponded = async () => {
     try {
-      play('click'); // 🔊 Sonido de click
+      play('click');
       await setRoundHasResponded(gameId, team.id, displayRoundNumber, true);
-      play('transition'); // 🔊 Sonido de transición
+      play('transition');
     } catch (e) {
       console.error('Error setting hasResponded:', e);
       play('incorrect');
-      alert('Error al marcar "ya respondió".');
+      alert(texts.errors.markingResponse);
     }
   };
 
@@ -251,47 +366,44 @@ export function TeamView({
     // Inicializar todos en 0
     team.players.forEach((p) => (points[p.id] = 0));
 
-    // Solo contar ratings validados (aceptados)
-    const validatedRatings = ratingsArray.filter((rating) => validations[rating.playerId] === true);
+    // Determinar qué ratings están efectivamente validados/aceptados
+    // - VERDE: siempre se considera aceptado automáticamente
+    // - AMARILLO/ROJO: necesitan validación explícita (validations[playerId] === true)
+    const effectivelyAcceptedRatings = ratingsArray.filter((rating) => {
+      if (rating.color === 'green') {
+        return true; // Verdes siempre aceptados
+      }
+      // Amarillos y rojos necesitan validación explícita
+      return validations[rating.playerId] === true;
+    });
 
-    // Verificar si hay algún ROJO VALIDADO
-    const hasValidatedRed = validatedRatings.some((rating) => rating.color === 'red');
+    // Verificar si hay algún ROJO ACEPTADO
+    const hasAcceptedRed = effectivelyAcceptedRatings.some((rating) => rating.color === 'red');
 
-    // Si hay rojo validado → respuesta INCORRECTA
-    if (hasValidatedRed) {
-      // Solo los rojos validados reciben 10 puntos
-      validatedRatings.forEach((rating) => {
+    if (hasAcceptedRed) {
+      // Respuesta INCORRECTA - solo los rojos aceptados reciben puntos
+      effectivelyAcceptedRatings.forEach((rating) => {
         if (rating.color === 'red') {
           points[rating.playerId] = 10;
         }
-        // Verdes y amarillos quedan en 0 (ya inicializados)
+        // Verdes y amarillos quedan en 0
       });
-
       // Respondedor NO recibe puntos (respuesta incorrecta)
       points[currentRound.respondingPlayerId] = 0;
-
     } else {
-      // No hay rojos validados → respuesta CORRECTA
+      // NO hay rojos aceptados → Respuesta CORRECTA
+      // El respondedor recibe 12 puntos
+      points[currentRound.respondingPlayerId] = 12;
 
-      // Verificar que haya al menos un verde o amarillo validado
-      const hasValidatedGreenOrYellow = validatedRatings.some(
-        (rating) => rating.color === 'green' || rating.color === 'yellow'
-      );
-
-      if (hasValidatedGreenOrYellow) {
-        // Respondedor recibe 12 puntos (respuesta correcta)
-        points[currentRound.respondingPlayerId] = 12;
-
-        // Distribuir puntos a los calificadores validados
-        validatedRatings.forEach((rating) => {
-          if (rating.color === 'green') {
-            points[rating.playerId] = 5;
-          } else if (rating.color === 'yellow') {
-            points[rating.playerId] = 10;
-          }
-          // Rojos no validados quedan en 0
-        });
-      }
+      // Distribuir puntos a los calificadores
+      effectivelyAcceptedRatings.forEach((rating) => {
+        if (rating.color === 'green') {
+          points[rating.playerId] = 5;
+        } else if (rating.color === 'yellow') {
+          points[rating.playerId] = 10;
+        }
+        // Rojos rechazados (no aceptados) quedan en 0
+      });
     }
 
     return points;
@@ -299,15 +411,12 @@ export function TeamView({
 
   const updateLastPlaceCounters = async () => {
     if (!team.players || team.players.length === 0) return;
-
     const minScore = Math.min(...team.players.map(p => p.score ?? 0));
-
     const lastPlaceIdsLocal = new Set(
       team.players
         .filter(p => (p.score ?? 0) === minScore)
         .map(p => p.id)
     );
-
     for (const player of team.players) {
       if (lastPlaceIdsLocal.has(player.id)) {
         const newCount = (player.consecutiveLastPlace ?? 0) + 1;
@@ -320,100 +429,75 @@ export function TeamView({
     }
   };
 
-  // 🔊 Handler con sonido para confirmar puntos
   const handleConfirmPoints = async () => {
     const targetRoundNumber = currentRound?.roundNumber ?? 0;
-
     try {
       const alreadyConfirmed = await arePointsConfirmed(gameId, team.id, targetRoundNumber);
       if (alreadyConfirmed) {
-        console.log('⚠️ Puntos ya confirmados - solo avanzando ronda (prepareNextRound)');
         play('click');
         await prepareNextRound(gameId, team.id);
-
         const allComplete = await areAllTeamsStage1Complete(gameId);
         if (allComplete) {
-          console.log('🎉 Todos los equipos completaron Stage 1');
-          play('roundComplete'); // 🔊 Fanfare
+          play('roundComplete');
           await update(ref(database), {
             [`games/${gameId}/status/status`]: 'transition',
             [`games/${gameId}/status/currentStage`]: 2,
             [`games/${gameId}/updatedAt`]: Date.now(),
           });
         }
-
         return;
       }
     } catch (e) {
-      console.warn('⚠️ No se pudo verificar arePointsConfirmed, intentando flujo normal', e);
+      console.warn('⚠️ No se pudo verificar arePointsConfirmed', e);
     }
 
     if (phase !== 'validation') {
       play('incorrect');
-      alert('Primero deben calificar todos (Fase 1).');
+      alert(texts.errors.phase1First);
       return;
     }
-
     if (!allValidated) {
       play('incorrect');
-      alert('Debés completar la validación (Fase 2) antes de confirmar puntos.');
+      alert(texts.errors.phase2First);
       return;
     }
 
     setIsConfirmingPoints(true);
-    play('click'); // 🔊 Click inicial
-
+    play('click');
     try {
       await markPointsAsConfirmed(gameId, team.id, targetRoundNumber);
-      console.log('🔒 Ronda marcada como confirmada');
-
       const points = calculatePoints();
       setLastRoundPoints(points);
-      console.log('📊 Puntos calculados:', points);
-
       await awardPoints(gameId, team.id, targetRoundNumber, points);
-      console.log('💾 Puntos guardados en Firebase');
-
       for (const [playerId, earnedPoints] of Object.entries(points)) {
         if (earnedPoints > 0) {
           const player = team.players.find((p) => p.id === playerId);
           if (player) {
             const newScore = (player.score ?? 0) + earnedPoints;
-            console.log(`💰 ${player.name}: ${player.score} + ${earnedPoints} = ${newScore}`);
             await updatePlayerScoreSmartCompat(gameId, team.id, playerId, newScore);
           }
         }
       }
-      console.log('👥 Scores actualizados');
-
-      play('points'); // 🔊 Sonido de puntos ganados
-
+      play('points');
       await updateLastPlaceCounters();
-      console.log('📉 Contadores actualizados');
-
       await prepareNextRound(gameId, team.id);
-      console.log('⏭️ prepareNextRound ejecutado');
-
       const allComplete = await areAllTeamsStage1Complete(gameId);
       if (allComplete) {
-        console.log('🎉 Todos los equipos completaron Stage 1');
-        play('roundComplete'); // 🔊 Fanfare grande
+        play('roundComplete');
         await update(ref(database), {
           [`games/${gameId}/status/status`]: 'transition',
           [`games/${gameId}/status/currentStage`]: 2,
           [`games/${gameId}/updatedAt`]: Date.now(),
         });
       } else {
-        play('correct'); // 🔊 Sonido de éxito
+        play('correct');
       }
-
       setShowPedagogicalTip(true);
       setTimeout(() => setShowPedagogicalTip(false), 3000);
-
     } catch (error) {
       console.error('❌ Error confirmando puntos:', error);
-      play('incorrect'); // 🔊 Sonido de error
-      alert('Error al confirmar puntos. Intentá de nuevo.');
+      play('incorrect');
+      alert(texts.errors.confirmingPoints);
     } finally {
       setIsConfirmingPoints(false);
     }
@@ -424,39 +508,30 @@ export function TeamView({
   // =========================
   const rankedPlayers = [...team.players].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   const lowestScorePlayer = rankedPlayers[rankedPlayers.length - 1];
-
   const respondingPlayer = team.players.find((p) => p.id === currentRound.respondingPlayerId);
-
   const pendingValidations = ratersInOrder.filter((p) => {
     const r = liveRatings[p.id];
     if (!r) return false;
     if (r.color !== 'yellow' && r.color !== 'red') return false;
     return validations[p.id] === undefined;
   });
-
   const currentValidationTurnPlayerId = pendingValidations[0]?.id;
-
   const totalNeedValidation = useMemo(() => {
     return ratersInOrder.filter((p) => {
       const r = liveRatings[p.id];
       return r && (r.color === 'yellow' || r.color === 'red');
     }).length;
   }, [ratersInOrder, liveRatings]);
-
   const validatedRelevantCount = useMemo(() => {
     return Object.keys(validations).filter((pid) => {
       const r = liveRatings[pid];
       return r && (r.color === 'yellow' || r.color === 'red');
     }).length;
   }, [validations, liveRatings]);
-
   const validationProgressPercent = (validatedRelevantCount / Math.max(totalNeedValidation, 1)) * 100;
-
   const lastPlaceIds = useMemo(() => {
     if (!team.players || team.players.length === 0) return new Set<string>();
-
     const minScore = Math.min(...team.players.map(p => p.score ?? 0));
-
     return new Set(
       team.players
         .filter(p => (p.score ?? 0) === minScore)
@@ -464,13 +539,22 @@ export function TeamView({
     );
   }, [team.players]);
 
+  // Helper para nombres de colores
+  const getColorName = (color: string) => {
+    if (color === 'green') return texts.rating.greenShort;
+    if (color === 'yellow') return texts.rating.yellowShort;
+    if (color === 'red') return texts.rating.redShort;
+    return color;
+  };
+
+  // Stage 1 completado
   if ((team as any)?.stage1Completed === true) {
     return (
       <div className="team-view">
         <div className="header">
           <h1>🎮 {team.name}</h1>
-          <p>✅ Este equipo terminó Stage 1</p>
-          <p>⏳ Esperando a que los demás equipos terminen...</p>
+          <p>{texts.stage1Complete.title}</p>
+          <p>{texts.stage1Complete.waiting}</p>
         </div>
       </div>
     );
@@ -484,81 +568,93 @@ export function TeamView({
       <div className="header">
         <h1>🎮 {team.name}</h1>
         <p>
-          Etapa 1 | Ronda {displayRoundNumber + 1} de {totalStage1Questions}
+          {texts.header.stage} | {texts.header.round} {displayRoundNumber + 1} {texts.header.of} {totalStage1Questions}
         </p>
       </div>
 
       {(lowestScorePlayer?.consecutiveLastPlace ?? 0) >= 2 && (
         <div className="reminder pedagogical">
-          💡 <strong>Recordatorio pedagógico:</strong> Si alguien está teniendo dificultades sostenidas, es un buen
-          momento para pausar y reforzar la comprensión como equipo.
+          💡 <strong>{language === 'es' ? 'Recordatorio pedagógico:' : language === 'pt' ? 'Lembrete pedagógico:' : 'Pedagogical reminder:'}</strong> {texts.pedagogicalReminder}
         </div>
       )}
 
       <div className="question-section">
-        <h2>📝 PREGUNTA DE ESTA RONDA:</h2>
+        <h2>{texts.question.title}</h2>
         <div className="question-text">{currentQuestion}</div>
+        {sourceTextPath && (
+          <button
+            onClick={handleOpenMaterial}
+            style={{
+              marginTop: 12,
+              padding: '10px 16px',
+              fontSize: 14,
+              fontWeight: 600,
+              backgroundColor: '#f0f9ff',
+              color: '#0369a1',
+              border: '2px solid #0ea5e9',
+              borderRadius: 8,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            {texts.question.supportMaterial}
+          </button>
+        )}
       </div>
 
       {phase === 'response' ? (
         <div className="response-phase">
           <div className="response-instructions">
             <p>
-              🎤 <strong>{respondingPlayer?.name || 'El jugador'}</strong> está respondiendo la pregunta en voz alta.
+              🎤 <strong>{respondingPlayer?.name || texts.response.thePlayer}</strong> {texts.response.isAnswering}
             </p>
-
             {(currentRound as any)?.captainName && (
               <p className="captain-inline">
-                📱 <strong>Capitán del dispositivo:</strong>{' '}
+                📱 <strong>{texts.response.captain}</strong>{' '}
                 <span className="captain-name-inline">
                   {(currentRound as any).captainName}
                 </span>
               </p>
             )}
-
-            <p>👂 El resto del equipo escucha con atención para poder calificar después.</p>
-
+            <p>👂 {texts.response.teamListens}</p>
             <p className="tip">
-              💡 <em>Tip: Presten atención a si la respuesta es completa y correcta.</em>
+              💡 <em>{texts.response.tip}</em>
             </p>
           </div>
-
-          <button className="btn-responded" onClick={handleMarkResponded} disabled={hasResponded}>
-            {hasResponded ? '✅ Ya marcado' : '✅ YA RESPONDIÓ (pasar a calificar)'}
+          <button
+            className="btn-responded"
+            onClick={handleMarkResponded}
+            disabled={hasResponded}
+          >
+            {hasResponded ? texts.response.alreadyMarked : texts.response.markAnswered}
           </button>
         </div>
       ) : phase === 'rating' ? (
         <div className="ratings-container">
-          <h3>💬 FASE 1: CALIFICAR LA RESPUESTA</h3>
-          <p className="phase-instruction">Cada uno califica en orden, de menor a mayor puntaje</p>
-
+          <h3>{texts.rating.phase1Title}</h3>
+          <p className="phase-instruction">{texts.rating.phase1Subtitle}</p>
           <div className="legend-items">
             <div className="legend-item green">
-              <span className="legend-color">🟩 VERDE</span>
+              <span className="legend-color">🟩 {texts.rating.green}</span>
               <span className="legend-sep">—</span>
-              <span className="legend-description">La respuesta es correcta y no quiero agregar nada</span>
+              <span className="legend-description">{texts.rating.greenDesc}</span>
               <span className="legend-points">+5 pts</span>
             </div>
-
             <div className="legend-item yellow">
-              <span className="legend-color">🟨 AMARILLO</span>
+              <span className="legend-color">🟨 {texts.rating.yellow}</span>
               <span className="legend-sep">—</span>
-              <span className="legend-description">
-                La respuesta es correcta pero hay algo importante que deseo agregar o relacionar
-              </span>
+              <span className="legend-description">{texts.rating.yellowDesc}</span>
               <span className="legend-points">+10 pts</span>
             </div>
-
             <div className="legend-item red">
-              <span className="legend-color">🟥 ROJO</span>
+              <span className="legend-color">🟥 {texts.rating.red}</span>
               <span className="legend-sep">—</span>
-              <span className="legend-description">La respuesta es incorrecta y voy a explicar exactamente por qué</span>
+              <span className="legend-description">{texts.rating.redDesc}</span>
               <span className="legend-points">+10 pts*</span>
             </div>
-
-            <p className="legend-note">
-              . . . . . . . . . . . . . . . . . . .
-            </p>
+            <p className="legend-note">. . . . . . . . . . . . . . . . . . .</p>
           </div>
 
           {ratersInOrder.map((player, index) => {
@@ -567,56 +663,59 @@ export function TeamView({
             const isBlocked = !hasRated && !isCurrentTurn;
             const rating = liveRatings[player.id];
             const isLastPlace = lastPlaceIds.has(player.id);
-
             return (
               <div
                 key={player.id}
-                className={`rater-row
-                  ${isCurrentTurn ? 'current-turn' : ''}
-                  ${isBlocked ? 'blocked' : ''}
-                  ${hasRated ? 'completed' : ''}
-                  ${isLastPlace ? 'last-place' : ''}
-                `}
+                className={`rater-row ${isCurrentTurn ? 'current-turn' : ''} ${isBlocked ? 'blocked' : ''} ${hasRated ? 'completed' : ''} ${isLastPlace ? 'last-place' : ''}`}
               >
                 <div className="rater-info">
                   <span className="rater-number">{index + 1}️⃣</span>
                   <span className="rater-name">{player.name}</span>
                   <span className="rater-score">({player.score ?? 0} pts)</span>
-
-                  {isCurrentTurn && <span className="turn-indicator">⬅️ TU TURNO 🔥</span>}
+                  {isCurrentTurn && <span className="turn-indicator">{texts.rating.yourTurn}</span>}
                   {isBlocked && <span className="blocked-indicator">🔒</span>}
                   {hasRated && <span className="completed-indicator">✅</span>}
                 </div>
-
                 {hasRated ? (
                   <div className="rating-display">
                     <span className={`vote-pill ${rating.color}`}>
-                      {rating.color === 'green' && '🟩 Verde'}
-                      {rating.color === 'yellow' && '🟨 Amarillo'}
-                      {rating.color === 'red' && '🟥 Rojo'}
+                      {rating.color === 'green' && `🟩 ${texts.rating.greenShort}`}
+                      {rating.color === 'yellow' && `🟨 ${texts.rating.yellowShort}`}
+                      {rating.color === 'red' && `🟥 ${texts.rating.redShort}`}
                     </span>
                   </div>
                 ) : isCurrentTurn ? (
                   <div className="color-buttons">
-                    <button className="color-btn green" onClick={() => handleRating(player.id, player.name, 'green')}>
-                      🟩 Verde
+                    <button
+                      className="color-btn green"
+                      onClick={() => handleRating(player.id, player.name, 'green')}
+                    >
+                      🟩 {texts.rating.greenShort}
                     </button>
-                    <button className="color-btn yellow" onClick={() => handleRating(player.id, player.name, 'yellow')}>
-                      🟨 Amarillo
+                    <button
+                      className="color-btn yellow"
+                      onClick={() => handleRating(player.id, player.name, 'yellow')}
+                    >
+                      🟨 {texts.rating.yellowShort}
                     </button>
-                    <button className="color-btn red" onClick={() => handleRating(player.id, player.name, 'red')}>
-                      🟥 Rojo
+                    <button
+                      className="color-btn red"
+                      onClick={() => handleRating(player.id, player.name, 'red')}
+                    >
+                      🟥 {texts.rating.redShort}
                     </button>
                   </div>
                 ) : (
-                  <div className="waiting-message">{isBlocked ? '⏳ Esperá - Pronto será tu turno' : '⏳ Esperando...'}</div>
+                  <div className="waiting-message">
+                    {isBlocked ? texts.rating.waitYourTurn : texts.rating.waiting}
+                  </div>
                 )}
               </div>
             );
           })}
 
           <div className="progress-bar">
-            <div className="progress-text">{ratingProgress}</div>
+            <div className="progress-text">{ratingsCount} {texts.rating.rated} {totalRaters}</div>
             <div className="progress-visual">
               {'▓'.repeat(ratingsCount)}
               {'░'.repeat(Math.max(0, totalRaters - ratingsCount))}
@@ -625,93 +724,85 @@ export function TeamView({
         </div>
       ) : (
         <div className="ratings-container">
-          <h3>💬 FASE 2: VALIDAR JUSTIFICACIONES</h3>
-          <p className="phase-instruction">Solo los votos amarillos y rojos necesitan justificación</p>
-
+          <h3>{texts.validation.phase2Title}</h3>
+          <p className="phase-instruction">{texts.validation.phase2Subtitle}</p>
           <div className="validation-progress">
             <div className="progress-info">
-              <span className="progress-label">Progreso de validación:</span>
+              <span className="progress-label">{texts.validation.progress}</span>
               <span className="progress-numbers">
-                {validatedRelevantCount} de {totalNeedValidation} validados
+                {validatedRelevantCount} {texts.header.of} {totalNeedValidation} {texts.validation.validated}
               </span>
             </div>
-
             <div className="progress-bar-container">
-              <div className="progress-bar-fill" style={{ width: `${validationProgressPercent}%` }} />
+              <div
+                className="progress-bar-fill"
+                style={{ width: `${validationProgressPercent}%` }}
+              />
             </div>
           </div>
 
           {ratersInOrder.map((player, index) => {
             const rating = liveRatings[player.id];
             if (!rating) return null;
-
             const needsValidation = rating.color === 'yellow' || rating.color === 'red';
             const isValidated = validations[player.id] !== undefined;
             const isCurrentValidationTurn = currentValidationTurnPlayerId === player.id;
             const isLastPlace = lastPlaceIds.has(player.id);
-
             return (
               <div
                 key={player.id}
-                className={`validation-row
-                   ${needsValidation ? 'needs-validation' : 'auto-accepted'}
-                   ${isCurrentValidationTurn ? 'current-turn' : ''}
-                    ${isLastPlace ? 'last-place' : ''}
-                `}
+                className={`validation-row ${needsValidation ? 'needs-validation' : 'auto-accepted'} ${isCurrentValidationTurn ? 'current-turn' : ''} ${isLastPlace ? 'last-place' : ''}`}
               >
                 <div className="validation-info">
                   <span className="rater-number">{index + 1}️⃣</span>
                   <span className="rater-name">{player.name}</span>
                   <span className={`vote-pill ${rating.color}`}>
-                    {rating.color === 'green' && '🟩 Verde'}
-                    {rating.color === 'yellow' && '🟨 Amarillo'}
-                    {rating.color === 'red' && '🟥 Rojo'}
+                    {rating.color === 'green' && `🟩 ${texts.rating.greenShort}`}
+                    {rating.color === 'yellow' && `🟨 ${texts.rating.yellowShort}`}
+                    {rating.color === 'red' && `🟥 ${texts.rating.redShort}`}
                   </span>
                 </div>
-
                 {needsValidation ? (
                   isValidated ? (
                     <div className="validation-result">
                       <span className={`validation-badge ${validations[player.id] ? 'accepted' : 'rejected'}`}>
-                        {validations[player.id] ? '✅ Aceptado' : '❌ Rechazado'}
+                        {validations[player.id] ? texts.validation.accepted : texts.validation.rejected}
                       </span>
                     </div>
                   ) : isCurrentValidationTurn ? (
                     <div className="validation-controls">
                       <p className="validation-prompt">
-                        💬 {player.name} está justificando su voto.
+                        💬 {player.name} {texts.validation.isJustifying}
                         <br />
-                        Escuchen con atención y decidan en equipo:
+                        {texts.validation.listenAndDecide}
                       </p>
-
                       <div className="validation-buttons">
                         <button
                           className={`validation-btn reject ${validations[player.id] === false ? 'selected' : ''}`}
                           onClick={() => handleSetValidation(player.id, false)}
                         >
-                          ❌ Rechazar
+                          {texts.validation.reject}
                         </button>
-
                         <button
                           className={`validation-btn accept ${validations[player.id] === true ? 'selected' : ''}`}
                           onClick={() => handleSetValidation(player.id, true)}
                         >
-                          ✅ Aceptar
+                          {texts.validation.accept}
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <div className="waiting-validation">⏳ Esperando validar primero a los anteriores...</div>
+                    <div className="waiting-validation">{texts.validation.waitingPrevious}</div>
                   )
                 ) : (
-                  <div className="auto-accepted-badge">✅ Aceptado automáticamente</div>
+                  <div className="auto-accepted-badge">{texts.validation.autoAccepted}</div>
                 )}
               </div>
             );
           })}
 
           {pointsAlreadyConfirmed && (
-            <p>✅ Los puntos de esta ronda ya fueron confirmados</p>
+            <p>{texts.validation.pointsConfirmed}</p>
           )}
 
           <button
@@ -720,10 +811,10 @@ export function TeamView({
             disabled={isConfirmingPoints || !allValidated}
           >
             {pointsAlreadyConfirmed
-              ? '▶️ Pasar a la siguiente ronda'
+              ? texts.validation.nextRound
               : isConfirmingPoints
-                ? '⏳ Confirmando...'
-                : '✅ Confirmar puntos y avanzar'}
+                ? texts.validation.confirming
+                : texts.validation.confirmAndAdvance}
           </button>
         </div>
       )}
@@ -732,18 +823,17 @@ export function TeamView({
         <div className="pedagogical-tip">
           <div className="tip-icon">💡</div>
           <div className="tip-text">
-            Recuerden: Lo importante no es ganar puntos, sino <strong>aprender juntos</strong>
+            {texts.pedagogicalTip.split('<strong>')[0]}
+            <strong>{texts.pedagogicalTip.split('<strong>')[1]?.split('</strong>')[0]}</strong>
           </div>
         </div>
       )}
 
       <div className="ranking-section">
-        <h3>📊 Ranking de {team.name}</h3>
-
+        <h3>{texts.ranking} {team.name}</h3>
         {rankedPlayers.map((player, index) => {
           const minScore = rankedPlayers[rankedPlayers.length - 1]?.score ?? 0;
           const isLast = (player.score ?? 0) === minScore;
-
           return (
             <div key={player.id} className={`ranking-item ${isLast ? 'last' : ''}`}>
               <div>
@@ -756,6 +846,116 @@ export function TeamView({
           );
         })}
       </div>
+
+      {/* Modal de material complementario */}
+      {showMaterialModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+            zIndex: 10000,
+          }}
+          onClick={() => setShowMaterialModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: 16,
+              width: '100%',
+              maxWidth: 600,
+              maxHeight: '80vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                padding: '16px 20px',
+                borderBottom: '1px solid #e2e8f0',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1e293b' }}>
+                {texts.modal.title}
+              </h3>
+              <button
+                onClick={() => setShowMaterialModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: 24,
+                  cursor: 'pointer',
+                  color: '#64748b',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: 20,
+              }}
+            >
+              {loadingMaterial ? (
+                <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
+                  {texts.modal.loading}
+                </div>
+              ) : (
+                <pre
+                  style={{
+                    margin: 0,
+                    whiteSpace: 'pre-wrap',
+                    wordWrap: 'break-word',
+                    fontFamily: 'inherit',
+                    fontSize: 15,
+                    lineHeight: 1.6,
+                    color: '#334155',
+                  }}
+                >
+                  {materialContent}
+                </pre>
+              )}
+            </div>
+            <div
+              style={{
+                padding: '12px 20px',
+                borderTop: '1px solid #e2e8f0',
+                textAlign: 'right',
+              }}
+            >
+              <button
+                onClick={() => setShowMaterialModal(false)}
+                style={{
+                  padding: '10px 20px',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  backgroundColor: '#0ea5e9',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                }}
+              >
+                {texts.modal.close}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,7 +3,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n";
-import type { ParseResult, ParsedQuestion, SuggestedStage } from "../utils/csvParser";
+import type {
+  ParseResult,
+  ParsedQuestion,
+  SuggestedStage,
+} from "../utils/csvParser";
 
 interface CSVPreviewProps {
   parseResult: ParseResult;
@@ -11,8 +15,19 @@ interface CSVPreviewProps {
   onCancel: () => void;
 }
 
-export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps) {
+export function CSVPreview({
+  parseResult,
+  onConfirm,
+  onCancel,
+}: CSVPreviewProps) {
   const { t, language } = useI18n();
+  
+  // Traducciones de etapas
+  const stageLabels = {
+    stage1: language === 'es' ? 'Etapa 1' : language === 'pt' ? 'Etapa 1' : 'Stage 1',
+    stage2: language === 'es' ? 'Etapa 2' : language === 'pt' ? 'Etapa 2' : 'Stage 2',
+  };
+  
   const [showErrors, setShowErrors] = useState(true);
   const [showWarnings, setShowWarnings] = useState(true);
   const [editableQuestions, setEditableQuestions] = useState<ParsedQuestion[]>([]);
@@ -62,85 +77,129 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
     const stage = value === "2" ? 2 : 1;
     setEditableQuestions((prev) => {
       const next = [...prev];
-      if (next[index]) next[index] = { ...next[index], suggestedStage: stage as SuggestedStage };
+      if (next[index])
+        next[index] = {
+          ...next[index],
+          suggestedStage: stage as SuggestedStage,
+        };
       return next;
     });
   };
 
   // Textos del mensaje pedagógico
-  const curationGuide = language === 'es' ? {
-    title: '🎯 Guía para asignar etapas',
-    subtitle: 'Como docente, tu rol es curar las consignas asignándolas a la etapa más apropiada:',
-    stage1Title: 'Etapa 1: Preparación grupal',
-    stage1Desc: 'Consignas de conocimiento base que el equipo resuelve internamente. Sirven para que los estudiantes se familiaricen con el contenido, alineen conceptos y construyan confianza grupal antes de competir.',
-    stage1Examples: 'Ejemplos: definiciones, identificación de conceptos, preguntas de comprensión directa.',
-    stage2Title: 'Etapa 2: Competencia inter-equipos',
-    stage2Desc: 'Consignas de comprensión profunda donde los equipos compiten entre sí. Requieren análisis, síntesis, argumentación o aplicación del conocimiento a situaciones nuevas.',
-    stage2Examples: 'Ejemplos: comparaciones, análisis de casos, justificaciones, resolución de problemas.',
-    tip: '💡 Tip: Un buen balance es 40-60% Stage 1 y 40-60% Stage 2, dependiendo del nivel del grupo.',
-    hideGuide: 'Ocultar guía',
-    showGuide: 'Mostrar guía de curación',
-  } : {
-    title: '🎯 Stage Assignment Guide',
-    subtitle: 'As a teacher, your role is to curate questions by assigning them to the most appropriate stage:',
-    stage1Title: 'Stage 1: Team Preparation',
-    stage1Desc: 'Base knowledge questions that teams solve internally. They help students familiarize themselves with the content, align concepts, and build group confidence before competing.',
-    stage1Examples: 'Examples: definitions, concept identification, direct comprehension questions.',
-    stage2Title: 'Stage 2: Inter-team Competition',
-    stage2Desc: 'Deep understanding questions where teams compete against each other. They require analysis, synthesis, argumentation, or applying knowledge to new situations.',
-    stage2Examples: 'Examples: comparisons, case analysis, justifications, problem-solving.',
-    tip: '💡 Tip: A good balance is 40-60% Stage 1 and 40-60% Stage 2, depending on the group level.',
-    hideGuide: 'Hide guide',
-    showGuide: 'Show curation guide',
-  };
+  const curationGuide =
+    language === "es"
+      ? {
+          title: "🎯 Guía para asignar etapas",
+          subtitle:
+            "Como docente, tu rol es curar las consignas asignándolas a la etapa más apropiada:",
+          stage1Title: "Etapa 1: Preparación grupal",
+          stage1Desc:
+            "Consignas de conocimiento base que el equipo resuelve internamente. Sirven para que los estudiantes se familiaricen con el contenido, alineen conceptos y construyan confianza grupal antes de competir.",
+          stage1Examples:
+            "Ejemplos: definiciones, identificación de conceptos, preguntas de comprensión directa.",
+          stage2Title: "Etapa 2: Competencia inter-equipos",
+          stage2Desc:
+            "Consignas de comprensión profunda donde los equipos compiten entre sí. Requieren análisis, síntesis, argumentación o aplicación del conocimiento a situaciones nuevas.",
+          stage2Examples:
+            "Ejemplos: comparaciones, análisis de casos, justificaciones, resolución de problemas.",
+          tip: "💡 Tip: Un buen balance es 40-60% Etapa 1 y 40-60% Etapa 2, dependiendo del nivel del grupo.",
+          hideGuide: "Ocultar guía",
+          showGuide: "Mostrar guía de curación",
+        }
+      : language === "pt"
+      ? {
+          title: "🎯 Guia para atribuir etapas",
+          subtitle:
+            "Como professor, seu papel é curar as questões atribuindo-as à etapa mais apropriada:",
+          stage1Title: "Etapa 1: Preparação em grupo",
+          stage1Desc:
+            "Questões de conhecimento base que a equipe resolve internamente. Servem para que os alunos se familiarizem com o conteúdo, alinhem conceitos e construam confiança grupal antes de competir.",
+          stage1Examples:
+            "Exemplos: definições, identificação de conceitos, perguntas de compreensão direta.",
+          stage2Title: "Etapa 2: Competição entre equipes",
+          stage2Desc:
+            "Questões de compreensão profunda onde as equipes competem entre si. Requerem análise, síntese, argumentação ou aplicação do conhecimento a situações novas.",
+          stage2Examples:
+            "Exemplos: comparações, análise de casos, justificativas, resolução de problemas.",
+          tip: "💡 Dica: Um bom equilíbrio é 40-60% Etapa 1 e 40-60% Etapa 2, dependendo do nível do grupo.",
+          hideGuide: "Ocultar guia",
+          showGuide: "Mostrar guia de curação",
+        }
+      : {
+          title: "🎯 Stage Assignment Guide",
+          subtitle:
+            "As a teacher, your role is to curate questions by assigning them to the most appropriate stage:",
+          stage1Title: "Stage 1: Team Preparation",
+          stage1Desc:
+            "Base knowledge questions that teams solve internally. They help students familiarize themselves with the content, align concepts, and build group confidence before competing.",
+          stage1Examples:
+            "Examples: definitions, concept identification, direct comprehension questions.",
+          stage2Title: "Stage 2: Inter-team Competition",
+          stage2Desc:
+            "Deep understanding questions where teams compete against each other. They require analysis, synthesis, argumentation, or applying knowledge to new situations.",
+          stage2Examples:
+            "Examples: comparisons, case analysis, justifications, problem-solving.",
+          tip: "💡 Tip: A good balance is 40-60% Stage 1 and 40-60% Stage 2, depending on the group level.",
+          hideGuide: "Hide guide",
+          showGuide: "Show curation guide",
+        };
 
   return (
-    <div style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: "rgba(0, 0, 0, 0.6)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 20,
-      zIndex: 10000,
-      backdropFilter: "blur(4px)",
-    }}>
-      <div style={{
-        backgroundColor: "white",
-        borderRadius: 20,
-        width: "100%",
-        maxWidth: 900,
-        maxHeight: "90vh",
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.6)",
         display: "flex",
-        flexDirection: "column",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-        overflow: "hidden",
-      }}>
-        {/* Header */}
-        <div style={{
-          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          padding: "20px 24px",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+        zIndex: 10000,
+        backdropFilter: "blur(4px)",
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: "white",
+          borderRadius: 20,
+          width: "100%",
+          maxWidth: 900,
+          maxHeight: "90vh",
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}>
-          <h2 style={{
-            margin: 0,
-            fontSize: 20,
-            fontWeight: 700,
-            color: "white",
+          flexDirection: "column",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+          overflow: "hidden",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            padding: "20px 24px",
             display: "flex",
+            justifyContent: "space-between",
             alignItems: "center",
-            gap: 10,
-          }}>
+          }}
+        >
+          <h2
+            style={{
+              margin: 0,
+              fontSize: 20,
+              fontWeight: 700,
+              color: "white",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
             <span>📊</span>
             {t.csvPreview.title}
           </h2>
-          <button 
+          <button
             onClick={onCancel}
             style={{
               background: "rgba(255,255,255,0.2)",
@@ -163,162 +222,218 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
         {/* Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
           {/* Stats */}
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-            gap: 12,
-            marginBottom: 24,
-          }}>
-            <StatCard value={totalRows} label={t.csvPreview.totalRows} color="#64748b" />
-            <StatCard value={validRows} label={t.csvPreview.validQuestions} color="#22c55e" />
-            <StatCard value={stage1Count} label="Stage 1" color="#3b82f6" />
-            <StatCard value={stage2Count} label="Stage 2" color="#a855f7" />
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+              gap: 12,
+              marginBottom: 24,
+            }}
+          >
+            <StatCard
+              value={totalRows}
+              label={t.csvPreview.totalRows}
+              color="#64748b"
+            />
+            <StatCard
+              value={validRows}
+              label={t.csvPreview.validQuestions}
+              color="#22c55e"
+            />
+            <StatCard value={stage1Count} label={stageLabels.stage1} color="#3b82f6" />
+            <StatCard value={stage2Count} label={stageLabels.stage2} color="#a855f7" />
           </div>
 
-          {/* ✅ NUEVO: Mensaje pedagógico de curación */}
+          {/* Guía pedagógica */}
           <div style={{ marginBottom: 20 }}>
             {showCurationGuide ? (
-              <div style={{
-                backgroundColor: '#f0fdf4',
-                border: '2px solid #86efac',
-                borderRadius: 16,
-                padding: 20,
-                position: 'relative',
-              }}>
+              <div
+                style={{
+                  backgroundColor: "#f0fdf4",
+                  border: "2px solid #86efac",
+                  borderRadius: 16,
+                  padding: 20,
+                  position: "relative",
+                }}
+              >
                 <button
                   onClick={() => setShowCurationGuide(false)}
                   style={{
-                    position: 'absolute',
+                    position: "absolute",
                     top: 12,
                     right: 12,
-                    background: 'none',
-                    border: 'none',
+                    background: "none",
+                    border: "none",
                     fontSize: 12,
-                    color: '#64748b',
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
+                    color: "#64748b",
+                    cursor: "pointer",
+                    textDecoration: "underline",
                   }}
                 >
                   {curationGuide.hideGuide}
                 </button>
 
-                <h3 style={{ 
-                  margin: '0 0 8px 0', 
-                  fontSize: 16, 
-                  fontWeight: 700, 
-                  color: '#15803d',
-                }}>
+                <h3
+                  style={{
+                    margin: "0 0 8px 0",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    color: "#15803d",
+                  }}
+                >
                   {curationGuide.title}
                 </h3>
-                <p style={{ 
-                  margin: '0 0 16px 0', 
-                  fontSize: 14, 
-                  color: '#166534',
-                  lineHeight: 1.5,
-                }}>
+                <p
+                  style={{
+                    margin: "0 0 16px 0",
+                    fontSize: 14,
+                    color: "#166534",
+                    lineHeight: 1.5,
+                  }}
+                >
                   {curationGuide.subtitle}
                 </p>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 16,
+                  }}
+                >
                   {/* Stage 1 */}
-                  <div style={{
-                    backgroundColor: '#eff6ff',
-                    borderRadius: 12,
-                    padding: 16,
-                    border: '2px solid #3b82f6',
-                  }}>
-                    <div style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: 8, 
-                      marginBottom: 8,
-                    }}>
-                      <span style={{
-                        backgroundColor: '#3b82f6',
-                        color: 'white',
-                        padding: '2px 10px',
-                        borderRadius: 12,
-                        fontSize: 12,
-                        fontWeight: 700,
-                      }}>
-                        Stage 1
+                  <div
+                    style={{
+                      backgroundColor: "#eff6ff",
+                      borderRadius: 12,
+                      padding: 16,
+                      border: "2px solid #3b82f6",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <span
+                        style={{
+                          backgroundColor: "#3b82f6",
+                          color: "white",
+                          padding: "2px 10px",
+                          borderRadius: 12,
+                          fontSize: 12,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {stageLabels.stage1}
                       </span>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: '#1e40af' }}>
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: "#1e40af",
+                        }}
+                      >
                         {curationGuide.stage1Title}
                       </span>
                     </div>
-                    <p style={{ 
-                      margin: '0 0 8px 0', 
-                      fontSize: 13, 
-                      color: '#1e40af',
-                      lineHeight: 1.5,
-                    }}>
+                    <p
+                      style={{
+                        margin: "0 0 8px 0",
+                        fontSize: 13,
+                        color: "#1e40af",
+                        lineHeight: 1.5,
+                      }}
+                    >
                       {curationGuide.stage1Desc}
                     </p>
-                    <p style={{ 
-                      margin: 0, 
-                      fontSize: 12, 
-                      color: '#3b82f6',
-                      fontStyle: 'italic',
-                    }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 12,
+                        color: "#3b82f6",
+                        fontStyle: "italic",
+                      }}
+                    >
                       {curationGuide.stage1Examples}
                     </p>
                   </div>
 
                   {/* Stage 2 */}
-                  <div style={{
-                    backgroundColor: '#faf5ff',
-                    borderRadius: 12,
-                    padding: 16,
-                    border: '2px solid #a855f7',
-                  }}>
-                    <div style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: 8, 
-                      marginBottom: 8,
-                    }}>
-                      <span style={{
-                        backgroundColor: '#a855f7',
-                        color: 'white',
-                        padding: '2px 10px',
-                        borderRadius: 12,
-                        fontSize: 12,
-                        fontWeight: 700,
-                      }}>
-                        Stage 2
+                  <div
+                    style={{
+                      backgroundColor: "#faf5ff",
+                      borderRadius: 12,
+                      padding: 16,
+                      border: "2px solid #a855f7",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <span
+                        style={{
+                          backgroundColor: "#a855f7",
+                          color: "white",
+                          padding: "2px 10px",
+                          borderRadius: 12,
+                          fontSize: 12,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {stageLabels.stage2}
                       </span>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: '#7c3aed' }}>
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: "#7c3aed",
+                        }}
+                      >
                         {curationGuide.stage2Title}
                       </span>
                     </div>
-                    <p style={{ 
-                      margin: '0 0 8px 0', 
-                      fontSize: 13, 
-                      color: '#7c3aed',
-                      lineHeight: 1.5,
-                    }}>
+                    <p
+                      style={{
+                        margin: "0 0 8px 0",
+                        fontSize: 13,
+                        color: "#7c3aed",
+                        lineHeight: 1.5,
+                      }}
+                    >
                       {curationGuide.stage2Desc}
                     </p>
-                    <p style={{ 
-                      margin: 0, 
-                      fontSize: 12, 
-                      color: '#a855f7',
-                      fontStyle: 'italic',
-                    }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 12,
+                        color: "#a855f7",
+                        fontStyle: "italic",
+                      }}
+                    >
                       {curationGuide.stage2Examples}
                     </p>
                   </div>
                 </div>
 
-                <p style={{
-                  margin: '16px 0 0 0',
-                  fontSize: 13,
-                  color: '#15803d',
-                  backgroundColor: '#dcfce7',
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                }}>
+                <p
+                  style={{
+                    margin: "16px 0 0 0",
+                    fontSize: 13,
+                    color: "#15803d",
+                    backgroundColor: "#dcfce7",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                  }}
+                >
                   {curationGuide.tip}
                 </p>
               </div>
@@ -326,17 +441,17 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
               <button
                 onClick={() => setShowCurationGuide(true)}
                 style={{
-                  background: 'none',
-                  border: '2px dashed #86efac',
+                  background: "none",
+                  border: "2px dashed #86efac",
                   borderRadius: 12,
-                  padding: '12px 16px',
-                  width: '100%',
+                  padding: "12px 16px",
+                  width: "100%",
                   fontSize: 14,
-                  color: '#22c55e',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  color: "#22c55e",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   gap: 8,
                 }}
               >
@@ -349,10 +464,22 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
           {hasWarnings && (
             <Section
               type="warning"
-              title={`⚠️ ${t.csvPreview.warnings} (${parseResult.warnings?.length})`}
+              title={`⚠️ ${t.csvPreview.warnings} (${
+                parseResult.warnings?.length
+              })`}
               isOpen={showWarnings}
               onToggle={() => setShowWarnings(!showWarnings)}
-              items={parseResult.warnings || []}
+              items={(parseResult.warnings || []).map((w) => {
+                const template = (t.csv.warnings as any)[w.code] || w.code;
+                if (typeof template === "string" && w.meta) {
+                  return Object.entries(w.meta).reduce(
+                    (str, [key, val]) =>
+                      str.replace(`{{${key}}}`, String(val)),
+                    template
+                  );
+                }
+                return template;
+              })}
             />
           )}
 
@@ -363,7 +490,17 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
               title={`❌ ${t.csvPreview.errors} (${parseResult.errors?.length})`}
               isOpen={showErrors}
               onToggle={() => setShowErrors(!showErrors)}
-              items={parseResult.errors || []}
+              items={(parseResult.errors || []).map((e) => {
+                const template = (t.csv.errors as any)[e.code] || e.code;
+                if (typeof template === "string" && e.meta) {
+                  return Object.entries(e.meta).reduce(
+                    (str, [key, val]) =>
+                      str.replace(`{{${key}}}`, String(val)),
+                    template
+                  );
+                }
+                return template;
+              })}
             />
           )}
 
@@ -372,31 +509,56 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
             <div style={{ marginBottom: 20 }}>
               <div style={{ marginBottom: 12 }}>
                 <span style={{ fontWeight: 600, fontSize: 15 }}>
-                  ✅ {t.csvPreview.validQuestionsTitle} ({editableQuestions.length})
+                  ✅ {t.csvPreview.validQuestionsTitle} (
+                  {editableQuestions.length})
                 </span>
-                <span style={{ fontSize: 13, color: "#64748b", marginLeft: 8 }}>
+                <span
+                  style={{
+                    fontSize: 13,
+                    color: "#64748b",
+                    marginLeft: 8,
+                  }}
+                >
                   — {t.csvPreview.editBeforeImport}
                 </span>
               </div>
 
-              <div style={{
-                overflowX: "auto",
-                border: "1px solid #e2e8f0",
-                borderRadius: 12,
-              }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+              <div
+                style={{
+                  overflowX: "auto",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 12,
+                }}
+              >
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: 14,
+                  }}
+                >
                   <thead>
                     <tr>
                       <th style={thStyle}>#</th>
                       <th style={thStyle}>{t.csvPreview.question}</th>
-                      <th style={{ ...thStyle, width: 180 }}>{t.csvPreview.hint}</th>
-                      <th style={{ ...thStyle, width: 100 }}>{t.csvPreview.stage}</th>
+                      <th style={{ ...thStyle, width: 180 }}>
+                        {t.csvPreview.hint}
+                      </th>
+                      <th style={{ ...thStyle, width: 100 }}>
+                        {t.csvPreview.stage}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {editableQuestions.map((q, i) => (
                       <tr key={`${q.id}_${i}`}>
-                        <td style={{ ...tdStyle, color: "#94a3b8", fontSize: 13 }}>
+                        <td
+                          style={{
+                            ...tdStyle,
+                            color: "#94a3b8",
+                            fontSize: 13,
+                          }}
+                        >
                           {q.rowNumber}
                         </td>
                         <td style={tdStyle}>
@@ -420,16 +582,25 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
                           <select
                             style={{
                               ...selectStyle,
-                              backgroundColor: q.suggestedStage === 2 ? '#faf5ff' : '#eff6ff',
-                              borderColor: q.suggestedStage === 2 ? '#a855f7' : '#3b82f6',
-                              color: q.suggestedStage === 2 ? '#7c3aed' : '#1e40af',
+                              backgroundColor:
+                                q.suggestedStage === 2
+                                  ? "#faf5ff"
+                                  : "#eff6ff",
+                              borderColor:
+                                q.suggestedStage === 2
+                                  ? "#a855f7"
+                                  : "#3b82f6",
+                              color:
+                                q.suggestedStage === 2
+                                  ? "#7c3aed"
+                                  : "#1e40af",
                               fontWeight: 600,
                             }}
                             value={String(q.suggestedStage)}
                             onChange={(e) => updateStage(i, e.target.value)}
                           >
-                            <option value="1">Stage 1</option>
-                            <option value="2">Stage 2</option>
+                            <option value="1">{stageLabels.stage1}</option>
+                            <option value="2">{stageLabels.stage2}</option>
                           </select>
                         </td>
                       </tr>
@@ -442,17 +613,19 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
 
           {/* Note */}
           {hasErrors && canImport && (
-            <div style={{
-              backgroundColor: "#eff6ff",
-              border: "1px solid #bfdbfe",
-              borderRadius: 8,
-              padding: "10px 14px",
-              fontSize: 13,
-              color: "#1e40af",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}>
+            <div
+              style={{
+                backgroundColor: "#eff6ff",
+                border: "1px solid #bfdbfe",
+                borderRadius: 8,
+                padding: "10px 14px",
+                fontSize: 13,
+                color: "#1e40af",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
               <span>ℹ️</span>
               <span>{t.csvPreview.note}</span>
             </div>
@@ -460,21 +633,23 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
         </div>
 
         {/* Footer */}
-        <div style={{
-          padding: "16px 24px",
-          borderTop: "1px solid #e2e8f0",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-        }}>
+        <div
+          style={{
+            padding: "16px 24px",
+            borderTop: "1px solid #e2e8f0",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
           <button
             onClick={onCancel}
             style={{
               padding: "12px 24px",
               fontSize: 15,
               fontWeight: 600,
-              backgroundColor: "#f1f5f9",
+              backgroundColor: "#f1f59",
               color: "#475569",
               border: "none",
               borderRadius: 10,
@@ -491,18 +666,22 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
               padding: "12px 24px",
               fontSize: 15,
               fontWeight: 700,
-              background: canImport 
-                ? "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)" 
+              background: canImport
+                ? "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)"
                 : "#e2e8f0",
               color: canImport ? "white" : "#94a3b8",
               border: "none",
               borderRadius: 10,
               cursor: canImport ? "pointer" : "not-allowed",
-              boxShadow: canImport ? "0 4px 12px rgba(34, 197, 94, 0.3)" : "none",
+              boxShadow: canImport
+                ? "0 4px 12px rgba(34, 197, 94, 0.3)"
+                : "none",
             }}
           >
             {canImport
-              ? `✅ ${t.csvPreview.import} ${editableQuestions.length} ${t.csvPreview.questions}`
+              ? `✅ ${t.csvPreview.import} ${
+                  editableQuestions.length
+                } ${t.csvPreview.questions}`
               : `❌ ${t.csvPreview.noValidQuestions}`}
           </button>
         </div>
@@ -512,22 +691,42 @@ export function CSVPreview({ parseResult, onConfirm, onCancel }: CSVPreviewProps
 }
 
 // Helper components
-function StatCard({ value, label, color }: { value: number; label: string; color: string }) {
+function StatCard({
+  value,
+  label,
+  color,
+}: {
+  value: number;
+  label: string;
+  color: string;
+}) {
   return (
-    <div style={{
-      backgroundColor: `${color}10`,
-      border: `2px solid ${color}`,
-      borderRadius: 12,
-      padding: 16,
-      textAlign: "center",
-    }}>
-      <div style={{ fontSize: 32, fontWeight: 800, color, margin: 0 }}>{value}</div>
-      <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>{label}</div>
+    <div
+      style={{
+        backgroundColor: `${color}10`,
+        border: `2px solid ${color}`,
+        borderRadius: 12,
+        padding: 16,
+        textAlign: "center",
+      }}
+    >
+      <div style={{ fontSize: 32, fontWeight: 800, color, margin: 0 }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+        {label}
+      </div>
     </div>
   );
 }
 
-function Section({ type, title, isOpen, onToggle, items }: {
+function Section({
+  type,
+  title,
+  isOpen,
+  onToggle,
+  items,
+}: {
   type: "warning" | "error";
   title: string;
   isOpen: boolean;
@@ -535,8 +734,18 @@ function Section({ type, title, isOpen, onToggle, items }: {
   items: string[];
 }) {
   const colors = {
-    warning: { bg: "#fef3c7", border: "#f59e0b", text: "#b45309", itemBg: "#fffbeb" },
-    error: { bg: "#fee2e2", border: "#ef4444", text: "#dc2626", itemBg: "#fef2f2" },
+    warning: {
+      bg: "#fef3c7",
+      border: "#f59e0b",
+      text: "#b45309",
+      itemBg: "#fffbeb",
+    },
+    error: {
+      bg: "#fee2e2",
+      border: "#ef4444",
+      text: "#dc2626",
+      itemBg: "#fef2f2",
+    },
   };
   const c = colors[type];
 
@@ -562,23 +771,28 @@ function Section({ type, title, isOpen, onToggle, items }: {
         <span>{isOpen ? "▼" : "▶"}</span>
       </div>
       {isOpen && (
-        <div style={{
-          backgroundColor: "#f8fafc",
-          borderRadius: "0 0 10px 10px",
-          padding: 12,
-          marginTop: -1,
-          border: "1px solid #e2e8f0",
-          borderTop: "none",
-        }}>
+        <div
+          style={{
+            backgroundColor: "#f8fafc",
+            borderRadius: "0 0 10px 10px",
+            padding: 12,
+            marginTop: -1,
+            border: "1px solid #e2e8f0",
+            borderTop: "none",
+          }}
+        >
           {items.map((item, i) => (
-            <div key={i} style={{
-              padding: "8px 12px",
-              borderRadius: 6,
-              marginBottom: 6,
-              fontSize: 13,
-              backgroundColor: c.itemBg,
-              color: c.text,
-            }}>
+            <div
+              key={i}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 6,
+                marginBottom: 6,
+                fontSize: 13,
+                backgroundColor: c.itemBg,
+                color: c.text,
+              }}
+            >
               {item}
             </div>
           ))}

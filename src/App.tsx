@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { ref, onValue } from "firebase/database";
 import { database } from "./firebase.config";
-
 import { SetupScreen } from "./components/SetupScreen";
 import { GameController } from "./components/GameController";
 import { SoundToggle } from "./components/SoundToggle";
@@ -18,10 +17,16 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { AboutPage } from "./pages/AboutPage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { JoinGamePage } from "./pages/JoinGamePage";
+import { ReferralPage } from "./pages/ReferralPage";
+import { WebinarRegistrationPage } from "./pages/WebinarRegistrationPage";
 
 // ✅ NUEVO: Componentes de propuestas
 import { SetupFlowManager } from "./components/setup/SetupFlowManager";
 import { ProposalStudentView } from "./components/Stage0/ProposalStudentView";
+
+// ✅ NUEVO: Páginas de autoevaluación y resultados
+import { SelfEvaluationPage } from "./pages/SelfEvaluationPage";
+import { GameResultsPage } from "./pages/GameResultsPage";
 
 // ✅ CLASSROOM VIEWS REALES
 import { Stage1ClassroomView } from "./components/Stage1/Stage1ClassroomView";
@@ -399,6 +404,25 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <AboutPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* REFERRAL PAGE */}
+              <Route path="/referir" element={<ReferralPage />} />
+
+              {/* WEBINAR REGISTRATION PAGE */}
+              <Route path="/webinar-registro" element={<WebinarRegistrationPage />} />
+
+              {/* AUTOEVALUACIÓN - SIN LOGIN (alumnos) */}
+              <Route path="/autoevaluacion/:gameId/:teamId" element={<SelfEvaluationPage />} />
+
+              {/* RESULTADOS DEL JUEGO - CON LOGIN (docente) */}
+              <Route
+                path="/resultados/:gameId"
+                element={
+                  <ProtectedRoute>
+                    <GameResultsPage />
                   </ProtectedRoute>
                 }
               />

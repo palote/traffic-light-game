@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "traffic-ligths-game"
-  }
+  },
+  "targets": {
+    "traffic-ligths-game": {
+      "hosting": {
+        "app-original": [
+          "traffic-ligths-game"
+        ],
+        "app-coopetition": [
+          "coopetition-game-site"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

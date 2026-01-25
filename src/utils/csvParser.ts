@@ -13,10 +13,20 @@ export interface ParsedQuestion {
   rowNumber: number;
 }
 
+/**
+ * ✅ NUEVO: mensajes agnósticos del idioma
+ * - code: clave i18n (ej: "noValidHeadersFallback")
+ * - meta: datos extra para interpolación (rowNumber, value, etc.)
+ */
+export type CsvMessage = {
+  code: string;
+  meta?: Record<string, any>;
+};
+
 export interface ParseResult {
   questions: ParsedQuestion[];
-  errors: string[];
-  warnings: string[];
+  errors: CsvMessage[];
+  warnings: CsvMessage[];
   rawRowCount: number;
 }
 
@@ -137,7 +147,7 @@ function tryFixMojibake(text: string): string {
     const afterBad = (repaired.match(/�|Ã|Â|â€/g) || []).length;
 
     if (afterBad < beforeBad) {
-      console.warn("[csvParser] Se detectó mojibake y se aplicó reparación latin1→utf8");
+      console.warn("[csvParser] Mojibake detected, applied latin1→utf8 repair");
       return repaired;
     }
   } catch {
@@ -193,14 +203,14 @@ function rowFromArray(cols: unknown[]): Record<string, unknown> {
 
 export function parseCSV(text: string): Promise<ParseResult> {
   return new Promise((resolve) => {
-    // ✅ Importante: antes normalizabas y listo. Ahora: intentamos reparar si hay mojibake.
+    // ✅ Importante: intentamos reparar si hay mojibake.
     const repairedText = tryFixMojibake(text);
     const trimmed = normalize(repairedText);
 
     if (!trimmed) {
       resolve({
         questions: [],
-        errors: ["El archivo CSV está vacío."],
+        errors: [{ code: "emptyCsvFile" }],
         warnings: [],
         rawRowCount: 0,
       });
@@ -215,14 +225,12 @@ export function parseCSV(text: string): Promise<ParseResult> {
       dataRows: Record<string, unknown>[],
       baseRowNumber: number
     ): ParseResult => {
-      const errors: string[] = [];
-      const warnings: string[] = [];
+      const errors: CsvMessage[] = [];
+      const warnings: CsvMessage[] = [];
       const questions: ParsedQuestion[] = [];
 
       if (encodingWarning) {
-        warnings.push(
-          "⚠️ El archivo puede tener problemas de encoding (acentos incorrectos). Considerá guardarlo como UTF-8."
-        );
+        warnings.push({ code: "encodingIssuesPossible" });
       }
 
       const rawRowCount = dataRows.length;
@@ -232,7 +240,7 @@ export function parseCSV(text: string): Promise<ParseResult> {
         const rowNumber = baseRowNumber + i;
 
         if (looksLikeRepeatedHeader(row)) {
-          warnings.push(`Fila ${rowNumber}: encabezado repetido (se ignoró).`);
+          warnings.push({ code: "repeatedHeaderIgnored", meta: { rowNumber } });
           continue;
         }
 
@@ -252,7 +260,7 @@ export function parseCSV(text: string): Promise<ParseResult> {
         if (!textField) {
           const anyContent = Object.values(row).some((v) => normalize(v));
           if (anyContent) {
-            warnings.push(`Fila ${rowNumber}: sin texto de pregunta (se ignoró).`);
+            warnings.push({ code: "missingQuestionTextIgnored", meta: { rowNumber } });
           }
           continue;
         }
@@ -262,11 +270,10 @@ export function parseCSV(text: string): Promise<ParseResult> {
 
         if (parsed === null) {
           if (stageFieldRaw) {
-            warnings.push(
-              `Fila ${rowNumber}: suggestedStage inválido ("${normalize(
-                stageFieldRaw
-              )}"). Se usó Stage 1.`
-            );
+            warnings.push({
+              code: "invalidSuggestedStageDefaulted",
+              meta: { rowNumber, value: normalize(stageFieldRaw), defaultStage: 1 },
+            });
           }
           suggestedStage = 1;
         } else {
@@ -286,7 +293,7 @@ export function parseCSV(text: string): Promise<ParseResult> {
       }
 
       if (questions.length === 0 && errors.length === 0) {
-        errors.push("No se encontraron preguntas válidas en el CSV.");
+        errors.push({ code: "noValidQuestionsFound" });
       }
 
       return { questions, errors, warnings, rawRowCount };
@@ -310,9 +317,10 @@ export function parseCSV(text: string): Promise<ParseResult> {
             : [],
         });
 
-        const parseErrors = (results.errors ?? []).map(
-          (e) => `CSV: ${e.message} (fila ${e.row ?? "?"})`
-        );
+        const parseErrors: CsvMessage[] = (results.errors ?? []).map((e) => ({
+          code: "papaparseError",
+          meta: { message: e.message, row: e.row ?? null, type: e.type ?? null, code: e.code ?? null },
+        }));
 
         const data = results.data ?? [];
         const fields = results.meta?.fields;
@@ -321,7 +329,7 @@ export function parseCSV(text: string): Promise<ParseResult> {
 
         // ✅ 2) Fallback (header=false) si headers no son válidos / faltan
         if (!headerOk) {
-          console.warn("[csvParser] Header inválido o ausente → fallback header=false");
+          console.warn("[csvParser] Invalid/missing header → fallback header=false");
 
           Papa.parse<unknown[]>(trimmed, {
             header: false,
@@ -343,21 +351,28 @@ export function parseCSV(text: string): Promise<ParseResult> {
               // header=false: fila 1 es la primera de datos
               const processed = processRows(rows, 1);
 
+              // Errores del parse header=true (si los hubo)
               processed.errors.unshift(...parseErrors);
-              processed.warnings.unshift(
-                "ℹ️ Este CSV no tenía encabezados válidos. Se interpretaron columnas por posición y se generaron IDs si faltaban."
-              );
+
+              // Warning principal del fallback
+              processed.warnings.unshift({
+                code: "noValidHeadersFallback",
+                meta: { delimiter },
+              });
 
               resolve(processed);
             },
 
             error: (err: unknown) => {
               const message =
-                err instanceof Error ? err.message : "Error desconocido al leer el CSV";
+                err instanceof Error ? err.message : "Unknown error while reading CSV";
 
               resolve({
                 questions: [],
-                errors: [...parseErrors, `No se pudo leer el CSV (fallback): ${message}`],
+                errors: [
+                  ...parseErrors,
+                  { code: "cannotReadCsvFallback", meta: { message } },
+                ],
                 warnings: [],
                 rawRowCount: 0,
               });
@@ -375,11 +390,11 @@ export function parseCSV(text: string): Promise<ParseResult> {
       },
 
       error: (err: unknown) => {
-        const message = err instanceof Error ? err.message : "Error desconocido al leer el CSV";
+        const message = err instanceof Error ? err.message : "Unknown error while reading CSV";
 
         resolve({
           questions: [],
-          errors: [`No se pudo leer el CSV: ${message}`],
+          errors: [{ code: "cannotReadCsv", meta: { message } }],
           warnings: [],
           rawRowCount: 0,
         });

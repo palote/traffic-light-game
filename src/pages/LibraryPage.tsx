@@ -43,7 +43,7 @@ import type {
   Subject,
   LibraryLanguage,
 } from "../types/library";
-import { PRIMARY_GRADES, AREAS_ES, AREAS_EN, SUBJECTS_ES, SUBJECTS_EN } from "../types/library";
+import { PRIMARY_GRADES, AREAS_ES, AREAS_EN, AREAS_PT, SUBJECTS_ES, SUBJECTS_EN, SUBJECTS_PT } from "../types/library";
 import type { TeacherGame, TeacherLibraryFilters, ReportReason } from "../types/teacherLibrary";
 import { TEACHER_LIMITS } from "../types/teacherLibrary";
 
@@ -57,19 +57,20 @@ type TabType = "my-games" | "community" | "official";
  * =========================================================
  */
 function hasVisibleBadReplacement(text: string): boolean {
-  return /ï¿½/.test(text) || text.includes("�");
+  // \uFFFD es el "replacement character" que aparece cuando hay encoding inválido
+  return /\uFFFD/.test(text);
 }
 
 function hasMojibakeMarkers(text: string): boolean {
-  // típicos cuando se ve “DecÃ­”, “Â¿”, “â€””, etc.
-  return /Ã|Â|â€/.test(text);
+  // típicos cuando se ve "DecÃ­", "Â¿", "â€”", etc.
+  // \u00C3 = Ã, \u00C2 = Â, \u00E2 = â
+  return /\u00C3|\u00C2|\u00E2/.test(text);
 }
 
 function scoreText(text: string): number {
-  const repl = (text.match(/�/g) || []).length;
-  const mojibake = (text.match(/Ã|Â|â€/g) || []).length;
-  const visible = (text.match(/ï¿½/g) || []).length;
-  return repl * 10 + visible * 8 + mojibake * 3;
+  const repl = (text.match(/\uFFFD/g) || []).length;
+  const mojibake = (text.match(/\u00C3|\u00C2|\u00E2/g) || []).length;
+  return repl * 10 + mojibake * 3;
 }
 
 function decodeArrayBufferBestEffort(buf: ArrayBuffer): {
@@ -240,6 +241,32 @@ export function LibraryPage() {
     });
   }, [officialItems, gameMode, grade, area, subject, language, search]);
 
+  /**
+   * ✅ Ordenar items OFICIALES para priorizar coincidencias con el usuario:
+   * - 2 puntos: coincide idioma Y modo actual
+   * - 1 punto: coincide idioma O modo actual
+   * - 0 puntos: no coincide
+   * Mantener orden original dentro de cada grupo (estable por índice).
+   *
+   * NOTA: se aplica sobre filteredOfficialItems para NO tocar el filtrado existente.
+   */
+  const sortedOfficialItems = useMemo(() => {
+    return filteredOfficialItems
+      .map((item, idx) => {
+        const score =
+          (item.language === appLang ? 1 : 0) +
+          (item.gameMode === currentGameMode ? 1 : 0);
+
+        return { item, idx, score };
+      })
+      .sort((a, b) => {
+        const byScore = b.score - a.score; // mayor score primero
+        if (byScore !== 0) return byScore;
+        return a.idx - b.idx; // estable: mantiene orden original
+      })
+      .map(({ item }) => item);
+  }, [filteredOfficialItems, appLang, currentGameMode]);
+
   // Filter my games locally
   const filteredMyGames = useMemo(() => {
     return myGames.filter((game) => {
@@ -273,8 +300,7 @@ export function LibraryPage() {
 
       console.log("🧪 [LibraryPage] official encoding check", {
         storagePath: item.storagePath,
-        hasReplacement: csvContent.includes("�"),
-        hasIfffd: csvContent.includes("ï¿½"),
+        hasReplacement: csvContent.includes("\uFFFD"),
         hasMojibake: hasMojibakeMarkers(csvContent),
         score: scoreText(csvContent),
         sample: csvContent.slice(0, 180),
@@ -290,6 +316,8 @@ export function LibraryPage() {
             `${(item.title || item.topic || "archivo").replace(/\s+/g, "_")}.csv`,
           csvTitle: item.title || item.topic,
           csvSubject: item.subject || item.area,
+          // ✅ NUEVO: pasar sourceTextPath si existe
+          sourceTextPath: item.sourceTextPath || null,
         },
       });
     } catch (error) {
@@ -364,8 +392,9 @@ export function LibraryPage() {
   const handleDeleteTeacherGame = async (game: TeacherGame) => {
     if (!user) return;
     try {
-      await deleteTeacherGame(game.id, user.uid);
+      await deleteTeacherGame(game.id, user.uid, isAdmin);  // ← Agregar isAdmin
       setMyGames((prev) => prev.filter((g) => g.id !== game.id));
+      setCommunityGames((prev) => prev.filter((g) => g.id !== game.id));  // ← También limpiar de comunidad
       // Refresh stats
       const stats = await getGameStats(user.uid);
       setMyStats(stats);
@@ -374,7 +403,6 @@ export function LibraryPage() {
       alert(t.errors.generic);
     }
   };
-
   const handleToggleVisibility = async (game: TeacherGame) => {
     if (!user) return;
     const newVisibility = game.visibility === "public" ? "private" : "public";
@@ -409,7 +437,12 @@ export function LibraryPage() {
     }
 
     try {
-      await copyGameToMyLibrary(game.id, user.uid, user.displayName || "Docente", user.email || "");
+      await copyGameToMyLibrary(
+        game.id,
+        user.uid,
+        user.displayName || t.dashboard.teacherFallbackName,
+        user.email || ""
+      );
       alert(t.teacherLibrary.copySuccess + "\n" + t.teacherLibrary.copyAsPrivate);
       // Refresh my games
       loadMyGames();
@@ -420,11 +453,15 @@ export function LibraryPage() {
   };
 
   const handleRateGame = async (game: TeacherGame, stars: number) => {
-    if (!user) return;
+    if (!user || !user.email) {
+      console.error('User or user email not available for rating');
+      alert(t.errors.generic);
+      return;
+    }
+
     try {
-      await rateGame(game.id, user.uid, stars);
+      await rateGame(game.id, user.uid, user.email, stars);
       setMyRatings((prev) => ({ ...prev, [game.id]: stars }));
-      // Refresh community to update rating display
       loadCommunityGames();
     } catch (error) {
       console.error("Error rating game:", error);
@@ -648,8 +685,8 @@ export function LibraryPage() {
               }}
               options={[
                 { value: "all", label: t.common.all },
-                { value: "traffic-light", label: "🚦 Traffic Light" },
-                { value: "coopetition", label: "🎯 Coopetition" },
+                { value: "traffic-light", label: `🚦 ${t.gameModes.trafficLight.title}` },
+                { value: "coopetition", label: `🎯 ${t.gameModes.coopetition.title}` },
               ]}
             />
 
@@ -661,7 +698,10 @@ export function LibraryPage() {
                 onChange={(v) => setGrade(v as any)}
                 options={[
                   { value: "all", label: t.common.all },
-                  ...PRIMARY_GRADES.map((g) => ({ value: g, label: g })),
+                  ...PRIMARY_GRADES.map((g) => ({
+                    value: g,
+                    label: (t.grades as any)[g] || g
+                  })),
                 ]}
               />
             )}
@@ -673,7 +713,7 @@ export function LibraryPage() {
               onChange={(v) => setArea(v as any)}
               options={[
                 { value: "all", label: t.common.all },
-                ...(appLang === "es" ? AREAS_ES : AREAS_EN).map((a) => ({ value: a, label: a })),
+                ...(appLang === "es" ? AREAS_ES : appLang === "pt" ? AREAS_PT : AREAS_EN).map((a) => ({ value: a, label: a })),
               ]}
             />
 
@@ -685,7 +725,7 @@ export function LibraryPage() {
                 onChange={(v) => setSubject(v as any)}
                 options={[
                   { value: "all", label: t.common.all },
-                  ...(appLang === "es" ? SUBJECTS_ES : SUBJECTS_EN).map((s) => ({
+                  ...(appLang === "es" ? SUBJECTS_ES : appLang === "pt" ? SUBJECTS_PT : SUBJECTS_EN).map((s) => ({
                     value: s,
                     label: s,
                   })),
@@ -702,6 +742,7 @@ export function LibraryPage() {
                 { value: "all", label: t.common.all },
                 { value: "es", label: "🇪🇸 Español" },
                 { value: "en", label: "🇺🇸 English" },
+                { value: "pt", label: "🇧🇷 Português" },
               ]}
             />
 
@@ -784,6 +825,7 @@ export function LibraryPage() {
                       onDelete={handleDeleteTeacherGame}
                       onToggleVisibility={handleToggleVisibility}
                       isLoading={loadingItemId === game.id}
+                      isAdmin={isAdmin}
                     />
                   ))}
                 </div>
@@ -813,8 +855,10 @@ export function LibraryPage() {
                       onCopy={handleCopyGame}
                       onRate={handleRateGame}
                       onReport={handleReportGame}
+                      onDelete={isAdmin ? handleDeleteTeacherGame : undefined}
                       myRating={myRatings[game.id]}
                       isLoading={loadingItemId === game.id}
+                      isAdmin={isAdmin}
                     />
                   ))}
                 </div>
@@ -832,7 +876,7 @@ export function LibraryPage() {
                     gap: 20,
                   }}
                 >
-                  {filteredOfficialItems.map((item) => (
+                  {sortedOfficialItems.map((item) => (
                     <LibraryCard
                       key={item.id}
                       item={item}
@@ -1012,10 +1056,11 @@ function FilterSelect({
 }
 
 function LoadingState() {
+  const { t } = useI18n();
   return (
     <div style={{ textAlign: "center", padding: 48, color: "#64748b" }}>
       <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
-      <p>Loading...</p>
+      <p>{t.common.loading}</p>
     </div>
   );
 }
