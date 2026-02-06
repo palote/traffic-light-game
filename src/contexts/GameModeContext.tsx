@@ -33,51 +33,78 @@ interface GameModeContextType {
   mode: GameMode;
   setMode: (mode: GameMode) => void;
   theme: GameModeTheme;
+  getLocalizedTheme: (language: string) => GameModeTheme;
 }
 
 // ============================================
-// TEMAS
+// TEMAS BASE (colores y estructura)
 // ============================================
 
-const themes: Record<GameMode, GameModeTheme> = {
+const baseThemes: Record<GameMode, Omit<GameModeTheme, 'name' | 'tagline' | 'welcomeTitle' | 'welcomeSubtitle'>> = {
   'traffic-light': {
-    // Identidad
-    name: 'Traffic Light Game',
-    tagline: 'El Juego del Semáforo',
     icon: '🚦',
-
-    // Colores - Vibrantes y amigables para niños
     primary: '#22c55e',
     primaryGradient: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
     secondary: '#fbbf24',
-
-    // UI
     cardBorder: '#22c55e',
     cardHoverBg: '#f0fdf4',
-
-    // Textos
-    welcomeTitle: '¡Bienvenido/a! 👋',
-    welcomeSubtitle: '¿Qué querés hacer hoy?',
   },
-
   'coopetition': {
-    // Identidad
-    name: 'The Coopetition Game',
-    tagline: 'Where competition meets collaboration',
     icon: '🎯',
-
-    // Colores - Más sobrios y profesionales
     primary: '#6366f1',
     primaryGradient: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
     secondary: '#8b5cf6',
-
-    // UI
     cardBorder: '#6366f1',
     cardHoverBg: '#eef2ff',
+  },
+};
 
-    // Textos
-    welcomeTitle: 'Welcome! 👋',
-    welcomeSubtitle: 'What would you like to do today?',
+// ============================================
+// TEXTOS POR IDIOMA
+// ============================================
+
+const localizedTexts: Record<string, Record<GameMode, { name: string; tagline: string; welcomeTitle: string; welcomeSubtitle: string }>> = {
+  es: {
+    'traffic-light': {
+      name: 'El Juego del Semáforo',
+      tagline: 'Donde aprender es divertido',
+      welcomeTitle: '¡Bienvenido/a! 👋',
+      welcomeSubtitle: '¿Qué querés hacer hoy?',
+    },
+    'coopetition': {
+      name: 'El Juego de la Coopetición',
+      tagline: 'Donde la competencia encuentra la colaboración',
+      welcomeTitle: '¡Bienvenido/a! 👋',
+      welcomeSubtitle: '¿Qué querés hacer hoy?',
+    },
+  },
+  en: {
+    'traffic-light': {
+      name: 'Traffic Light Game',
+      tagline: 'Where learning is fun',
+      welcomeTitle: 'Welcome! 👋',
+      welcomeSubtitle: 'What would you like to do today?',
+    },
+    'coopetition': {
+      name: 'The Coopetition Game',
+      tagline: 'Where competition meets collaboration',
+      welcomeTitle: 'Welcome! 👋',
+      welcomeSubtitle: 'What would you like to do today?',
+    },
+  },
+  pt: {
+    'traffic-light': {
+      name: 'O Jogo do Semáforo',
+      tagline: 'Onde aprender é divertido',
+      welcomeTitle: 'Bem-vindo/a! 👋',
+      welcomeSubtitle: 'O que você quer fazer hoje?',
+    },
+    'coopetition': {
+      name: 'O Jogo da Coopetição',
+      tagline: 'Onde a competição encontra a colaboração',
+      welcomeTitle: 'Bem-vindo/a! 👋',
+      welcomeSubtitle: 'O que você quer fazer hoje?',
+    },
   },
 };
 
@@ -87,68 +114,83 @@ const themes: Record<GameMode, GameModeTheme> = {
 
 const GameModeContext = createContext<GameModeContextType | null>(null);
 
-// ✅ NUEVO: Determinar modo inicial con prioridad:
-// 1) URL param (?mode=coopetition | traffic-light) - testing
-// 2) Dominio (hostname)
-// 3) localStorage (tlg_gameMode)
-// 4) Default ('traffic-light')
-function getInitialGameMode(): GameMode { // ✅ NUEVO
+function getInitialGameMode(): GameMode {
   // 1. URL param (para testing)
-  try { // ✅ NUEVO
-    const urlParams = new URLSearchParams(window.location.search); // ✅ NUEVO
-    const modeParam = urlParams.get('mode'); // ✅ NUEVO
-    if (modeParam === 'coopetition' || modeParam === 'traffic-light') { // ✅ NUEVO
-      return modeParam as GameMode; // ✅ NUEVO
-    }
-  } catch {
-    // ignore (por ejemplo, SSR)
-  }
-
-  // 2. Detectar por dominio
-  try { // ✅ NUEVO
-    const hostname = window.location.hostname.toLowerCase(); // ✅ NUEVO
-    if (hostname.includes('coopetition')) { // ✅ NUEVO
-      return 'coopetition'; // ✅ NUEVO
-    }
-    if (hostname.includes('trafficlight') || hostname.includes('traffic-light')) { // ✅ NUEVO
-      return 'traffic-light'; // ✅ NUEVO
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const modeParam = urlParams.get('mode');
+    if (modeParam === 'coopetition' || modeParam === 'traffic-light') {
+      return modeParam as GameMode;
     }
   } catch {
     // ignore
   }
 
-  // 3. localStorage (clave correcta: tlg_gameMode)
-  try { // ✅ NUEVO
-    const saved = localStorage.getItem('tlg_gameMode'); // ✅ NUEVO
-    if (saved === 'coopetition' || saved === 'traffic-light') { // ✅ NUEVO
-      return saved as GameMode; // ✅ NUEVO
+  // 2. Detectar por dominio
+  try {
+    const hostname = window.location.hostname.toLowerCase();
+    if (hostname.includes('coopetition')) {
+      return 'coopetition';
+    }
+    if (hostname.includes('trafficlight') || hostname.includes('traffic-light')) {
+      return 'traffic-light';
+    }
+  } catch {
+    // ignore
+  }
+
+  // 3. localStorage
+  try {
+    const saved = localStorage.getItem('tlg_gameMode');
+    if (saved === 'coopetition' || saved === 'traffic-light') {
+      return saved as GameMode;
     }
   } catch {
     // ignore
   }
 
   // 4. Default
-  return 'traffic-light'; // ✅ NUEVO
+  return 'traffic-light';
+}
+
+function buildTheme(mode: GameMode, language: string): GameModeTheme {
+  const base = baseThemes[mode];
+  const texts = localizedTexts[language]?.[mode] || localizedTexts['es'][mode];
+  
+  return {
+    ...base,
+    ...texts,
+  };
 }
 
 export function GameModeProvider({ children }: { children: ReactNode }) {
-  // Persistir en localStorage
-  const [mode, setModeState] = useState<GameMode>(() => { // ✅ MODIFICADO
-    return getInitialGameMode(); // ✅ MODIFICADO
-  });
+  const [mode, setModeState] = useState<GameMode>(() => getInitialGameMode());
 
-  useEffect(() => { // ✅ MODIFICADO
-    localStorage.setItem('tlg_gameMode', mode); // ✅ MODIFICADO
+  useEffect(() => {
+    localStorage.setItem('tlg_gameMode', mode);
   }, [mode]);
 
   const setMode = (newMode: GameMode) => {
     setModeState(newMode);
   };
 
-  const theme = themes[mode];
+  // Obtener idioma del localStorage o default
+  const getLanguage = (): string => {
+    try {
+      return localStorage.getItem('tlg_language') || 'es';
+    } catch {
+      return 'es';
+    }
+  };
+
+  const theme = buildTheme(mode, getLanguage());
+
+  const getLocalizedTheme = (language: string): GameModeTheme => {
+    return buildTheme(mode, language);
+  };
 
   return (
-    <GameModeContext.Provider value={{ mode, setMode, theme }}>
+    <GameModeContext.Provider value={{ mode, setMode, theme, getLocalizedTheme }}>
       {children}
     </GameModeContext.Provider>
   );
@@ -166,6 +208,6 @@ export function useGameMode() {
 // HELPER: Obtener tema por modo (sin contexto)
 // ============================================
 
-export function getThemeByMode(mode: GameMode): GameModeTheme {
-  return themes[mode];
+export function getThemeByMode(mode: GameMode, language: string = 'es'): GameModeTheme {
+  return buildTheme(mode, language);
 }

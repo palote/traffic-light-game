@@ -16,6 +16,8 @@ import {
   SECONDARY_SUBJECTS_ES,
   PRIMARY_SUBJECTS_EN,
   SECONDARY_SUBJECTS_EN,
+  PRIMARY_SUBJECTS_PT, // ✅ AGREGADO
+  SECONDARY_SUBJECTS_PT, // ✅ AGREGADO
   HISTORICAL_EVENTS,
   BOOKS,
   MEDIA_CONTENT,
@@ -62,11 +64,15 @@ export function PromptGeneratorModal({ isOpen, onClose }: PromptGeneratorModalPr
   const [mediaFilter, setMediaFilter] = useState<'all' | 'movie' | 'series' | 'documentary'>('all');
 
   // Get subjects based on level and language
-  const subjects = useMemo(() => {
+  const subjects = useMemo(() => { // ✅ MODIFICADO
     if (config.level === 'primary') {
-      return config.language === 'es' ? [...PRIMARY_SUBJECTS_ES] : [...PRIMARY_SUBJECTS_EN];
+      if (config.language === 'pt') return [...PRIMARY_SUBJECTS_PT];
+      if (config.language === 'en') return [...PRIMARY_SUBJECTS_EN];
+      return [...PRIMARY_SUBJECTS_ES];
     }
-    return config.language === 'es' ? [...SECONDARY_SUBJECTS_ES] : [...SECONDARY_SUBJECTS_EN];
+    if (config.language === 'pt') return [...SECONDARY_SUBJECTS_PT];
+    if (config.language === 'en') return [...SECONDARY_SUBJECTS_EN];
+    return [...SECONDARY_SUBJECTS_ES];
   }, [config.level, config.language]);
 
   // Get grades based on level
@@ -508,7 +514,7 @@ export function PromptGeneratorModal({ isOpen, onClose }: PromptGeneratorModalPr
               <div style={{ marginBottom: 20 }}>
                 <label style={labelStyle}>{t.promptGenerator.promptLanguage}</label>
                 <div style={{ display: 'flex', gap: 12 }}>
-                  {(['es', 'en'] as const).map((lang) => (
+                  {(['es', 'en', 'pt'] as const).map((lang) => ( // ✅ MODIFICADO: agregado 'pt'
                     <button
                       key={lang}
                       onClick={() => updateConfig({ language: lang, selection: '' })}
@@ -525,9 +531,11 @@ export function PromptGeneratorModal({ isOpen, onClose }: PromptGeneratorModalPr
                         gap: 8,
                       }}
                     >
-                      <span style={{ fontSize: 20 }}>{lang === 'es' ? '🇪🇸' : '🇺🇸'}</span>
+                      <span style={{ fontSize: 20 }}>
+                        {lang === 'es' ? '🇪🇸' : lang === 'en' ? '🇺🇸' : '🇧🇷'}
+                      </span>
                       <span style={{ fontWeight: 600, color: config.language === lang ? theme.primary : '#475569' }}>
-                        {t.promptGenerator[lang === 'es' ? 'spanish' : 'english']}
+                        {t.promptGenerator[lang === 'es' ? 'spanish' : lang === 'en' ? 'english' : 'portuguese']}
                       </span>
                     </button>
                   ))}
@@ -685,7 +693,7 @@ export function PromptGeneratorModal({ isOpen, onClose }: PromptGeneratorModalPr
               {/* ✅ NUEVO: Contexto geográfico/cultural */}
               <div style={{ marginBottom: 20 }}>
                 <label style={labelStyle}>
-                  🌍 {config.language === 'es' ? 'Contexto geográfico/cultural (opcional)' : 'Geographic/cultural context (optional)'}
+                  🌍 {config.language === 'es' ? 'Contexto geográfico/cultural (opcional)' : config.language === 'en' ? 'Geographic/cultural context (optional)' : 'Contexto geográfico/cultural (opcional)'}
                 </label>
                 <input 
                   type="text" 
@@ -693,13 +701,17 @@ export function PromptGeneratorModal({ isOpen, onClose }: PromptGeneratorModalPr
                   onChange={(e) => updateConfig({ culturalContext: e.target.value })} 
                   placeholder={config.language === 'es' 
                     ? 'Ej: México, zona rural de Oaxaca / España, Cataluña / Perú, Lima' 
-                    : 'E.g.: Mexico, rural Oaxaca / Spain, Catalonia / USA, Texas'}
+                    : config.language === 'en'
+                    ? 'E.g.: Mexico, rural Oaxaca / Spain, Catalonia / USA, Texas'
+                    : 'Ex: Brasil, zona rural de Minas Gerais / Portugal, Lisboa / Angola, Luanda'}
                   style={inputStyle} 
                 />
                 <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748b' }}>
                   {config.language === 'es' 
                     ? 'Los ejemplos y referencias se adaptarán a este contexto' 
-                    : 'Examples and references will be adapted to this context'}
+                    : config.language === 'en'
+                    ? 'Examples and references will be adapted to this context'
+                    : 'Os exemplos e referências serão adaptados a este contexto'}
                 </p>
               </div>
 

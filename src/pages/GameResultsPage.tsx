@@ -1,5 +1,6 @@
 // src/pages/GameResultsPage.tsx
 // 📊 Página de resultados del juego para el docente
+// ✅ ACTUALIZADO: Vista por alumno + Exportar Excel
 
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
@@ -12,24 +13,38 @@ interface Team {
   name: string;
   emoji?: string;
   totalScore?: number;
-  players?: Record<string, { name: string }>;
+  players?: Record<string, { id: string; name: string }> | Array<{ id: string; name: string }>;
+}
+
+interface Question {
+  id: string;
+  text: string;
+  hint?: string;
+}
+
+interface RatingTeamData {
+  teamId: string;
+  teamName: string;
+  playerId: string;
+  playerName: string;
+  rating: "green" | "yellow" | "red" | null;
+  validated?: boolean;
+  ratedAt?: number;
 }
 
 interface Round {
   questionId: string;
+  phase: string;
   respondingTeam?: {
     teamId: string;
+    playerId: string;
     playerName: string;
     helpRequested?: boolean;
-    responseAccepted?: boolean;
+    responseGiven?: boolean;
   };
-  ratingTeams?: Record<string, {
-    teamId: string;
-    playerName: string;
-    rating: "green" | "yellow" | "red";
-    accepted?: boolean;
-  }>;
+  ratingTeams?: Record<string, RatingTeamData>;
   pointsAwarded?: Record<string, number>;
+  responseValidated?: "correct" | "incorrect" | null;
 }
 
 interface SelfEvaluation {
@@ -42,6 +57,36 @@ interface SelfEvaluation {
   submittedAt: number;
 }
 
+interface StudentPerformance {
+  studentName: string;
+  playerId: string;
+  teamId: string;
+  teamName: string;
+  teamEmoji?: string;
+  respondedCount: number;
+  respondedWithHelp: number;
+  respondedCorrect: number;
+  respondedIncorrect: number;
+  respondedQuestions: Array<{
+    questionText: string;
+    helpRequested: boolean;
+    responseValidated: "correct" | "incorrect" | null;
+    roundNumber: number;
+  }>;
+  ratedCount: number;
+  greenRatings: number;
+  yellowRatings: number;
+  redRatings: number;
+  ratingsAccepted: number;
+  ratingsRejected: number;
+  ratingDetails: Array<{
+    rating: "green" | "yellow" | "red";
+    validated?: boolean;
+    roundNumber: number;
+  }>;
+  selfEvaluation?: SelfEvaluation;
+}
+
 interface GameData {
   config?: {
     className?: string;
@@ -49,9 +94,27 @@ interface GameData {
     subject?: string;
   };
   teams?: Record<string, Team>;
+  questions?: Record<string, Question>;
   stage2?: {
     rounds?: Round[];
     currentRound?: number;
+    completed?: boolean;
+  };
+  selfEvaluationActive?: boolean;
+}
+
+interface GameData {
+  config?: {
+    className?: string;
+    gameName?: string;
+    subject?: string;
+  };
+  teams?: Record<string, Team>;
+  questions?: Record<string, Question>;
+  stage2?: {
+    rounds?: Round[];
+    currentRound?: number;
+    completed?: boolean;
   };
   selfEvaluationActive?: boolean;
 }
@@ -65,13 +128,16 @@ export function GameResultsPage() {
   const [loading, setLoading] = useState(true);
   const [game, setGame] = useState<GameData | null>(null);
   const [selfEvaluations, setSelfEvaluations] = useState<SelfEvaluation[]>([]);
-  const [activeTab, setActiveTab] = useState<"podium" | "performance" | "autoevaluaciones">("podium");
+  const [activeTab, setActiveTab] = useState<"podium" | "alumnos" | "autoevaluaciones">("podium");
+  const [teamFilter, setTeamFilter] = useState<string>("all");
 
   // Detectar tab inicial desde URL
   useEffect(() => {
     const tab = searchParams.get("tab");
     if (tab === "autoevaluaciones") {
       setActiveTab("autoevaluaciones");
+    } else if (tab === "alumnos") {
+      setActiveTab("alumnos");
     }
   }, [searchParams]);
 
@@ -81,7 +147,7 @@ export function GameResultsPage() {
       backToDashboard: "← Volver al Dashboard",
       tabs: {
         podium: "🏆 Podio",
-        performance: "📊 Desempeño",
+        alumnos: "👤 Por Alumno",
         autoevaluaciones: "📝 Autoevaluaciones",
       },
       podium: {
@@ -89,18 +155,28 @@ export function GameResultsPage() {
         points: "puntos",
         otherTeams: "Otros equipos",
       },
-      performance: {
-        title: "Desempeño en Stage 2",
+      alumnos: {
+        title: "Desempeño Individual",
+        filterAll: "Todos los equipos",
+        exportExcel: "📥 Exportar Excel",
+        student: "Alumno",
         team: "Equipo",
         responded: "Respondió",
+        rated: "Calificó",
         times: "veces",
         withHelp: "con ayuda",
-        rated: "Calificó",
+        correct: "correctas",
+        ratings: "Calificaciones",
         accepted: "aceptadas",
-        green: "verdes",
-        yellow: "amarillos",
-        red: "rojos",
-        noStage2: "Este juego no tiene datos de Stage 2",
+        rejected: "rechazadas",
+        question: "Pregunta",
+        help: "Ayuda",
+        result: "Resultado",
+        yes: "Sí",
+        no: "No",
+        noData: "No hay datos de Stage 2",
+        expandDetails: "Ver detalles",
+        collapseDetails: "Ocultar detalles",
       },
       selfEval: {
         title: "Autoevaluaciones",
@@ -114,7 +190,7 @@ export function GameResultsPage() {
         toWho: "A quién",
         description: "Descripción",
         submittedAt: "Enviado",
-        activateSelfEval: "La autoevaluación no está activa. Activala desde el podio del juego.",
+        activateSelfEval: "La autoevaluación no está activa.",
       },
       loading: "Cargando...",
       gameNotFound: "Juego no encontrado",
@@ -124,7 +200,7 @@ export function GameResultsPage() {
       backToDashboard: "← Back to Dashboard",
       tabs: {
         podium: "🏆 Podium",
-        performance: "📊 Performance",
+        alumnos: "👤 By Student",
         autoevaluaciones: "📝 Self-Evaluations",
       },
       podium: {
@@ -132,18 +208,28 @@ export function GameResultsPage() {
         points: "points",
         otherTeams: "Other teams",
       },
-      performance: {
-        title: "Stage 2 Performance",
+      alumnos: {
+        title: "Individual Performance",
+        filterAll: "All teams",
+        exportExcel: "📥 Export Excel",
+        student: "Student",
         team: "Team",
         responded: "Responded",
+        rated: "Rated",
         times: "times",
         withHelp: "with help",
-        rated: "Rated",
+        correct: "correct",
+        ratings: "Ratings",
         accepted: "accepted",
-        green: "green",
-        yellow: "yellow",
-        red: "red",
-        noStage2: "This game has no Stage 2 data",
+        rejected: "rejected",
+        question: "Question",
+        help: "Help",
+        result: "Result",
+        yes: "Yes",
+        no: "No",
+        noData: "No Stage 2 data",
+        expandDetails: "View details",
+        collapseDetails: "Hide details",
       },
       selfEval: {
         title: "Self-Evaluations",
@@ -157,7 +243,7 @@ export function GameResultsPage() {
         toWho: "To who",
         description: "Description",
         submittedAt: "Submitted",
-        activateSelfEval: "Self-evaluation is not active. Activate it from the game podium.",
+        activateSelfEval: "Self-evaluation is not active.",
       },
       loading: "Loading...",
       gameNotFound: "Game not found",
@@ -167,7 +253,7 @@ export function GameResultsPage() {
       backToDashboard: "← Voltar ao Dashboard",
       tabs: {
         podium: "🏆 Pódio",
-        performance: "📊 Desempenho",
+        alumnos: "👤 Por Aluno",
         autoevaluaciones: "📝 Autoavaliações",
       },
       podium: {
@@ -175,18 +261,28 @@ export function GameResultsPage() {
         points: "pontos",
         otherTeams: "Outras equipes",
       },
-      performance: {
-        title: "Desempenho no Stage 2",
+      alumnos: {
+        title: "Desempenho Individual",
+        filterAll: "Todas as equipes",
+        exportExcel: "📥 Exportar Excel",
+        student: "Aluno",
         team: "Equipe",
         responded: "Respondeu",
+        rated: "Avaliou",
         times: "vezes",
         withHelp: "com ajuda",
-        rated: "Avaliou",
+        correct: "corretas",
+        ratings: "Avaliações",
         accepted: "aceitas",
-        green: "verdes",
-        yellow: "amarelos",
-        red: "vermelhos",
-        noStage2: "Este jogo não tem dados do Stage 2",
+        rejected: "rejeitadas",
+        question: "Pergunta",
+        help: "Ajuda",
+        result: "Resultado",
+        yes: "Sim",
+        no: "Não",
+        noData: "Sem dados do Stage 2",
+        expandDetails: "Ver detalhes",
+        collapseDetails: "Ocultar detalhes",
       },
       selfEval: {
         title: "Autoavaliações",
@@ -200,7 +296,7 @@ export function GameResultsPage() {
         toWho: "Para quem",
         description: "Descrição",
         submittedAt: "Enviado",
-        activateSelfEval: "A autoavaliação não está ativa. Ative-a no pódio do jogo.",
+        activateSelfEval: "A autoavaliação não está ativa.",
       },
       loading: "Carregando...",
       gameNotFound: "Jogo não encontrado",
@@ -254,73 +350,194 @@ export function GameResultsPage() {
       .sort((a, b) => (b.totalScore ?? 0) - (a.totalScore ?? 0));
   }, [game]);
 
-  // Calcular desempeño por equipo en Stage 2
-  const teamPerformance = useMemo(() => {
-    if (!game?.stage2?.rounds) return {};
+  // Calcular desempeño por alumno
+  const studentPerformances = useMemo((): StudentPerformance[] => {
+    if (!game?.stage2?.rounds || !game?.teams) return [];
 
-    const performance: Record<string, {
-        responded: number;
-        helpRequested: number;
-        responseAccepted: number;
-        rated: number;
-        ratingAccepted: number;
-        greenRatings: number;
-        yellowRatings: number;
-        redRatings: number;
-      }> = {};
+    const rounds = Array.isArray(game.stage2.rounds)
+      ? game.stage2.rounds
+      : Object.values(game.stage2.rounds);
 
-    // Inicializar para todos los equipos
-    sortedTeams.forEach((team) => {
-      performance[team.id] = {
-        responded: 0,
-        helpRequested: 0,
-        responseAccepted: 0,
-        rated: 0,
-        ratingAccepted: 0,
-        greenRatings: 0,
-        yellowRatings: 0,
-        redRatings: 0,
-      };
-    });
+    const questions = game.questions || {};
+    const performances: Record<string, StudentPerformance> = {};
+
+    // Inicializar todos los jugadores de todos los equipos
+    for (const [teamId, team] of Object.entries(game.teams)) {
+      const players = team.players;
+      if (!players) continue;
+
+      const playerList = Array.isArray(players) ? players : Object.values(players);
+
+      for (const player of playerList) {
+        if (!player?.id || !player?.name) continue;
+
+        const key = `${teamId}-${player.id}`;
+        performances[key] = {
+          studentName: player.name,
+          playerId: player.id,
+          teamId,
+          teamName: team.name || teamId,
+          teamEmoji: team.emoji,
+          respondedCount: 0,
+          respondedWithHelp: 0,
+          respondedCorrect: 0,
+          respondedIncorrect: 0,
+          respondedQuestions: [],
+          ratedCount: 0,
+          greenRatings: 0,
+          yellowRatings: 0,
+          redRatings: 0,
+          ratingsAccepted: 0,
+          ratingsRejected: 0,
+          ratingDetails: [],
+          selfEvaluation: undefined,
+        };
+      }
+    }
 
     // Analizar cada ronda
-    for (const round of game.stage2.rounds) {
+    rounds.forEach((round: Round, roundIndex: number) => {
+      if (!round) return;
+
       // Equipo que respondió
       if (round.respondingTeam) {
-        const teamId = round.respondingTeam.teamId;
-        if (performance[teamId]) {
-          performance[teamId].responded++;
-          if (round.respondingTeam.helpRequested) {
-            performance[teamId].helpRequested++;
+        const rt = round.respondingTeam;
+        const key = `${rt.teamId}-${rt.playerId}`;
+
+        if (performances[key]) {
+          performances[key].respondedCount++;
+
+          if (rt.helpRequested) {
+            performances[key].respondedWithHelp++;
           }
-          if (round.respondingTeam.responseAccepted) {
-            performance[teamId].responseAccepted++;
+
+          const questionText = questions[round.questionId]?.text || round.questionId;
+          const validated = round.responseValidated;
+
+          if (validated === "correct") {
+            performances[key].respondedCorrect++;
+          } else if (validated === "incorrect") {
+            performances[key].respondedIncorrect++;
           }
+
+          performances[key].respondedQuestions.push({
+            questionText,
+            helpRequested: rt.helpRequested || false,
+            responseValidated: validated || null,
+            roundNumber: roundIndex,
+          });
         }
       }
 
       // Equipos que calificaron
       if (round.ratingTeams) {
         for (const [teamId, ratingData] of Object.entries(round.ratingTeams)) {
-          if (performance[teamId]) {
-            performance[teamId].rated++;
-            if (ratingData.accepted) {
-              performance[teamId].ratingAccepted++;
-            }
+          const key = `${teamId}-${ratingData.playerId}`;
+
+          if (performances[key] && ratingData.rating) {
+            performances[key].ratedCount++;
+
             if (ratingData.rating === "green") {
-              performance[teamId].greenRatings++;
+              performances[key].greenRatings++;
             } else if (ratingData.rating === "yellow") {
-              performance[teamId].yellowRatings++;
+              performances[key].yellowRatings++;
             } else if (ratingData.rating === "red") {
-              performance[teamId].redRatings++;
+              performances[key].redRatings++;
             }
+
+            if (ratingData.validated === true) {
+              performances[key].ratingsAccepted++;
+            } else if (ratingData.validated === false) {
+              performances[key].ratingsRejected++;
+            }
+
+            performances[key].ratingDetails.push({
+              rating: ratingData.rating,
+              validated: ratingData.validated,
+              roundNumber: roundIndex,
+            });
           }
+        }
+      }
+    });
+
+    // Vincular autoevaluaciones
+    for (const selfEval of selfEvaluations) {
+      // Buscar por nombre del estudiante y equipo
+      for (const perf of Object.values(performances)) {
+        if (
+          perf.studentName.toLowerCase() === selfEval.studentName.toLowerCase() &&
+          perf.teamId === selfEval.teamId
+        ) {
+          perf.selfEvaluation = selfEval;
+          break;
         }
       }
     }
 
-    return performance;
-  }, [game, sortedTeams]);
+    return Object.values(performances).sort((a, b) => {
+      // Ordenar por equipo, luego por nombre
+      if (a.teamName !== b.teamName) {
+        return a.teamName.localeCompare(b.teamName);
+      }
+      return a.studentName.localeCompare(b.studentName);
+    });
+  }, [game, selfEvaluations]);
+
+  // Filtrar por equipo
+  const filteredStudents = useMemo(() => {
+    if (teamFilter === "all") return studentPerformances;
+    return studentPerformances.filter((s) => s.teamId === teamFilter);
+  }, [studentPerformances, teamFilter]);
+
+  // Exportar a Excel
+  const handleExportExcel = () => {
+    const headers = [
+      "Alumno",
+      "Equipo",
+      "Respondió (veces)",
+      "Con ayuda",
+      "Correctas",
+      "Incorrectas",
+      "Calificó (veces)",
+      "Verdes",
+      "Amarillos",
+      "Rojos",
+      "Aceptadas",
+      "Rechazadas",
+      "Tiene autoevaluación",
+    ];
+
+    const rows = filteredStudents.map((s) => [
+      s.studentName,
+      s.teamName,
+      s.respondedCount,
+      s.respondedWithHelp,
+      s.respondedCorrect,
+      s.respondedIncorrect,
+      s.ratedCount,
+      s.greenRatings,
+      s.yellowRatings,
+      s.redRatings,
+      s.ratingsAccepted,
+      s.ratingsRejected,
+      s.selfEvaluation ? "Sí" : "No",
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(","))].join("\n");
+
+    const BOM = "\uFEFF";
+    const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `resultados_${gameId}_${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleString(language === "es" ? "es-AR" : language === "pt" ? "pt-BR" : "en-US", {
@@ -386,8 +603,8 @@ export function GameResultsPage() {
           <TabButton active={activeTab === "podium"} onClick={() => setActiveTab("podium")}>
             {t.tabs.podium}
           </TabButton>
-          <TabButton active={activeTab === "performance"} onClick={() => setActiveTab("performance")}>
-            {t.tabs.performance}
+          <TabButton active={activeTab === "alumnos"} onClick={() => setActiveTab("alumnos")}>
+            {t.tabs.alumnos}
           </TabButton>
           <TabButton active={activeTab === "autoevaluaciones"} onClick={() => setActiveTab("autoevaluaciones")}>
             {t.tabs.autoevaluaciones} ({selfEvaluations.length})
@@ -510,61 +727,67 @@ export function GameResultsPage() {
             </div>
           )}
 
-          {/* PERFORMANCE TAB */}
-          {activeTab === "performance" && (
+          {/* ALUMNOS TAB */}
+          {activeTab === "alumnos" && (
             <div>
-              <h3 style={{ margin: "0 0 16px 0", fontSize: 18, fontWeight: 700 }}>{t.performance.title}</h3>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 20,
+                  flexWrap: "wrap",
+                  gap: 12,
+                }}
+              >
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{t.alumnos.title}</h3>
 
-              {!game.stage2?.rounds || game.stage2.rounds.length === 0 ? (
-                <div style={{ textAlign: "center", padding: 40, color: "#64748b" }}>{t.performance.noStage2}</div>
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  {/* Filtro por equipo */}
+                  <select
+                    value={teamFilter}
+                    onChange={(e) => setTeamFilter(e.target.value)}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: 8,
+                      border: "1px solid #e2e8f0",
+                      fontSize: 14,
+                    }}
+                  >
+                    <option value="all">{t.alumnos.filterAll}</option>
+                    {sortedTeams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.emoji} {team.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Exportar */}
+                  <button
+                    onClick={handleExportExcel}
+                    style={{
+                      padding: "8px 16px",
+                      backgroundColor: "#22c55e",
+                      color: "white",
+                      border: "none",
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {t.alumnos.exportExcel}
+                  </button>
+                </div>
+              </div>
+
+              {filteredStudents.length === 0 ? (
+                <div style={{ textAlign: "center", padding: 40, color: "#64748b" }}>{t.alumnos.noData}</div>
               ) : (
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ backgroundColor: "#f8fafc" }}>
-                        <Th>{t.performance.team}</Th>
-                        <Th>🏆 Pts</Th>
-                        <Th>🎤 {t.performance.responded}</Th>
-                        <Th>✍️ {t.performance.rated}</Th>
-                        <Th>🟩🟨🟥</Th>
-                        <Th>✅ {t.performance.accepted}</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedTeams.map((team) => {
-                        const perf = teamPerformance[team.id];
-                        return (
-                          <tr key={team.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                            <Td>
-                              <span style={{ marginRight: 8 }}>{team.emoji}</span>
-                              {team.name}
-                            </Td>
-                            <Td style={{ fontWeight: 700 }}>{team.totalScore ?? 0}</Td>
-                            <Td>
-                              {perf?.responded || 0}
-                              {perf?.helpRequested ? (
-                                <span style={{ fontSize: 11, color: "#f59e0b", marginLeft: 4 }}>
-                                  ({perf.helpRequested} 🆘)
-                                </span>
-                              ) : null}
-                            </Td>
-                            <Td>{perf?.rated || 0}</Td>
-                            <Td>
-                              <span style={{ color: "#22c55e" }}>{perf?.greenRatings || 0}</span>
-                              {" / "}
-                              <span style={{ color: "#eab308" }}>{perf?.yellowRatings || 0}</span>
-                              {" / "}
-                              <span style={{ color: "#ef4444" }}>{perf?.redRatings || 0}</span>
-                            </Td>
-                            <Td>
-                              <span style={{ color: "#22c55e", fontWeight: 600 }}>{perf?.ratingAccepted || 0}</span>
-                              <span style={{ color: "#64748b" }}> / {perf?.rated || 0}</span>
-                            </Td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {filteredStudents.map((student) => (
+                    <StudentCard key={`${student.teamId}-${student.playerId}`} student={student} t={t} />
+                  ))}
                 </div>
               )}
             </div>
@@ -644,9 +867,7 @@ export function GameResultsPage() {
                                 borderLeft: "3px solid #22c55e",
                               }}
                             >
-                              {help.concept && (
-                                <div style={{ fontWeight: 600, marginBottom: 4 }}>{help.concept}</div>
-                              )}
+                              {help.concept && <div style={{ fontWeight: 600, marginBottom: 4 }}>{help.concept}</div>}
                               {help.fromWho.length > 0 && (
                                 <div style={{ fontSize: 13, color: "#64748b", marginBottom: 4 }}>
                                   {t.selfEval.fromWho}: {help.fromWho.join(", ")}
@@ -687,9 +908,7 @@ export function GameResultsPage() {
                                 borderLeft: "3px solid #3b82f6",
                               }}
                             >
-                              {help.concept && (
-                                <div style={{ fontWeight: 600, marginBottom: 4 }}>{help.concept}</div>
-                              )}
+                              {help.concept && <div style={{ fontWeight: 600, marginBottom: 4 }}>{help.concept}</div>}
                               {help.toWho.length > 0 && (
                                 <div style={{ fontSize: 13, color: "#64748b", marginBottom: 4 }}>
                                   {t.selfEval.toWho}: {help.toWho.join(", ")}
@@ -714,16 +933,199 @@ export function GameResultsPage() {
   );
 }
 
+// Componente de tarjeta de estudiante
+function StudentCard({ student, t }: { student: StudentPerformance; t: any }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const hasActivity = student.respondedCount > 0 || student.ratedCount > 0;
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#f8fafc",
+        borderRadius: 12,
+        border: "1px solid #e2e8f0",
+        overflow: "hidden",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          padding: 16,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          cursor: hasActivity ? "pointer" : "default",
+        }}
+        onClick={() => hasActivity && setExpanded(!expanded)}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              backgroundColor: "#e2e8f0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 18,
+            }}
+          >
+            {student.teamEmoji || "👤"}
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, color: "#1e293b" }}>{student.studentName}</div>
+            <div style={{ fontSize: 12, color: "#64748b" }}>{student.teamName}</div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {/* Respondió */}
+          {student.respondedCount > 0 && (
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "#64748b" }}>🎤 {t.alumnos.responded}</div>
+              <div style={{ fontWeight: 700, color: "#f59e0b" }}>
+                {student.respondedCount}
+                {student.respondedWithHelp > 0 && (
+                  <span style={{ fontSize: 11, color: "#94a3b8" }}> ({student.respondedWithHelp}🆘)</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Calificó */}
+          {student.ratedCount > 0 && (
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "#64748b" }}>✍️ {t.alumnos.rated}</div>
+              <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                <span style={{ color: "#22c55e", fontWeight: 700 }}>{student.greenRatings}</span>
+                <span style={{ color: "#eab308", fontWeight: 700 }}>{student.yellowRatings}</span>
+                <span style={{ color: "#ef4444", fontWeight: 700 }}>{student.redRatings}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Autoevaluación */}
+          {student.selfEvaluation && (
+            <div
+              style={{
+                padding: "4px 8px",
+                backgroundColor: "#dbeafe",
+                color: "#1d4ed8",
+                borderRadius: 4,
+                fontSize: 11,
+                fontWeight: 600,
+              }}
+            >
+              📝
+            </div>
+          )}
+
+          {/* Expand icon */}
+          {hasActivity && <span style={{ color: "#94a3b8" }}>{expanded ? "▲" : "▼"}</span>}
+        </div>
+      </div>
+
+      {/* Detalles expandidos */}
+      {expanded && (
+        <div style={{ padding: "0 16px 16px", borderTop: "1px solid #e2e8f0" }}>
+          {/* Preguntas respondidas */}
+          {student.respondedQuestions.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#f59e0b", marginBottom: 8 }}>
+                🎤 {t.alumnos.responded}
+              </div>
+              {student.respondedQuestions.map((q, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    backgroundColor: "white",
+                    borderRadius: 8,
+                    padding: 12,
+                    marginBottom: 8,
+                    borderLeft: `3px solid ${q.responseValidated === "correct" ? "#22c55e" : q.responseValidated === "incorrect" ? "#ef4444" : "#94a3b8"}`,
+                  }}
+                >
+                  <div style={{ fontSize: 13, color: "#374151", marginBottom: 8 }}>
+                    <strong>{t.alumnos.question}:</strong> {q.questionText}
+                  </div>
+                  <div style={{ display: "flex", gap: 16, fontSize: 12 }}>
+                    <span>
+                      <strong>{t.alumnos.help}:</strong> {q.helpRequested ? `✅ ${t.alumnos.yes}` : `❌ ${t.alumnos.no}`}
+                    </span>
+                    <span>
+                      <strong>{t.alumnos.result}:</strong>{" "}
+                      {q.responseValidated === "correct" ? "✅ Correcta" : q.responseValidated === "incorrect" ? "❌ Incorrecta" : "⏳ Sin validar"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Calificaciones dadas */}
+          {student.ratingDetails.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#3b82f6", marginBottom: 8 }}>
+                ✍️ {t.alumnos.rated}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {student.ratingDetails.map((r, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 8,
+                      backgroundColor: r.rating === "green" ? "#dcfce7" : r.rating === "yellow" ? "#fef3c7" : "#fee2e2",
+                      color: r.rating === "green" ? "#166534" : r.rating === "yellow" ? "#a16207" : "#991b1b",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    {r.rating === "green" ? "🟩" : r.rating === "yellow" ? "🟨" : "🟥"}
+                    {r.validated === true && <span>✅</span>}
+                    {r.validated === false && <span>❌</span>}
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: "#64748b", marginTop: 8 }}>
+                ✅ {student.ratingsAccepted} {t.alumnos.accepted} • ❌ {student.ratingsRejected} {t.alumnos.rejected}
+              </div>
+            </div>
+          )}
+
+          {/* Autoevaluación vinculada */}
+          {student.selfEvaluation && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#8b5cf6", marginBottom: 8 }}>📝 Autoevaluación</div>
+              <div style={{ backgroundColor: "white", borderRadius: 8, padding: 12, fontSize: 13 }}>
+                {student.selfEvaluation.receivedHelp?.length > 0 && (
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Aprendió de:</strong>{" "}
+                    {student.selfEvaluation.receivedHelp.map((h) => h.fromWho.join(", ")).join("; ")}
+                  </div>
+                )}
+                {student.selfEvaluation.gaveHelp?.length > 0 && (
+                  <div>
+                    <strong>Ayudó a:</strong>{" "}
+                    {student.selfEvaluation.gaveHelp.map((h) => h.toWho.join(", ")).join("; ")}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Componentes auxiliares
-function TabButton({
-  children,
-  active,
-  onClick,
-}: {
-  children: React.ReactNode;
-  active: boolean;
-  onClick: () => void;
-}) {
+function TabButton({ children, active, onClick }: { children: React.ReactNode; active: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -741,38 +1143,6 @@ function TabButton({
     >
       {children}
     </button>
-  );
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th
-      style={{
-        textAlign: "left",
-        padding: "12px 16px",
-        fontSize: 12,
-        fontWeight: 600,
-        color: "#64748b",
-        textTransform: "uppercase",
-        letterSpacing: "0.5px",
-      }}
-    >
-      {children}
-    </th>
-  );
-}
-
-function Td({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-  return (
-    <td
-      style={{
-        padding: "12px 16px",
-        fontSize: 14,
-        ...style,
-      }}
-    >
-      {children}
-    </td>
   );
 }
 

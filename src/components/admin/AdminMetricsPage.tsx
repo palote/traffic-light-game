@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ref, get } from "firebase/database";
+import { ref, get, set } from "firebase/database";
 import { database } from "../../firebase.config";
 import { useI18n } from "../../i18n";
 
@@ -13,12 +13,26 @@ type TeacherMetrics = {
   lastAccessByGame?: Record<string, { lastAccessAt?: number } | number>;
 };
 
+interface ReferralConfig {
+  active: boolean;
+  formUrl: string;
+  rewards: string;
+  requireFinishedGame?: boolean;  // ✅ AGREGADO
+}
+
 export function AdminMetricsPage() {
   const { t, language } = useI18n();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [teachers, setTeachers] = useState<Record<string, TeacherMetrics>>({});
+  const [referralConfig, setReferralConfig] = useState<ReferralConfig>({
+    active: false,
+    formUrl: "",
+    rewards: "",
+    requireFinishedGame: false,
+  });
 
+  // Cargar métricas
   useEffect(() => {
     async function load() {
       setLoading(true);
@@ -28,6 +42,34 @@ export function AdminMetricsPage() {
     }
     load();
   }, []);
+
+  // Cargar configuración de referidos
+  useEffect(() => {
+    async function loadReferralConfig() {
+      try {
+        const configRef = ref(database, "config/referral");
+        const snap = await get(configRef);
+        if (snap.exists()) {
+          setReferralConfig(snap.val());
+        }
+      } catch (error) {
+        console.error("Error loading referral config:", error);
+      }
+    }
+    loadReferralConfig();
+  }, []);
+
+  // Guardar configuración de referidos
+  const saveReferralConfig = async () => {
+    try {
+      const configRef = ref(database, "config/referral");
+      await set(configRef, referralConfig);
+      alert("Configuración guardada exitosamente");
+    } catch (error) {
+      console.error("Error saving referral config:", error);
+      alert("Error al guardar la configuración");
+    }
+  };
 
   const rows = useMemo(() => {
     return Object.entries(teachers).map(([uid, data]) => {
@@ -153,6 +195,104 @@ export function AdminMetricsPage() {
             }}
           >
             📥 {t.admin.downloadExcel}
+          </button>
+        </div>
+      </div>
+
+      {/* Configuración de Referidos */}
+      <div style={{ 
+        backgroundColor: "white", 
+        borderRadius: 12, 
+        padding: 24,
+        marginBottom: 24,
+        boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+      }}>
+        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16, color: "#1e293b" }}>
+          ⚙️ Configuración de Referidos
+        </h2>
+        
+        {/* Banner de Referidos */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <input
+              type="checkbox"
+              checked={referralConfig.active}
+              onChange={(e) => setReferralConfig(prev => ({ ...prev, active: e.target.checked }))}
+              style={{ width: 16, height: 16 }}
+            />
+            <span style={{ fontSize: 14, fontWeight: 500, color: "#475569" }}>
+              Activar sistema de referidos
+            </span>
+          </label>
+
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#64748b", marginBottom: 4 }}>
+              URL del formulario
+            </label>
+            <input
+              type="text"
+              value={referralConfig.formUrl}
+              onChange={(e) => setReferralConfig(prev => ({ ...prev, formUrl: e.target.value }))}
+              placeholder="https://forms.google.com/..."
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                border: "1px solid #e2e8f0",
+                borderRadius: 6,
+                fontSize: 14,
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#64748b", marginBottom: 4 }}>
+              Recompensas (descripción)
+            </label>
+            <textarea
+              value={referralConfig.rewards}
+              onChange={(e) => setReferralConfig(prev => ({ ...prev, rewards: e.target.value }))}
+              placeholder="Ej: Acceso premium por 6 meses + certificado"
+              rows={2}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                border: "1px solid #e2e8f0",
+                borderRadius: 6,
+                fontSize: 14,
+                resize: "vertical",
+              }}
+            />
+          </div>
+
+          {/* ✅ AGREGADO: Checkbox para requerir juego completado */}
+          <div style={{ marginTop: 16 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={referralConfig?.requireFinishedGame || false}
+                onChange={(e) => setReferralConfig(prev => prev ? { ...prev, requireFinishedGame: e.target.checked } : prev)}
+              />
+              <span style={{ fontSize: 14, color: '#475569' }}>
+                Solo mostrar a docentes con al menos 1 juego completado
+              </span>
+            </label>
+          </div>
+
+          <button
+            onClick={saveReferralConfig}
+            style={{
+              padding: "10px 20px",
+              fontSize: 14,
+              fontWeight: 600,
+              backgroundColor: "#3b82f6",
+              color: "white",
+              border: "none",
+              borderRadius: 8,
+              cursor: "pointer",
+              marginTop: 16,
+            }}
+          >
+            💾 Guardar Configuración
           </button>
         </div>
       </div>

@@ -8,7 +8,7 @@ export type SecondaryGrade = '1°' | '2°' | '3°' | '4°' | '5°' | '6°';
 
 export type ContentCategory = 'subject' | 'history' | 'book' | 'fun';
 
-export type PromptLanguage = 'es' | 'en';
+export type PromptLanguage = 'es' | 'en' | 'pt'; // ✅ Modificado: agregado 'pt'
 
 // ============================================
 // MATERIAS CURRICULARES
@@ -54,6 +54,28 @@ export const SECONDARY_SUBJECTS_EN = [
   'Spanish',
   'Economics',
   'Philosophy',
+] as const;
+
+// ✅ AGREGADO: Materias en portugués
+export const PRIMARY_SUBJECTS_PT = [
+  'Língua Portuguesa',
+  'Matemática',
+  'Ciências Naturais',
+  'Ciências Sociais',
+] as const;
+
+export const SECONDARY_SUBJECTS_PT = [
+  'Língua Portuguesa e Literatura',
+  'Matemática',
+  'Física',
+  'Química',
+  'Biologia',
+  'História',
+  'Geografia',
+  'Educação Cívica',
+  'Inglês',
+  'Economia',
+  'Filosofia',
 ] as const;
 
 // ============================================

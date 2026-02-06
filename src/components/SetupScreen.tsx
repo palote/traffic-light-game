@@ -39,30 +39,30 @@ import type { NewTeacherGame } from "../types/teacherLibrary";
 
 // 🦁 Nombres de equipos con animales (Traffic Light - niños)
 const TEAM_ANIMALS = [
-  { emoji: "🦁", name: "Leones", nameEn: "Lions" },
-  { emoji: "🐯", name: "Tigres", nameEn: "Tigers" },
-  { emoji: "🐻", name: "Osos", nameEn: "Bears" },
-  { emoji: "🦅", name: "Águilas", nameEn: "Eagles" },
-  { emoji: "🦊", name: "Zorros", nameEn: "Foxes" },
-  { emoji: "🐺", name: "Lobos", nameEn: "Wolves" },
-  { emoji: "🦒", name: "Jirafas", nameEn: "Giraffes" },
-  { emoji: "🐘", name: "Elefantes", nameEn: "Elephants" },
-  { emoji: "🦓", name: "Cebras", nameEn: "Zebras" },
-  { emoji: "🦘", name: "Canguros", nameEn: "Kangaroos" },
+  { emoji: "🦁", name: "Leones", nameEn: "Lions", namePt: "Leões" },
+  { emoji: "🐯", name: "Tigres", nameEn: "Tigers", namePt: "Tigres" },
+  { emoji: "🐻", name: "Osos", nameEn: "Bears", namePt: "Ursos" },
+  { emoji: "🦅", name: "Águilas", nameEn: "Eagles", namePt: "Águias" },
+  { emoji: "🦊", name: "Zorros", nameEn: "Foxes", namePt: "Raposas" },
+  { emoji: "🐺", name: "Lobos", nameEn: "Wolves", namePt: "Lobos" },
+  { emoji: "🦒", name: "Jirafas", nameEn: "Giraffes", namePt: "Girafas" },
+  { emoji: "🐘", name: "Elefantes", nameEn: "Elephants", namePt: "Elefantes" },
+  { emoji: "🦓", name: "Cebras", nameEn: "Zebras", namePt: "Zebras" },
+  { emoji: "🦘", name: "Canguros", nameEn: "Kangaroos", namePt: "Cangurus" },
 ];
 
-// 🎯 Nombres de equipos profesionales (Coopetition - adolescentes/adultos)
+// 🎯 Nombres de equipos neutrales (Coopetition - adolescentes/adultos)
 const TEAM_PROFESSIONAL = [
-  { emoji: "🔷", name: "Estrategas", nameEn: "Strategists" },
-  { emoji: "🔶", name: "Innovadores", nameEn: "Innovators" },
-  { emoji: "💎", name: "Vanguardia", nameEn: "Vanguard" },
-  { emoji: "⚡", name: "Impulso", nameEn: "Momentum" },
-  { emoji: "🎯", name: "Enfoque", nameEn: "Focus" },
-  { emoji: "🚀", name: "Pioneros", nameEn: "Pioneers" },
-  { emoji: "💡", name: "Creativos", nameEn: "Creatives" },
-  { emoji: "🔥", name: "Impacto", nameEn: "Impact" },
-  { emoji: "⭐", name: "Élite", nameEn: "Elite" },
-  { emoji: "🌟", name: "Líderes", nameEn: "Leaders" },
+  { emoji: "1️⃣", name: "Equipo 1", nameEn: "Team 1", namePt: "Equipe 1" },
+  { emoji: "2️⃣", name: "Equipo 2", nameEn: "Team 2", namePt: "Equipe 2" },
+  { emoji: "3️⃣", name: "Equipo 3", nameEn: "Team 3", namePt: "Equipe 3" },
+  { emoji: "4️⃣", name: "Equipo 4", nameEn: "Team 4", namePt: "Equipe 4" },
+  { emoji: "5️⃣", name: "Equipo 5", nameEn: "Team 5", namePt: "Equipe 5" },
+  { emoji: "6️⃣", name: "Equipo 6", nameEn: "Team 6", namePt: "Equipe 6" },
+  { emoji: "7️⃣", name: "Equipo 7", nameEn: "Team 7", namePt: "Equipe 7" },
+  { emoji: "8️⃣", name: "Equipo 8", nameEn: "Team 8", namePt: "Equipe 8" },
+  { emoji: "9️⃣", name: "Equipo 9", nameEn: "Team 9", namePt: "Equipe 9" },
+  { emoji: "🔟", name: "Equipo 10", nameEn: "Team 10", namePt: "Equipe 10" },
 ];
 
 interface SetupScreenProps {
@@ -77,7 +77,7 @@ interface SetupScreenProps {
  * =========================================================
  */
 
-// típicos cuando se ve “Ã¡”, “Â¿”, “â€””, etc.
+// típicos cuando se ve "Ã¡", "Â¿", "â€"", etc.
 function hasMojibakeMarkers(text: string): boolean {
   return /Ã|Â|â€/.test(text);
 }
@@ -103,7 +103,7 @@ function repairLatin1ToUtf8(text: string): string {
 }
 
 /**
- * Intenta “mejorar” el string si parece mojibake.
+ * Intenta "mejorar" el string si parece mojibake.
  * Importante: si el texto YA viene con '�' fuerte,
  * puede estar corrupto y no hay arreglo perfecto: por eso solo aplicamos si mejora el score.
  */
@@ -322,7 +322,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
     setIsParsing(true);
     setCsvError(null);
 
-    // ✅ Guardar para SaveGameModal (guardamos el contenido “mejorado” si mejora)
+    // ✅ Guardar para SaveGameModal (guardamos el contenido "mejorado" si mejora)
     const probe = {
       hasMojibake: hasMojibakeMarkers(content),
       hasBadReplacement: hasVisibleBadReplacement(content),
@@ -521,7 +521,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
           stage0MaterialTextPlaceholder:
             "Cole aqui o texto que as equipes devem ler...",
           stage0GeneratePrompt:
-            "Precisa gerar material? Use este prompt com ChatGPT",
+            "Precisa de gerar material? Use este prompt com ChatGPT",
         }
         : {
           title: "Setup New Game",
@@ -669,15 +669,14 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         }
       }
 
-      let teamName = "";
-      if (language === "es") {
-        teamName = `${teamNames[i].emoji} ${teamNames[i].name}`;
-      } else if (language === "pt") {
-        // Para portugués, usa los nombres en inglés como base (puedes personalizar si tienes nombres en portugués)
-        teamName = `${teamNames[i].emoji} ${teamNames[i].nameEn}`;
-      } else {
-        teamName = `${teamNames[i].emoji} ${teamNames[i].nameEn}`;
-      }
+      // ✅ MODIFICADO: soporte para portugués
+      const teamName = `${teamNames[i].emoji} ${
+        language === "en" 
+          ? teamNames[i].nameEn 
+          : language === "pt" 
+            ? (teamNames[i].namePt || teamNames[i].name) 
+            : teamNames[i].name
+      }`;
 
       newTeams.push({
         id: teamId,
@@ -1423,6 +1422,19 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
           onCancel={() => {
             setShowPreview(false);
             setParseResult(null);
+          }}
+          // ✅ NUEVO: Callback para abrir generador de prompts
+          onOpenPromptGenerator={() => {
+            setShowPreview(false);
+            setParseResult(null);
+            setShowPromptGenerator(true);
+          }}
+          // ✅ NUEVO: Callback para ir a Etapa 0 (Los equipos proponen)
+          onGoToStage0={() => {
+            setShowPreview(false);
+            setParseResult(null);
+            // Navegar al selector de modalidad para que elija "Los equipos proponen"
+            navigate('/setup');
           }}
         />
       )}

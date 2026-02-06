@@ -12,6 +12,7 @@ interface ReferralConfig {
   active: boolean;
   formUrl: string;
   rewards: string;
+  requireFinishedGame?: boolean;  // ✅ AGREGADO
 }
 
 interface WebinarConfig {
@@ -78,7 +79,9 @@ export function DashboardBanners() {
         for (const gameId of Object.keys(games)) {
           const gameRef = ref(database, `games/${gameId}/status`);
           const gameSnapshot = await get(gameRef);
-          if (gameSnapshot.exists() && gameSnapshot.val() === "finished") {
+          const statusData = gameSnapshot.val();
+          const status = typeof statusData === "object" ? statusData?.status : statusData;
+          if (status === "finished" || status === "ended" || status === "game_complete") {
             foundFinished = true;
             break;
           }
@@ -269,8 +272,11 @@ export function DashboardBanners() {
         </div>
       )}
 
-      {/* Banner de Referidos (siempre visible si está activo) */}
+      {/* Banner de Referidos (con filtro opcional de juego completado) */}
       {referralConfig?.active && (
+        // Si requiere juego completado, verificar
+        (!referralConfig.requireFinishedGame || (hasFinishedGame && !checkingGames))
+      ) && (
         <div
           style={{
             padding: "20px 24px",

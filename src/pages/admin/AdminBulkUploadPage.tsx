@@ -90,11 +90,15 @@ function parseTableData(text: string, gameMode: LibraryGameMode): ParsedRow[] {
 function convertToLibraryItem(row: ParsedRow, gameMode: LibraryGameMode): NewCSVLibraryItem | null {
   if (!row.isValid || !row.nombreArchivo) return null;
   
-  // Determinar idioma
-  const language: LibraryLanguage = 
-    row.idioma.toLowerCase().includes('inglés') || row.idioma.toLowerCase().includes('english') || row.idioma.toLowerCase() === 'en'
-      ? 'en' 
-      : 'es';
+  // CAMBIO 1: Determinar idioma - Ahora incluye Portugués
+  const idiomaLower = row.idioma.toLowerCase();
+  let language: LibraryLanguage = 'es'; // valor por defecto
+  
+  if (idiomaLower.includes('inglés') || idiomaLower.includes('english') || idiomaLower === 'en') {
+    language = 'en';
+  } else if (idiomaLower.includes('português') || idiomaLower.includes('portugués') || idiomaLower.includes('portuguese') || idiomaLower === 'pt') {
+    language = 'pt';
+  }
   
   // Determinar materia/área
   let area: Area;
@@ -103,36 +107,38 @@ function convertToLibraryItem(row: ParsedRow, gameMode: LibraryGameMode): NewCSV
   const materiaLower = row.materia.toLowerCase();
   
   if (gameMode === 'coopetition') {
-    // Para Coopetition, mapear materia específica
-    if (materiaLower.includes('biología') || materiaLower.includes('biology')) {
-      subject = language === 'es' ? 'Biología' : 'Biology';
-    } else if (materiaLower.includes('química') || materiaLower.includes('chemistry')) {
-      subject = language === 'es' ? 'Química' : 'Chemistry';
-    } else if (materiaLower.includes('física') || materiaLower.includes('physics')) {
-      subject = language === 'es' ? 'Física' : 'Physics';
-    } else if (materiaLower.includes('historia') || materiaLower.includes('history')) {
-      subject = language === 'es' ? 'Historia' : 'History';
-    } else if (materiaLower.includes('geografía') || materiaLower.includes('geography')) {
-      subject = language === 'es' ? 'Geografía' : 'Geography';
-    } else if (materiaLower.includes('economía') || materiaLower.includes('economics')) {
-      subject = language === 'es' ? 'Economía' : 'Economics';
-    } else if (materiaLower.includes('lengua') || materiaLower.includes('language')) {
-      subject = language === 'es' ? 'Lengua' : 'Language Arts';
-    } else if (materiaLower.includes('matemática') || materiaLower.includes('math')) {
-      subject = language === 'es' ? 'Matemática' : 'Mathematics';
+    // CAMBIO 2: Para Coopetition, mapear materia específica - Incluye Portugués
+    if (materiaLower.includes('biología') || materiaLower.includes('biology') || materiaLower.includes('biologia')) {
+      subject = language === 'es' ? 'Biología' : language === 'pt' ? 'Biologia' : 'Biology';
+    } else if (materiaLower.includes('química') || materiaLower.includes('chemistry') || materiaLower.includes('química')) {
+      subject = language === 'es' ? 'Química' : language === 'pt' ? 'Química' : 'Chemistry';
+    } else if (materiaLower.includes('física') || materiaLower.includes('physics') || materiaLower.includes('física')) {
+      subject = language === 'es' ? 'Física' : language === 'pt' ? 'Física' : 'Physics';
+    } else if (materiaLower.includes('historia') || materiaLower.includes('history') || materiaLower.includes('história')) {
+      subject = language === 'es' ? 'Historia' : language === 'pt' ? 'História' : 'History';
+    } else if (materiaLower.includes('geografía') || materiaLower.includes('geography') || materiaLower.includes('geografia')) {
+      subject = language === 'es' ? 'Geografía' : language === 'pt' ? 'Geografia' : 'Geography';
+    } else if (materiaLower.includes('economía') || materiaLower.includes('economics') || materiaLower.includes('economia')) {
+      subject = language === 'es' ? 'Economía' : language === 'pt' ? 'Economia' : 'Economics';
+    } else if (materiaLower.includes('lengua') || materiaLower.includes('language') || materiaLower.includes('língua')) {
+      subject = language === 'es' ? 'Lengua' : language === 'pt' ? 'Língua Portuguesa' : 'Language Arts';
+    } else if (materiaLower.includes('matemática') || materiaLower.includes('math') || materiaLower.includes('matemática')) {
+      subject = language === 'es' ? 'Matemática' : language === 'pt' ? 'Matemática' : 'Mathematics';
     }
     
-    area = subject ? SUBJECT_TO_AREA[subject] : (language === 'es' ? 'Lengua' : 'Language Arts');
+    area = subject ? SUBJECT_TO_AREA[subject] : (language === 'es' ? 'Lengua' : language === 'pt' ? 'Língua Portuguesa' : 'Language Arts');
   } else {
-    // Para Traffic Light, solo área
-    if (materiaLower.includes('ciencias naturales') || materiaLower.includes('science') || materiaLower.includes('natural')) {
-      area = language === 'es' ? 'Ciencias Naturales' : 'Natural Sciences';
-    } else if (materiaLower.includes('ciencias sociales') || materiaLower.includes('social')) {
-      area = language === 'es' ? 'Ciencias Sociales' : 'Social Studies';
-    } else if (materiaLower.includes('matemática') || materiaLower.includes('math')) {
-      area = language === 'es' ? 'Matemática' : 'Mathematics';
+    // CAMBIO 3: Para Traffic Light, solo área - Incluye Portugués
+    if (materiaLower.includes('ciencias naturales') || materiaLower.includes('science') || materiaLower.includes('natural') || materiaLower.includes('ciências da natureza')) {
+      area = language === 'es' ? 'Ciencias Naturales' : language === 'pt' ? 'Ciências da Natureza' : 'Natural Sciences';
+    } else if (materiaLower.includes('ciencias sociales') || materiaLower.includes('social') || materiaLower.includes('ciências humanas')) {
+      area = language === 'es' ? 'Ciencias Sociales' : language === 'pt' ? 'Ciências Humanas' : 'Social Studies';
+    } else if (materiaLower.includes('matemática') || materiaLower.includes('math') || materiaLower.includes('matemática')) {
+      area = language === 'es' ? 'Matemática' : language === 'pt' ? 'Matemática' : 'Mathematics';
+    } else if (materiaLower.includes('língua') || materiaLower.includes('língua portuguesa')) {
+      area = language === 'pt' ? 'Língua Portuguesa' : language === 'es' ? 'Lengua' : 'Language Arts';
     } else {
-      area = language === 'es' ? 'Lengua' : 'Language Arts';
+      area = language === 'es' ? 'Lengua' : language === 'pt' ? 'Língua Portuguesa' : 'Language Arts';
     }
   }
   
@@ -458,12 +464,13 @@ export function AdminBulkUploadPage() {
                         </td>
                       )}
                       <td style={styles.td}>
+                        {/* CAMBIO 4: Ahora incluye Portugués */}
                         <span style={{ 
                           ...styles.badge, 
-                          backgroundColor: item.language === 'es' ? '#fef3c7' : '#cffafe', 
-                          color: item.language === 'es' ? '#b45309' : '#0891b2' 
+                          backgroundColor: item.language === 'es' ? '#fef3c7' : item.language === 'pt' ? '#dcfce7' : '#cffafe', 
+                          color: item.language === 'es' ? '#b45309' : item.language === 'pt' ? '#16a34a' : '#0891b2' 
                         }}>
-                          {item.language === 'es' ? '🇪🇸 ES' : '🇺🇸 EN'}
+                          {item.language === 'es' ? '🇪🇸 ES' : item.language === 'pt' ? '🇧🇷 PT' : '🇺🇸 EN'}
                         </span>
                       </td>
                     </tr>

@@ -68,11 +68,12 @@ export const es = {
 
     selectGameMode: "Seleccioná el modo de juego",
     selectGameModeSubtitle: "Elegí según la edad de tus estudiantes",
-
+    // En la sección dashboard, agrega:
+    evaluationsTitle: "Evaluaciones para revisar",
+    moreGames: "juegos más",
     // Games list
     loadingGames: "Cargando juegos...",
     noGamesCreated: "Todavía no creaste ningún juego.",
-    finishedGames: "juegos finalizados",
     finishedGames: "juegos finalizados",
     unnamedGame: "Juego sin nombre",
 
@@ -760,6 +761,7 @@ export const es = {
 
     // Validation
     selectContent: "Seleccioná un contenido para continuar",
+    portuguese: "Português",
   },
 
   // ============================================
@@ -790,28 +792,46 @@ export const es = {
   },
 
   // ============================================
-  // WEBINAR PAGE
+  // WEBINAR PAGE - ACTUALIZADO
   // ============================================
+  // Reemplazar la sección "webinar" en src/i18n/es.ts
+
   webinar: {
     title: "Registro para Webinar",
     noWebinar: "No hay webinars programados",
     noWebinarDesc: "Volvé pronto para ver los próximos eventos.",
     dateLabel: "Fecha y hora",
+    timezone: "(Argentina, GMT-3)",
     name: "Tu nombre",
     email: "Tu email",
-    school: "Escuela/Institución",
+    school: "Escuela/Institución (opcional)",
+
+    // Nuevo campo: nivel de enseñanza
+    teachingLevel: "¿Qué nivel enseñás?",
+    levelPrimary: "Primaria",
+    levelSecondary: "Secundaria",
+    levelHigher: "Superior / Universidad",
+    levelOther: "Otro",
+
+    // Experiencia - textos mejorados
     experience: "Experiencia con el Juego del Semáforo",
     experienceNone: "Nunca lo usé",
-    experienceExplored: "Lo exploré un poco",
+    experienceExplored: "Entré a verlo pero no lo probé en clase",
     experienceUsed: "Ya lo usé en clase",
     experienceRegular: "Lo uso regularmente",
+
     questions: "¿Qué te gustaría aprender? (opcional)",
     questionsPlaceholder: "Temas que te interesen o dudas que tengas...",
     submit: "Registrarme",
     sending: "Registrando...",
-    successTitle: "¡Registro confirmado!",
-    successMessage: "Te enviamos un email con los detalles del webinar.",
-    successReminder: "📅 Agregá el evento a tu calendario",
+
+    // Pantalla de éxito - mejorada
+    successTitle: "¡Listo! Tu lugar está reservado",
+    successMessage: "Te enviaremos el link de acceso por email.",
+    successReminder: "Mientras tanto, podés probar el juego:",
+    successLinkPrimary: "🚦 Primaria",
+    successLinkSecondary: "🎯 Secundaria",
+
     errorMessage: "Hubo un error. Por favor intentá de nuevo.",
     backToDashboard: "Volver al inicio",
   },

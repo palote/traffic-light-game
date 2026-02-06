@@ -13,12 +13,17 @@ interface CSVPreviewProps {
   parseResult: ParseResult;
   onConfirm: (questions: ParsedQuestion[]) => void;
   onCancel: () => void;
+  // ✅ NUEVO: Callbacks opcionales para navegación
+  onOpenPromptGenerator?: () => void;
+  onGoToStage0?: () => void;
 }
 
 export function CSVPreview({
   parseResult,
   onConfirm,
   onCancel,
+  onOpenPromptGenerator,
+  onGoToStage0,
 }: CSVPreviewProps) {
   const { t, language } = useI18n();
   
@@ -85,6 +90,28 @@ export function CSVPreview({
       return next;
     });
   };
+
+  // ✅ NUEVO: Traducciones del aviso de propuestas (Opción C)
+  const proposalNotice = language === "es"
+    ? {
+        title: "Revisá y adaptá estas propuestas",
+        description: "antes de usarlas en clase. Editá directamente en la tabla, o explorá otras opciones:",
+        createWithAI: "crear con IA",
+        enableStage0: "Etapa 0",
+      }
+    : language === "pt"
+    ? {
+        title: "Revise e adapte estas propostas",
+        description: "antes de usá-las em aula. Edite diretamente na tabela, ou explore outras opções:",
+        createWithAI: "criar com IA",
+        enableStage0: "Etapa 0",
+      }
+    : {
+        title: "Review and adapt these proposals",
+        description: "before using them in class. Edit directly in the table, or explore other options:",
+        createWithAI: "create with AI",
+        enableStage0: "Stage 0",
+      };
 
   // Textos del mensaje pedagógico
   const curationGuide =
@@ -227,7 +254,7 @@ export function CSVPreview({
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
               gap: 12,
-              marginBottom: 24,
+              marginBottom: 20,
             }}
           >
             <StatCard
@@ -242,6 +269,62 @@ export function CSVPreview({
             />
             <StatCard value={stage1Count} label={stageLabels.stage1} color="#3b82f6" />
             <StatCard value={stage2Count} label={stageLabels.stage2} color="#a855f7" />
+          </div>
+
+          {/* ✅ NUEVO: Aviso pedagógico sobre propuestas */}
+          <div
+            style={{
+              padding: "12px 16px",
+              backgroundColor: "#fefce8",
+              border: "1px solid #fde047",
+              borderRadius: 10,
+              marginBottom: 20,
+              fontSize: 13,
+              color: "#854d0e",
+              lineHeight: 1.6,
+            }}
+          >
+            <span>💡 </span>
+            <strong>{proposalNotice.title}</strong>{" "}
+            {proposalNotice.description}
+            {(onOpenPromptGenerator || onGoToStage0) && (
+              <span>
+                {" "}
+                {onOpenPromptGenerator && (
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onOpenPromptGenerator();
+                    }}
+                    style={{
+                      color: "#b45309",
+                      textDecoration: "underline",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {proposalNotice.createWithAI}
+                  </a>
+                )}
+                {onOpenPromptGenerator && onGoToStage0 && " | "}
+                {onGoToStage0 && (
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onGoToStage0();
+                    }}
+                    style={{
+                      color: "#b45309",
+                      textDecoration: "underline",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {proposalNotice.enableStage0}
+                  </a>
+                )}
+              </span>
+            )}
           </div>
 
           {/* Guía pedagógica */}
@@ -649,7 +732,7 @@ export function CSVPreview({
               padding: "12px 24px",
               fontSize: 15,
               fontWeight: 600,
-              backgroundColor: "#f1f59",
+              backgroundColor: "#f1f5f9",
               color: "#475569",
               border: "none",
               borderRadius: 10,

@@ -1,6 +1,7 @@
 // src/components/Stage2/TeamDeviceView.tsx
 // CON MEJORAS VISUALES + SONIDOS 🎨🔊
 // ✅ NUEVO: Pantalla de autoevaluación con QR
+// ✅ CORREGIDO: Bug 2 - Muestra "No calificaste" cuando no calificó
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ref, onValue } from "firebase/database";
@@ -898,25 +899,45 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
           <div style={styles.phaseCard("rating_reveal")}>
             <div style={styles.phaseBadge("rating_reveal")}>📊 CALIFICACIONES REVELADAS</div>
 
-            {isRaterTeam && myRaterData ? (
-              <div
-                style={{
-                  backgroundColor:
-                    myRaterData.rating === "green" ? "#22c55e" : myRaterData.rating === "yellow" ? "#eab308" : "#ef4444",
-                  color: "white",
-                  borderRadius: 16,
-                  padding: 32,
-                  textAlign: "center",
-                }}
-              >
-                <div style={{ fontSize: 14, opacity: 0.9 }}>Tu calificación</div>
-                <div style={{ fontSize: 72, margin: "16px 0" }}>
-                  {myRaterData.rating === "green" ? "🟩" : myRaterData.rating === "yellow" ? "🟨" : "🟥"}
+            {isRaterTeam ? (
+              // ✅ CORREGIDO: Verificar si realmente calificó
+              myRaterData?.rating ? (
+                <div
+                  style={{
+                    backgroundColor:
+                      myRaterData.rating === "green" ? "#22c55e" : myRaterData.rating === "yellow" ? "#eab308" : "#ef4444",
+                    color: "white",
+                    borderRadius: 16,
+                    padding: 32,
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ fontSize: 14, opacity: 0.9 }}>Tu calificación</div>
+                  <div style={{ fontSize: 72, margin: "16px 0" }}>
+                    {myRaterData.rating === "green" ? "🟩" : myRaterData.rating === "yellow" ? "🟨" : "🟥"}
+                  </div>
+                  <div style={{ fontSize: 24, fontWeight: 700 }}>
+                    {myRaterData.rating === "green" ? "VERDE" : myRaterData.rating === "yellow" ? "AMARILLO" : "ROJO"}
+                  </div>
                 </div>
-                <div style={{ fontSize: 24, fontWeight: 700 }}>
-                  {myRaterData.rating === "green" ? "VERDE" : myRaterData.rating === "yellow" ? "AMARILLO" : "ROJO"}
+              ) : (
+                // ✅ NUEVO: Mostrar mensaje cuando no calificó
+                <div
+                  style={{
+                    backgroundColor: "#64748b",
+                    color: "white",
+                    borderRadius: 16,
+                    padding: 32,
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ fontSize: 72, margin: "16px 0" }}>⏱️</div>
+                  <div style={{ fontSize: 24, fontWeight: 700 }}>No calificaste</div>
+                  <div style={{ fontSize: 14, opacity: 0.9, marginTop: 8 }}>
+                    Se acabó el tiempo
+                  </div>
                 </div>
-              </div>
+              )
             ) : (
               <div style={styles.waitingCard}>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>📊</div>
@@ -1018,7 +1039,7 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
               <div style={{ fontSize: 14, color: "#64748b", marginTop: 8 }}>Esperá los resultados...</div>
             </div>
 
-            {myRating && phase === "validation_ratings" && (
+            {phase === "validation_ratings" && isRaterTeam && (
               <div
                 style={{
                   ...styles.questionBox,
@@ -1026,10 +1047,20 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
                   textAlign: "center",
                 }}
               >
-                <div style={{ fontSize: 14, color: "#64748b" }}>Tu calificación</div>
-                <div style={{ fontSize: 48, margin: "8px 0" }}>
-                  {myRating.rating === "green" ? "🟩" : myRating.rating === "yellow" ? "🟨" : "🟥"}
-                </div>
+                {myRating?.rating ? (
+                  <>
+                    <div style={{ fontSize: 14, color: "#64748b" }}>Tu calificación</div>
+                    <div style={{ fontSize: 48, margin: "8px 0" }}>
+                      {myRating.rating === "green" ? "🟩" : myRating.rating === "yellow" ? "🟨" : "🟥"}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 14, color: "#64748b" }}>Tu calificación</div>
+                    <div style={{ fontSize: 48, margin: "8px 0" }}>⬜</div>
+                    <div style={{ fontSize: 14, color: "#94a3b8" }}>No calificaste</div>
+                  </>
+                )}
               </div>
             )}
           </div>

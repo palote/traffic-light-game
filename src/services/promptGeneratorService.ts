@@ -13,6 +13,8 @@ import {
   SECONDARY_SUBJECTS_ES,
   PRIMARY_SUBJECTS_EN,
   SECONDARY_SUBJECTS_EN,
+  PRIMARY_SUBJECTS_PT,
+  SECONDARY_SUBJECTS_PT,
   HISTORICAL_EVENTS,
   BOOKS,
   MEDIA_CONTENT,
@@ -527,6 +529,231 @@ Generate the complete game following exactly these rules.`;
 }
 
 // ============================================
+// GENERAR PROMPT EN PORTUGUÉS
+// ============================================
+
+function generatePromptPT(config: PromptConfig): string {
+  const levelText = config.level === 'primary' ? 'Ensino Fundamental' : 'Ensino Médio';
+  const selectionName = getSelectionName(
+    config.category, 
+    config.selection, 
+    config.customSelection,
+    'pt'
+  );
+  
+  const themes = getRelatedThemes(config.category, config.selection, 'pt');
+  const themesText = themes.length > 0 
+    ? `\nTemas sugeridos para explorar: ${themes.join(', ')}`
+    : '';
+
+  const categoryContext = getCategoryContextPT(config.category, selectionName);
+
+  return `Estou desenvolvendo conteúdos educacionais para o **Jogo do Semáforo**, um método pedagógico baseado em consignas orais, trabalho no quadro e avaliação dinâmica.
+
+Quero que você gere **UM JOGO DE CONSIGNAS** seguindo estritamente todas as regras, formatos e critérios detalhados abaixo.
+
+NÃO improvise.
+NÃO simplifique.
+Se algo não estiver claro, peça esclarecimento antes de gerar o conteúdo.
+
+────────────────────────────────
+🎯 1. PARÂMETROS CONFIGURÁVEIS
+────────────────────────────────
+
+Use estes parâmetros como configuração do jogo:
+
+- Nível educacional: ${levelText}
+- Série/Ano: ${config.grade}
+- ${categoryContext}
+- Tema principal: ${selectionName}${themesText}
+- Subtemas que DEVEM ser incluídos: ${config.subtopicsInclude || '[A definir pelo professor]'}
+- Subtemas que NÃO devem ser incluídos: ${config.subtopicsExclude || '[Nenhum especificado]'}
+${config.culturalContext ? `- Contexto geográfico/cultural: ${config.culturalContext}
+  (Adapte os exemplos, referências e situações ao contexto indicado)` : ''}
+
+- Quantidade total de consignas: ${config.totalQuestions}
+
+Distribuição por etapa:
+- Stage 1: 50% das consignas (${Math.floor(config.totalQuestions / 2)} consignas)
+- Stage 2: 50% das consignas (${Math.ceil(config.totalQuestions / 2)} consignas)
+
+Distribuição por tipo de consigna:
+- Consignas de produção (fazer, resolver, representar, escrever, desenhar, explicar no quadro):
+  - Stage 1: ${config.stage1ProductionPercent}%
+  - Stage 2: ${config.stage2ProductionPercent}%
+- Consignas de explicação/análise:
+  - Stage 1: ${100 - config.stage1ProductionPercent}%
+  - Stage 2: ${100 - config.stage2ProductionPercent}%
+
+Tipo de consignas preferidas: ${getStyleTextPT(config.preferredStyle)}
+
+Idioma do jogo: Português
+(NUNCA misturar idiomas dentro do mesmo arquivo)
+
+────────────────────────────────
+🚦 2. CONTEXTO PEDAGÓGICO DO JOGO
+────────────────────────────────
+
+**STAGE 1 - Preparação Interna da Equipe**
+- NÃO é competitivo entre equipes
+- Cada equipe trabalha internamente para se nivelar
+- As consignas são mais introdutórias e diagnósticas
+- Os erros são oportunidades de aprendizado em grupo
+- Todos os integrantes se revezam para responder
+- Objetivo: que toda a equipe domine os conceitos básicos
+
+**STAGE 2 - Competição Colaborativa**
+- Competição entre equipes
+- Consignas mais desafiadoras e de produção
+- Aplica-se o conhecimento construído no Stage 1
+- Colaboração interna + competição externa
+- Cada equipe escolhe estrategicamente quem responde
+
+────────────────────────────────
+📋 3. REGRAS PEDAGÓGICAS OBRIGATÓRIAS
+────────────────────────────────
+
+Todas as consignas devem cumprir:
+
+1. **Autonomia total**
+   - Cada consigna deve ser entendida sozinha.
+   - NÃO pode depender de uma consigna anterior.
+   - NÃO pode dizer "como na pergunta anterior".
+
+2. **Consistência pedagógica**
+   - A consigna deve indicar claramente:
+     - o que fazer
+     - com qual conteúdo
+     - sob qual critério
+   - Não deixar decisões-chave "ao acaso".
+
+3. **Viabilidade em sala de aula**
+   - Deve poder ser resolvida:
+     - oralmente
+     - no quadro
+     - em tempo razoável
+   - Evitar consignas impossíveis de executar em aula.
+
+4. **Nível cognitivo adequado**
+   - De acordo com o nível e idade indicados.
+   - Com desafio real, mas sem ambiguidade.
+
+5. **Produção ≠ responder**
+   - Produção implica fazer algo concreto:
+     - resolver um cálculo
+     - construir um esquema
+     - escrever uma frase
+     - representar um processo
+     - organizar informações
+   - Explicar sem produzir NÃO conta como produção.
+
+────────────────────────────────
+💡 4. HINT / DICA (COLUNA OBRIGATÓRIA)
+────────────────────────────────
+
+- A dica:
+  - NÃO é um título
+  - NÃO é a resposta
+  - NÃO repete o texto da consigna
+- Função:
+  - indicar o que revisar antes de responder
+  - orientar o pensamento prévio
+- Extensão:
+  - 1 a 5 palavras no máximo
+- Pode se repetir entre consignas se o foco cognitivo for o mesmo.
+
+Exemplos válidos:
+- "critério de classificação"
+- "relação causa-efeito"
+- "passos de resolução"
+- "uso de conectores"
+- "leitura de dados"
+
+────────────────────────────────
+📄 5. FORMATO OBRIGATÓRIO DE ENTREGA (CSV)
+────────────────────────────────
+
+O resultado deve ser entregue **EM UMA ÚNICA TABELA**, pronta para copiar e colar no Google Sheets.
+
+Cabeçalhos OBRIGATÓRIOS (primeira linha):
+
+id	text	hint	suggestedStage
+
+- id:
+  - usar exatamente: q1 a q${config.totalQuestions}
+- text:
+  - consigna completa, clara e autônoma
+- hint:
+  - dica cognitiva (ver regras)
+- suggestedStage:
+  - SOMENTE usar valores: 1 ou 2
+
+NÃO adicionar colunas extras.
+NÃO alterar os cabeçalhos.
+NÃO numerar fora do campo id.
+
+────────────────────────────────
+📌 6. ARQUIVO FONTE (OPCIONAL)
+────────────────────────────────
+
+Antes de gerar consignas:
+- Avalie se é NECESSÁRIO um texto fonte.
+
+Se NÃO for necessário:
+- NÃO o inclua.
+
+Se for necessário:
+- Inclua UM ÚNICO texto
+- Extensão:
+  - Ensino Fundamental: breve
+  - Ensino Médio: mínimo meia página
+- Entregar o texto:
+  - em uma TABELA SEPARADA
+  - pronto para copiar e colar
+- As consignas devem se referir ao texto SEM ambiguidade.
+
+────────────────────────────────
+📤 7. ORDEM DE ENTREGA
+────────────────────────────────
+
+1. TABELA com o nome do arquivo (.csv)
+2. (Opcional) TABELA com texto fonte
+3. TABELA com a tabela completa de consignas (q1 a q${config.totalQuestions})
+
+────────────────────────────────
+🧪 8. CONTROLE DE QUALIDADE (ANTES DE ENTREGAR)
+────────────────────────────────
+
+Antes de mostrar o resultado:
+- Revise uma por uma todas as consignas.
+- Se alguma:
+  - é ambígua
+  - está incompleta
+  - não pode ser feita no quadro
+  - não faz sentido pedagógico
+→ REFORMULE-A.
+
+A qualidade é prioritária em relação à velocidade.
+
+────────────────────────────────
+📎 9. INSTRUÇÕES PÓS-ENTREGA
+────────────────────────────────
+
+Fora da tabela, depois de entregar o jogo, inclua:
+
+- Instruções claras para:
+  - copiar e colar no Google Sheets
+  - verificar separação por colunas
+  - exportar o arquivo como CSV
+
+────────────────────────────────
+▶️ INÍCIO
+────────────────────────────────
+
+Gere o jogo completo seguindo exatamente estas regras.`;
+}
+
+// ============================================
 // HELPERS
 // ============================================
 
@@ -560,6 +787,21 @@ function getCategoryContextEN(category: ContentCategory, selection: string): str
   }
 }
 
+function getCategoryContextPT(category: ContentCategory, selection: string): string {
+  switch (category) {
+    case 'subject':
+      return `Disciplina: ${selection}`;
+    case 'history':
+      return `Área: História / Ciências Sociais\nFato histórico: ${selection}`;
+    case 'book':
+      return `Área: Língua e Literatura\nObra literária: ${selection}`;
+    case 'fun':
+      return `Conteúdo audiovisual educativo: ${selection}\n(Usar como disparador para trabalhar temas curriculares)`;
+    default:
+      return `Tema: ${selection}`;
+  }
+}
+
 function getStyleTextES(style: 'practical' | 'analytical' | 'mixed'): string {
   switch (style) {
     case 'practical':
@@ -582,6 +824,17 @@ function getStyleTextEN(style: 'practical' | 'analytical' | 'mixed'): string {
   }
 }
 
+function getStyleTextPT(style: 'practical' | 'analytical' | 'mixed'): string {
+  switch (style) {
+    case 'practical':
+      return 'Mais práticas (fazer, resolver, representar)';
+    case 'analytical':
+      return 'Mais analíticas (explicar, comparar, argumentar)';
+    case 'mixed':
+      return 'Mistas (equilíbrio entre práticas e analíticas)';
+  }
+}
+
 // ============================================
 // FUNCIÓN PRINCIPAL
 // ============================================
@@ -589,6 +842,9 @@ function getStyleTextEN(style: 'practical' | 'analytical' | 'mixed'): string {
 export function generatePrompt(config: PromptConfig): string {
   if (config.language === 'en') {
     return generatePromptEN(config);
+  }
+  if (config.language === 'pt') {
+    return generatePromptPT(config);
   }
   return generatePromptES(config);
 }

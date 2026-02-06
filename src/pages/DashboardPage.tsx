@@ -3,6 +3,7 @@
 // ✅ NUEVO: Sección de "Mis juegos activos"
 // ✅ NUEVO: Tarjeta de estadísticas del docente
 // ✅ NUEVO: Botones para juegos finalizados y conteo de autoevaluaciones
+// ✅ MODIFICACIÓN: Agregado botón "Ir al Podio" para juegos finalizados sin autoevaluaciones
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -215,6 +216,116 @@ function TeacherStatsCard({ stats, loading }: { stats: TeacherStats | null; load
           {t.total}: {formatDuration(stats.totalDurationSec)} · {stats.totalSessions} {t.sessions.toLowerCase()}
         </span>
       </div>
+    </div>
+  );
+}
+
+// ============================================
+// COMPONENTE: Sección de Evaluaciones Recientes
+// ============================================
+
+function EvaluationsSection({
+  gamesWithEvaluations,
+  t,
+}: {
+  gamesWithEvaluations: Array<{
+    gameId: string;
+    gameName: string;
+    subject?: string;
+    evalCount: number;
+  }>;
+  t: any;
+}) {
+  const navigate = useNavigate();
+
+  if (gamesWithEvaluations.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      style={{
+        backgroundColor: "white",
+        borderRadius: 16,
+        padding: 20,
+        marginBottom: 24,
+        boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+        border: "2px solid #8b5cf6",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 16,
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#1e293b" }}>
+          📊 {t.dashboard.evaluationsTitle || "Evaluaciones para revisar"}
+        </h3>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {gamesWithEvaluations.slice(0, 5).map((game) => (
+          <div
+            key={game.gameId}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "12px 16px",
+              backgroundColor: "#f8fafc",
+              borderRadius: 10,
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+            onClick={() => navigate(`/resultados/${game.gameId}?tab=autoevaluaciones`)}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = "#f1f5f9";
+              e.currentTarget.style.transform = "translateX(4px)";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = "#f8fafc";
+              e.currentTarget.style.transform = "translateX(0)";
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 600, color: "#1e293b" }}>{game.gameName}</div>
+              {game.subject && (
+                <div style={{ fontSize: 12, color: "#64748b" }}>{game.subject}</div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 12px",
+                  backgroundColor: "#8b5cf6",
+                  color: "white",
+                  borderRadius: 20,
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
+                📝 {game.evalCount}
+              </div>
+              <span style={{ color: "#94a3b8" }}>→</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {gamesWithEvaluations.length > 5 && (
+        <div style={{ textAlign: "center", marginTop: 12 }}>
+          <span style={{ fontSize: 13, color: "#64748b" }}>
+            +{gamesWithEvaluations.length - 5} {t.dashboard.moreGames || "juegos más"}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -705,6 +816,30 @@ function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardPro
                 {selfEvalCount}
               </button>
             )}
+
+            {/* ✅ MODIFICACIÓN: Botón Ir al Podio (si no hay autoevaluaciones) */}
+            {selfEvalCount === 0 && (
+              <button
+                onClick={() => navigate(`/stage2/classroom/${game.id}`)}
+                style={{
+                  padding: "10px 16px",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  borderRadius: 8,
+                  border: "2px solid #f59e0b",
+                  backgroundColor: "#fffbeb",
+                  color: "#d97706",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                <span>🏆</span>
+                {t.dashboard.goToPodium || "Ir al Podio"}
+              </button>
+            )}
           </>
         )}
 
@@ -779,8 +914,9 @@ function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardPro
 export function DashboardPage() {
   const navigate = useNavigate();
   const { user, logout, isAdmin } = useAuth();
-  const { mode, setMode, theme } = useGameMode();
-  const { t } = useI18n();
+  const { mode, setMode, getLocalizedTheme } = useGameMode(); // ✅ MODIFICADO
+  const { t, language } = useI18n(); // ✅ AGREGADO language
+  const theme = getLocalizedTheme(language); // ✅ NUEVO: obtener tema localizado
 
   const [showModeSelector, setShowModeSelector] = useState(false);
 
@@ -793,6 +929,15 @@ export function DashboardPage() {
 
   // ✅ NUEVO: Estado para conteo de autoevaluaciones por juego
   const [selfEvalCounts, setSelfEvalCounts] = useState<Record<string, number>>({});
+
+  // ✅ NUEVO: Paso 1 - Agregar estado para juegos con evaluaciones
+  const [gamesWithEvaluations, setGamesWithEvaluations] = useState<Array<{
+    gameId: string;
+    gameName: string;
+    subject?: string;
+    evalCount: number;
+    completedAt?: number;
+  }>>([]);
 
   // Cargar juegos activos
   useEffect(() => {
@@ -914,34 +1059,54 @@ export function DashboardPage() {
     loadStats();
   }, [user?.uid]);
 
-  // ✅ NUEVO: Cargar conteo de autoevaluaciones para juegos finalizados
+  // ✅ NUEVO: Paso 2 - Modificar el efecto que carga autoevaluaciones
   useEffect(() => {
     async function loadSelfEvalCounts() {
-      const finishedGameIds = activeGames
-        .filter((g) => g.status === "finished" || g.status === "ended" || g.status === "game_complete")
-        .map((g) => g.id);
+      const finishedGames = activeGames.filter(
+        (g) => g.status === "finished" || g.status === "ended" || g.status === "game_complete"
+      );
 
-      if (finishedGameIds.length === 0) {
+      if (finishedGames.length === 0) {
         setSelfEvalCounts({});
+        setGamesWithEvaluations([]);
         return;
       }
 
       const counts: Record<string, number> = {};
+      const gamesWithEvals: Array<{
+        gameId: string;
+        gameName: string;
+        subject?: string;
+        evalCount: number;
+        completedAt?: number;
+      }> = [];
 
-      for (const gameId of finishedGameIds) {
+      for (const game of finishedGames) {
         try {
-          const snap = await get(ref(database, `selfEvaluations/${gameId}`));
-          if (snap.exists()) {
-            counts[gameId] = Object.keys(snap.val()).length;
-          } else {
-            counts[gameId] = 0;
+          const snap = await get(ref(database, `selfEvaluations/${game.id}`));
+          const count = snap.exists() ? Object.keys(snap.val()).length : 0;
+          counts[game.id] = count;
+
+          // Agregar a la lista si tiene evaluaciones
+          if (count > 0) {
+            gamesWithEvals.push({
+              gameId: game.id,
+              gameName: game.name || "Sin nombre",
+              subject: game.subject,
+              evalCount: count,
+              completedAt: game.createdAt,
+            });
           }
         } catch {
-          counts[gameId] = 0;
+          counts[game.id] = 0;
         }
       }
 
+      // Ordenar por cantidad de evaluaciones (más primero)
+      gamesWithEvals.sort((a, b) => b.evalCount - a.evalCount);
+
       setSelfEvalCounts(counts);
+      setGamesWithEvaluations(gamesWithEvals);
     }
 
     if (!loadingGames && activeGames.length > 0) {
@@ -1021,8 +1186,8 @@ export function DashboardPage() {
     (g) => g.status === "finished" || g.status === "ended" || g.status === "game_complete"
   );
 
-  const appTitle =
-    mode === "coopetition" ? t.gameModes.coopetition.title : t.gameModes.trafficLight.title;
+  // ✅ MODIFICADO: usar theme.name en lugar de t.gameModes
+  const appTitle = theme.name;
 
   return (
     <div
@@ -1055,8 +1220,8 @@ export function DashboardPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 32 }}>{theme.icon}</span>
               <div>
-                <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{appTitle}</h1>
-                <p style={{ margin: 0, fontSize: 12, opacity: 0.9 }}>{theme.tagline}</p>
+                <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{theme.name}</h1> {/* ✅ MODIFICADO */}
+                <p style={{ margin: 0, fontSize: 12, opacity: 0.9 }}>{theme.tagline}</p> {/* ✅ MODIFICADO */}
               </div>
             </div>
 
@@ -1153,6 +1318,10 @@ export function DashboardPage() {
 
         {/* ✅ BANNERS DE REFERIDOS Y WEBINAR */}
         <DashboardBanners />
+
+        {/* ✅ NUEVO: Paso 4 - Renderizar la sección en el Dashboard */}
+        {/* Sección de Evaluaciones */}
+        <EvaluationsSection gamesWithEvaluations={gamesWithEvaluations} t={t} />
 
         {/* ✅ NUEVO: TARJETA DE ESTADÍSTICAS */}
         <TeacherStatsCard stats={teacherStats} loading={loadingStats} />

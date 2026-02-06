@@ -439,7 +439,7 @@ export function AboutPage() {
             📧 {content.contact}
           </h3>
           <a
-            href="https://www.linkedin.com/in/pablo-parente-63875727/"
+            href="https://www.linkedin.com/in/pablo-parente/"
             target="_blank"
             rel="noopener noreferrer"
             style={{

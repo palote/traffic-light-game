@@ -344,6 +344,28 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
         screen = <Stage0TeamView game={game} team={team} />;
       }
     }
+    // ✅ NUEVO: Manejar game_complete para mostrar QR de autoevaluación
+    else if (game.status?.status === "game_complete") {
+      if (isTeacher) {
+        // El docente ve el podio final
+        screen = (
+          <Stage2Controller
+            key="classroom-complete"
+            gameId={gameId}
+            teamId={undefined}
+          />
+        );
+      } else {
+        // Los equipos ven el QR de autoevaluación (TeamDeviceView lo maneja)
+        screen = (
+          <Stage2Controller
+            key={teamId + "-complete"}
+            gameId={gameId}
+            teamId={teamId}
+          />
+        );
+      }
+    }
     else if (game.status?.status === "stage2") {
       const effectiveStage2TeamId =
         devStage2ViewMode === "classroom"

@@ -47,6 +47,7 @@ import {
   stopCountdownMusic,
   pauseCountdownMusic,
 } from "../../hooks/useCountdownMusic";
+import { ReconnectBadge } from "../ReconnectBadge"; // ✅ AGREGADO
 
 interface ClassroomViewProps {
   gameId: string;
@@ -756,7 +757,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                 ? `La respuesta fue marcada como ${round.responseValidated ? "CORRECTA" : "INCORRECTA"}`
                 : language === 'pt'
                   ? `A resposta foi marcada como ${round.responseValidated ? "CORRETA" : "INCORRETA"}`
-                  : `The response was marcada como ${round.responseValidated ? "CORRECT" : "INCORRECT"}`
+                  : `The response fue marcada como ${round.responseValidated ? "CORRECT" : "INCORRECT"}`
               }
             </span>
           </div>
@@ -867,7 +868,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                           ? "La respuesta fue aceptada como correcta. Esta calificación roja normalmente no debería aceptarse."
                           : language === 'pt'
                             ? "A resposta foi aceita como correta. Esta avaliação vermelha normalmente não deveria ser aceita."
-                            : "The response was accepted as correct. This red rating normally should not be accepted."
+                            : "The response fue aceptada como correcta. This red rating normally should not be accepted."
                         }
                       </span>
                     </div>
@@ -1270,6 +1271,8 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
           👤 Representantes: {responding.players?.map(p => p.name).join(", ") || "No asignados"}
         </div>
       )}
+
+      <ReconnectBadge gameId={gameId} roomCode={game?.roomCode} />
     </div>
   );
 }

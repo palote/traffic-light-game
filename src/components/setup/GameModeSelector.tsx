@@ -14,7 +14,8 @@ export function GameModeSelector({ onSelect }: GameModeSelectorProps) {
   const { theme } = useGameMode();
   const { language } = useI18n();
 
-  console.log('🔍 GameModeSelector language:', language); //
+  console.log('🔍 GameModeSelector language:', language);
+  
   const t = {
     title: language === 'es'
       ? '¿Cómo vas a obtener las consignas del juego?'
@@ -24,6 +25,12 @@ export function GameModeSelector({ onSelect }: GameModeSelectorProps) {
 
     teacherCreates: {
       title: language === 'es' ? 'Yo las preparo' : language === 'pt' ? 'Eu preparo' : 'I prepare them',
+      // ✅ NUEVO: Subtítulo descriptivo
+      subtitle: language === 'es' 
+        ? 'Vos creás todas las consignas' 
+        : language === 'pt' 
+          ? 'Você cria todas as perguntas'
+          : 'You create all the questions',
       description: language === 'es'
         ? 'Creás las consignas con IA, manualmente o desde la biblioteca'
         : language === 'pt'
@@ -38,6 +45,12 @@ export function GameModeSelector({ onSelect }: GameModeSelectorProps) {
 
     studentsPropose: {
       title: language === 'es' ? 'Los equipos proponen' : language === 'pt' ? 'Equipes propõem' : 'Teams propose',
+      // ✅ NUEVO: Subtítulo descriptivo
+      subtitle: language === 'es' 
+        ? 'Los alumnos crean, vos curás' 
+        : language === 'pt' 
+          ? 'Os alunos criam, você cura'
+          : 'Students create, you curate',
       description: language === 'es'
         ? 'Los equipos elaboran consignas basadas en el material. Vos curás y organizás el juego.'
         : language === 'pt'
@@ -136,13 +149,23 @@ export function GameModeSelector({ onSelect }: GameModeSelectorProps) {
           </div>
 
           <h2 style={{
-            margin: '0 0 8px 0',
+            margin: '0 0 4px 0',
             fontSize: 22,
             fontWeight: 700,
             color: '#1e293b',
           }}>
             {t.teacherCreates.title}
           </h2>
+
+          {/* ✅ NUEVO: Subtítulo */}
+          <p style={{
+            margin: '0 0 12px 0',
+            fontSize: 14,
+            fontWeight: 600,
+            color: theme.primary,
+          }}>
+            {t.teacherCreates.subtitle}
+          </p>
 
           <p style={{
             margin: '0 0 16px 0',
@@ -197,13 +220,23 @@ export function GameModeSelector({ onSelect }: GameModeSelectorProps) {
           </div>
 
           <h2 style={{
-            margin: '0 0 8px 0',
+            margin: '0 0 4px 0',
             fontSize: 22,
             fontWeight: 700,
             color: '#1e293b',
           }}>
             {t.studentsPropose.title}
           </h2>
+
+          {/* ✅ NUEVO: Subtítulo */}
+          <p style={{
+            margin: '0 0 12px 0',
+            fontSize: 14,
+            fontWeight: 600,
+            color: '#8b5cf6',
+          }}>
+            {t.studentsPropose.subtitle}
+          </p>
 
           <p style={{
             margin: '0 0 16px 0',

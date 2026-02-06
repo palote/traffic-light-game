@@ -45,6 +45,7 @@ import {
   toggleCountdownMusic,
   isCountdownMusicPlaying
 } from "../../hooks/useCountdownMusic";
+import { ReconnectBadge } from "../ReconnectBadge"; // ✅ AGREGADO
 
 interface ClassroomViewProps {
   gameId: string;
@@ -1205,6 +1206,8 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
           🧪 Volver a Hint (debug)
         </button>
       </div>
+
+      <ReconnectBadge gameId={gameId} roomCode={game?.roomCode} />
     </div>
   );
 }

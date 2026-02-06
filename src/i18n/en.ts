@@ -66,6 +66,9 @@ export const en = {
 
     selectGameMode: "Select game mode",
     selectGameModeSubtitle: "Choose based on your students' age",
+    // En la sección dashboard, agrega:
+    evaluationsTitle: "Evaluations to review",
+    moreGames: "more games",
 
     // Games list
     loadingGames: "Loading games...",
@@ -732,6 +735,7 @@ export const en = {
       "Copy and paste it into Gemini, ChatGPT or another AI assistant to generate the prompts.",
 
     selectContent: "Select content to continue",
+    portuguese: "Portuguese",
   },
 
   // ============================================
@@ -762,28 +766,46 @@ export const en = {
   },
 
   // ============================================
-  // WEBINAR PAGE
+  // WEBINAR PAGE - ENGLISH
   // ============================================
+  // Reemplazar la sección "webinar" en src/i18n/en.ts
+
   webinar: {
     title: "Webinar Registration",
     noWebinar: "No webinars scheduled",
     noWebinarDesc: "Check back soon for upcoming events.",
     dateLabel: "Date and time",
+    timezone: "(Argentina, GMT-3)",
     name: "Your name",
     email: "Your email",
-    school: "School/Institution",
+    school: "School/Institution (optional)",
+
+    // New field: teaching level
+    teachingLevel: "What level do you teach?",
+    levelPrimary: "Primary / Elementary",
+    levelSecondary: "Secondary / High School",
+    levelHigher: "Higher Education / University",
+    levelOther: "Other",
+
+    // Experience - improved text
     experience: "Experience with the Traffic Light Game",
     experienceNone: "Never used it",
-    experienceExplored: "Explored it a bit",
-    experienceUsed: "Already used in class",
-    experienceRegular: "Use it regularly",
+    experienceExplored: "I checked it out but haven't tried it in class",
+    experienceUsed: "I've used it in class",
+    experienceRegular: "I use it regularly",
+
     questions: "What would you like to learn? (optional)",
     questionsPlaceholder: "Topics you're interested in or questions you have...",
     submit: "Register",
     sending: "Registering...",
-    successTitle: "Registration confirmed!",
-    successMessage: "We've sent you an email with the webinar details.",
-    successReminder: "📅 Add the event to your calendar",
+
+    // Success screen - improved
+    successTitle: "You're registered!",
+    successMessage: "We'll send you the access link by email.",
+    successReminder: "In the meantime, you can try the game:",
+    successLinkPrimary: "🚦 Primary",
+    successLinkSecondary: "🎯 Secondary",
+
     errorMessage: "There was an error. Please try again.",
     backToDashboard: "Back to home",
   },

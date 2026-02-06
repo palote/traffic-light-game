@@ -47,7 +47,7 @@ export async function endTeacherSession(
   const base = `${METRICS_ROOT}/${uid}/sessions/${sessionId}`;
   const logoutAt = nowMs();
 
-  // Leemos loginAt para calcular durationSec (opcional pero útil)
+  // Leemos loginAt para calcular durationSec
   let durationSec: number | null = null;
   try {
     const snap = await get(ref(database, base));

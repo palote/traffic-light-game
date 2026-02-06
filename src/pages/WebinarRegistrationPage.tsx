@@ -1,4 +1,6 @@
 // src/pages/WebinarRegistrationPage.tsx
+// VERSIÓN ACTUALIZADA - Reemplazar el archivo completo
+
 import { useState, useEffect } from "react";
 import { ref, push, get, serverTimestamp } from "firebase/database";
 import { database } from "../firebase.config";
@@ -20,6 +22,7 @@ export function WebinarRegistrationPage() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
+    teachingLevel: "", // Nuevo campo
     school: "",
     experience: "none",
     questions: "",
@@ -86,6 +89,7 @@ export function WebinarRegistrationPage() {
         webinarDate: webinarConfig?.date,
         webinarTopic: webinarConfig?.topic,
         registeredAt: serverTimestamp(),
+        language: language, // Guardar idioma del usuario
       });
 
       setStatus("success");
@@ -95,6 +99,9 @@ export function WebinarRegistrationPage() {
     }
   };
 
+  // ============================================
+  // PANTALLA: No hay webinar
+  // ============================================
   if (status === "no-webinar") {
     return (
       <div style={{ minHeight: "100vh", background: "#f8fafc", padding: 24 }}>
@@ -131,6 +138,9 @@ export function WebinarRegistrationPage() {
     );
   }
 
+  // ============================================
+  // PANTALLA: Éxito - MEJORADA con links a juegos
+  // ============================================
   if (status === "success") {
     return (
       <div style={{ minHeight: "100vh", background: "#f8fafc", padding: 24 }}>
@@ -146,8 +156,9 @@ export function WebinarRegistrationPage() {
           }}
         >
           <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
-          <h1 style={{ color: "#10b981", marginBottom: 8 }}>{t.webinar.successTitle}</h1>
+          <h1 style={{ color: "#10b981", marginBottom: 8, fontSize: 24 }}>{t.webinar.successTitle}</h1>
           <p style={{ color: "#64748b", marginBottom: 16 }}>{t.webinar.successMessage}</p>
+          
           {webinarConfig && (
             <div
               style={{
@@ -161,13 +172,59 @@ export function WebinarRegistrationPage() {
                 {webinarConfig.title}
               </div>
               <div style={{ color: "#3b82f6", fontSize: 14 }}>
-                {formatDate(webinarConfig.date)}
+                {formatDate(webinarConfig.date)} {t.webinar.timezone}
               </div>
             </div>
           )}
-          <p style={{ color: "#64748b", fontSize: 14, marginBottom: 24 }}>
+          
+          {/* Links a los juegos */}
+          <p style={{ color: "#64748b", fontSize: 14, marginBottom: 16 }}>
             {t.webinar.successReminder}
           </p>
+          
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", marginBottom: 24 }}>
+            <a
+              href="https://www.thetrafficlightgame.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "12px 20px",
+                background: "#f0fdf4",
+                border: "2px solid #22c55e",
+                borderRadius: 10,
+                color: "#15803d",
+                textDecoration: "none",
+                fontWeight: 600,
+                fontSize: 14,
+              }}
+            >
+              {t.webinar.successLinkPrimary}
+            </a>
+            <a
+              href="https://www.thecoopetitiongame.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "12px 20px",
+                background: "#eef2ff",
+                border: "2px solid #6366f1",
+                borderRadius: 10,
+                color: "#4338ca",
+                textDecoration: "none",
+                fontWeight: 600,
+                fontSize: 14,
+              }}
+            >
+              {t.webinar.successLinkSecondary}
+            </a>
+          </div>
+          
           <a
             href="/dashboard"
             style={{
@@ -187,6 +244,9 @@ export function WebinarRegistrationPage() {
     );
   }
 
+  // ============================================
+  // PANTALLA: Cargando
+  // ============================================
   if (!webinarConfig) {
     return (
       <div style={{ minHeight: "100vh", background: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -195,6 +255,9 @@ export function WebinarRegistrationPage() {
     );
   }
 
+  // ============================================
+  // PANTALLA: Formulario
+  // ============================================
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc", padding: 24 }}>
       <div
@@ -212,6 +275,7 @@ export function WebinarRegistrationPage() {
           <h1 style={{ margin: 0, color: "#1e293b", fontSize: 24 }}>{t.webinar.title}</h1>
         </div>
 
+        {/* Info del webinar con timezone */}
         <div
           style={{
             background: "#eff6ff",
@@ -227,9 +291,13 @@ export function WebinarRegistrationPage() {
           <div style={{ color: "#3b82f6", fontSize: 14 }}>
             <strong>{t.webinar.dateLabel}:</strong> {formatDate(webinarConfig.date)}
           </div>
+          <div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>
+            {t.webinar.timezone}
+          </div>
         </div>
 
         <form onSubmit={handleSubmit}>
+          {/* Nombre */}
           <div style={{ marginBottom: 20 }}>
             <label style={{ display: "block", marginBottom: 6, fontWeight: 500, color: "#374151" }}>
               {t.webinar.name} *
@@ -250,6 +318,7 @@ export function WebinarRegistrationPage() {
             />
           </div>
 
+          {/* Email */}
           <div style={{ marginBottom: 20 }}>
             <label style={{ display: "block", marginBottom: 6, fontWeight: 500, color: "#374151" }}>
               {t.webinar.email} *
@@ -270,6 +339,34 @@ export function WebinarRegistrationPage() {
             />
           </div>
 
+          {/* NUEVO: Nivel de enseñanza */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", marginBottom: 6, fontWeight: 500, color: "#374151" }}>
+              {t.webinar.teachingLevel} *
+            </label>
+            <select
+              required
+              value={formData.teachingLevel}
+              onChange={(e) => setFormData({ ...formData, teachingLevel: e.target.value })}
+              style={{
+                width: "100%",
+                padding: 12,
+                borderRadius: 8,
+                border: "1px solid #d1d5db",
+                fontSize: 16,
+                boxSizing: "border-box",
+                background: "white",
+              }}
+            >
+              <option value="">-- Seleccionar --</option>
+              <option value="primary">{t.webinar.levelPrimary}</option>
+              <option value="secondary">{t.webinar.levelSecondary}</option>
+              <option value="higher">{t.webinar.levelHigher}</option>
+              <option value="other">{t.webinar.levelOther}</option>
+            </select>
+          </div>
+
+          {/* Escuela/Institución (ahora opcional en el label) */}
           <div style={{ marginBottom: 20 }}>
             <label style={{ display: "block", marginBottom: 6, fontWeight: 500, color: "#374151" }}>
               {t.webinar.school}
@@ -289,6 +386,7 @@ export function WebinarRegistrationPage() {
             />
           </div>
 
+          {/* Experiencia (textos mejorados) */}
           <div style={{ marginBottom: 20 }}>
             <label style={{ display: "block", marginBottom: 6, fontWeight: 500, color: "#374151" }}>
               {t.webinar.experience}
@@ -313,6 +411,7 @@ export function WebinarRegistrationPage() {
             </select>
           </div>
 
+          {/* Preguntas */}
           <div style={{ marginBottom: 24 }}>
             <label style={{ display: "block", marginBottom: 6, fontWeight: 500, color: "#374151" }}>
               {t.webinar.questions}
@@ -334,6 +433,7 @@ export function WebinarRegistrationPage() {
             />
           </div>
 
+          {/* Error */}
           {status === "error" && (
             <div
               style={{
@@ -349,6 +449,7 @@ export function WebinarRegistrationPage() {
             </div>
           )}
 
+          {/* Submit */}
           <button
             type="submit"
             disabled={status === "loading"}

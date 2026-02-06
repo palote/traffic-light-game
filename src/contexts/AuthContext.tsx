@@ -14,7 +14,7 @@ import {
 } from "firebase/auth";
 
 import { auth, database } from "../firebase.config";
-import { ref, get } from "firebase/database";
+import { ref, get, update } from "firebase/database";
 
 import { startTeacherSession, endTeacherSession } from "../services/metricsService";
 
@@ -64,9 +64,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminLoading, setAdminLoading] = useState(false);
 
-  // Refs para acceder en event listeners
+  // Refs para acceder en event listeners y logout
   const userRef = useRef<User | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const loginAtRef = useRef<number | null>(null);
+  
+  // Flag para saber si estamos en proceso de logout
+  const isLoggingOutRef = useRef(false);
 
   // Mantener refs sincronizados
   useEffect(() => {
@@ -90,24 +94,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      setUser(u);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setUser(user);
       setLoading(false);
 
-      if (u) {
+      // Si estamos haciendo logout, no resetear sessionId
+      if (isLoggingOutRef.current) {
+        return;
+      }
+
+      // Verificar si este usuario es un referido pendiente
+      if (user?.email) {
         try {
-          const sid = await startTeacherSession(u);
+          const referralsSnap = await get(ref(database, "referrals"));
+          
+          if (referralsSnap.exists()) {
+            const referrals = referralsSnap.val();
+            
+            for (const [refId, refData] of Object.entries(referrals) as [string, any][]) {
+              if (
+                refData.referredEmail?.toLowerCase() === user.email.toLowerCase() &&
+                refData.status === "pending"
+              ) {
+                await update(ref(database, `referrals/${refId}`), {
+                  status: "registered",
+                  registeredUid: user.uid,
+                  registeredAt: Date.now(),
+                });
+                break;
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Error checking referral status:", error);
+        }
+      }
+
+      // Lógica de sesiones
+      if (user) {
+        try {
+          const loginAt = Date.now();
+          loginAtRef.current = loginAt;
+          
+          const sid = await startTeacherSession(user);
           setSessionId(sid);
+          sessionIdRef.current = sid;
+          
+          sessionStorage.setItem(`session_loginAt_${sid}`, loginAt.toString());
         } catch (e) {
           console.warn("⚠️ metrics startTeacherSession failed:", e);
           setSessionId(null);
+          sessionIdRef.current = null;
+          loginAtRef.current = null;
         }
       } else {
         setSessionId(null);
+        sessionIdRef.current = null;
+        loginAtRef.current = null;
       }
     });
 
-    return () => unsub();
+    return () => unsubscribe();
   }, [authRequired]);
 
   // -----------------------
@@ -121,13 +168,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const sid = sessionIdRef.current;
 
       if (uid && sid) {
-        // Usar sendBeacon para envío asíncrono confiable
-        const url = `https://traffic-ligths-game-default-rtdb.firebaseio.com/metrics/teachers/${uid}/sessions/${sid}.json`;
+        const url = `https://traffic-ligths-game-default-rtdb.firebaseio.com/metrics/teachers/${uid}/sessions/${sid}.json?x-http-method-override=PATCH`;
         const now = Date.now();
         
-        // Leer loginAt del sessionStorage para calcular duración
-        const loginAtStr = sessionStorage.getItem(`session_loginAt_${sid}`);
-        const loginAt = loginAtStr ? parseInt(loginAtStr, 10) : null;
+        let loginAt = loginAtRef.current;
+        if (!loginAt) {
+          const loginAtStr = sessionStorage.getItem(`session_loginAt_${sid}`);
+          loginAt = loginAtStr ? parseInt(loginAtStr, 10) : null;
+        }
+        
         const durationSec = loginAt ? Math.max(0, Math.floor((now - loginAt) / 1000)) : null;
 
         const data = JSON.stringify({
@@ -135,15 +184,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ...(durationSec !== null ? { durationSec } : {}),
         });
 
-        // sendBeacon es más confiable que fetch en beforeunload
         navigator.sendBeacon(url, data);
       }
     };
 
     const handleVisibilityChange = () => {
-      // Opcional: también trackear cuando la pestaña se oculta por mucho tiempo
       if (document.visibilityState === "hidden") {
-        // Guardar timestamp para detectar sesiones abandonadas
         const sid = sessionIdRef.current;
         if (sid) {
           sessionStorage.setItem(`session_lastVisible_${sid}`, Date.now().toString());
@@ -159,17 +205,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [authRequired]);
-
-  // -----------------------
-  // Guardar loginAt en sessionStorage para cálculo de duración
-  // -----------------------
-  useEffect(() => {
-    if (sessionId) {
-      // Guardar el momento de inicio para calcular duración en beforeunload
-      const now = Date.now();
-      sessionStorage.setItem(`session_loginAt_${sessionId}`, now.toString());
-    }
-  }, [sessionId]);
 
   // -----------------------
   // Admin flag
@@ -228,24 +263,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // -----------------------
+  // Logout
+  // -----------------------
   const logout = async () => {
     if (!authRequired) return;
 
-    try {
-      if (user?.uid && sessionId) {
-        await endTeacherSession(user.uid, sessionId);
+    // Capturar valores ANTES de cualquier cambio de estado
+    const currentUid = userRef.current?.uid;
+    const currentSessionId = sessionIdRef.current;
+
+    // Marcar que estamos en proceso de logout
+    isLoggingOutRef.current = true;
+
+    // Cerrar la sesión de métricas ANTES de signOut
+    if (currentUid && currentSessionId) {
+      try {
+        await endTeacherSession(currentUid, currentSessionId);
+      } catch (e) {
+        console.warn("⚠️ metrics endTeacherSession failed:", e);
       }
-    } catch (e) {
-      console.warn("⚠️ metrics endTeacherSession failed:", e);
+
+      // Limpiar sessionStorage
+      sessionStorage.removeItem(`session_loginAt_${currentSessionId}`);
+      sessionStorage.removeItem(`session_lastVisible_${currentSessionId}`);
     }
 
-    // Limpiar sessionStorage
-    if (sessionId) {
-      sessionStorage.removeItem(`session_loginAt_${sessionId}`);
-      sessionStorage.removeItem(`session_lastVisible_${sessionId}`);
-    }
+    // Limpiar refs
+    sessionIdRef.current = null;
+    loginAtRef.current = null;
+    setSessionId(null);
 
+    // Hacer signOut
     await signOut(auth);
+
+    // Resetear el flag después de un pequeño delay
+    setTimeout(() => {
+      isLoggingOutRef.current = false;
+    }, 100);
   };
 
   // -----------------------

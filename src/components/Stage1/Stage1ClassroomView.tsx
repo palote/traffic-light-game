@@ -8,6 +8,7 @@ import { database } from "../../firebase.config";
 import type { Game, Team } from "../../types/game";
 import { useI18n } from "../../i18n";
 import { startStage2Safely } from "../../services/gameRepository";
+import { ReconnectBadge } from "../ReconnectBadge";
 
 interface Stage1ClassroomViewProps {
   game: Game;
@@ -31,7 +32,7 @@ export function Stage1ClassroomView({ game, gameId }: Stage1ClassroomViewProps) 
     instructions: language === 'es'
       ? "💡 <strong>Vista del profesor:</strong> Monitoreo del progreso de todos los equipos en Etapa 1"
       : language === 'pt'
-        ? "💡 <strong>Visão do professor:</strong> Monitoramento do progresso de todas as equipes na Etapa 1"
+        ? "💡 <strong>Visão do profesor:</strong> Monitoramento do progresso de todas as equipes na Etapa 1"
         : "💡 <strong>Teacher view:</strong> Monitoring progress of all teams in Stage 1",
 
     completedTitle: language === 'es'
@@ -165,7 +166,7 @@ export function Stage1ClassroomView({ game, gameId }: Stage1ClassroomViewProps) 
     }
   };
 
-  // Resetear un equipo específico
+  // ✅ RESETEAR UN EQUIPO ESPECÍFICO - CORREGIDO CON LOS DOS PASOS
   const handleResetTeam = async (teamId: string) => {
     const teamName = teams.find(t => t.id === teamId)?.name || teamId;
     const confirmText = texts.resetConfirm.replace("{team}", teamName);
@@ -178,19 +179,48 @@ export function Stage1ClassroomView({ game, gameId }: Stage1ClassroomViewProps) 
       const team = teams.find((t) => t.id === teamId);
       if (!team) throw new Error("Team not found");
 
+      // ✅ PASO 1: Limpiar datos del equipo
       const updates: any = {};
-
       updates[`games/${gameId}/teams/${teamId}/currentRound`] = 0;
       updates[`games/${gameId}/teams/${teamId}/currentQuestionIndex`] = 0;
       updates[`games/${gameId}/teams/${teamId}/stage1Completed`] = false;
-      updates[`games/${gameId}/teams/${teamId}/stage1Rounds`] = {};
+      updates[`games/${gameId}/teams/${teamId}/stage1Rounds`] = null; // Borrar todas las rondas
+      updates[`games/${gameId}/teams/${teamId}/totalScore`] = 0;
 
-      team.players.forEach((player) => {
-        updates[`games/${gameId}/teams/${teamId}/players/${player.id}/score`] = 0;
-        updates[`games/${gameId}/teams/${teamId}/players/${player.id}/consecutiveLastPlace`] = 0;
+      // Normalizar players
+      const playersArray = Array.isArray(team.players)
+        ? team.players
+        : Object.values(team.players || {});
+
+      playersArray.forEach((player: any) => {
+        if (player?.id) {
+          updates[`games/${gameId}/teams/${teamId}/players/${player.id}/score`] = 0;
+          updates[`games/${gameId}/teams/${teamId}/players/${player.id}/consecutiveLastPlace`] = 0;
+        }
       });
 
       await update(ref(database), updates);
+
+      // ✅ PASO 2: Crear la primera ronda (en un update separado)
+      const stage1Questions = Object.values(game.questions || {})
+        .filter((q: any) => q.suggestedStage === 1)
+        .sort((a: any, b: any) => {
+          const na = Number(String(a?.id || "").replace(/\D+/g, "")) || 0;
+          const nb = Number(String(b?.id || "").replace(/\D+/g, "")) || 0;
+          return na - nb;
+        });
+
+      if (stage1Questions.length > 0) {
+        const firstQuestion = stage1Questions[0] as any;
+        await update(ref(database), {
+          [`games/${gameId}/teams/${teamId}/stage1Rounds/0`]: {
+            roundNumber: 0,
+            questionId: firstQuestion.id,
+            phase: "betting",
+            startedAt: Date.now(),
+          },
+        });
+      }
 
       console.log(`✅ Team ${teamId} reseteado`);
       alert(texts.resetSuccess.replace("{team}", teamName));
@@ -421,6 +451,8 @@ export function Stage1ClassroomView({ game, gameId }: Stage1ClassroomViewProps) 
           <p style={{ margin: 0, fontSize: 16 }}>{texts.noTeams}</p>
         </div>
       )}
+
+      <ReconnectBadge gameId={gameId} roomCode={game.roomCode} />
     </div>
   );
 }
