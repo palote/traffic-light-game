@@ -1,0 +1,67 @@
+.teacher-guide-button {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 1000;
+}
+
+.teacher-guide-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+.teacher-guide-button:active {
+  transform: scale(0.95);
+}
+
+.teacher-guide-button .icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.teacher-guide-button .tooltip {
+  position: absolute;
+  right: 60px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #333;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.teacher-guide-button:hover .tooltip {
+  opacity: 1;
+}
+
+@media (max-width: 768px) {
+  .teacher-guide-button {
+    width: 40px;
+    height: 40px;
+    top: 16px;
+    right: 16px;
+  }
+  .teacher-guide-button .icon {
+    font-size: 20px;
+  }
+  .teacher-guide-button .tooltip {
+    display: none;
+  }
+}

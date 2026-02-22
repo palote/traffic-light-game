@@ -1,5 +1,5 @@
 // src/components/TeamView.tsx
-// CON SONIDOS INTEGRADOS 🔊 + INTERNACIONALIZACIÓN 🌐
+// CON SONIDOS INTEGRADOS 🔊 + INTERNACIONALIZACIÓN 🌐 + ACCESIBILIDAD ♿
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { ref, update } from 'firebase/database';
 import { ref as storageRef, getBlob } from 'firebase/storage';
@@ -107,6 +107,49 @@ const getTeamViewTexts = (lang: 'es' | 'en' | 'pt') => ({
     confirmingPoints: lang === 'es' ? 'Error al confirmar puntos. Intentá de nuevo.' : lang === 'pt' ? 'Erro ao confirmar pontos. Tente novamente.' : 'Error confirming points. Try again.',
     loadingMaterial: lang === 'es' ? 'Error al cargar el material. Intentá de nuevo.' : lang === 'pt' ? 'Erro ao carregar o material. Tente novamente.' : 'Error loading material. Try again.',
   },
+  // ✅ NUEVAS CLAVES PARA ARIA-LABEL
+  aria: {
+    openMaterial: lang === 'es'
+      ? 'Abrir material complementario en ventana modal'
+      : lang === 'pt'
+        ? 'Abrir material complementar em janela modal'
+        : 'Open supplementary material in modal window',
+    alreadyMarked: lang === 'es'
+      ? 'Ya se marcó que el equipo respondió'
+      : lang === 'pt'
+        ? 'Já foi marcado que a equipe respondeu'
+        : 'The team has already been marked as having responded',
+    markAnswered: lang === 'es'
+      ? 'Marcar que el equipo ya respondió'
+      : lang === 'pt'
+        ? 'Marcar que a equipe já respondeu'
+        : 'Mark that the team has already responded',
+    nextRound: lang === 'es'
+      ? 'Avanzar a la siguiente ronda'
+      : lang === 'pt'
+        ? 'Avançar para a próxima rodada'
+        : 'Go to next round',
+    confirmingPoints: lang === 'es'
+      ? 'Confirmando puntos, espere'
+      : lang === 'pt'
+        ? 'Confirmando pontos, aguarde'
+        : 'Confirming points, please wait',
+    confirmAndAdvance: lang === 'es'
+      ? 'Confirmar puntos de esta ronda y avanzar'
+      : lang === 'pt'
+        ? 'Confirmar pontos desta rodada e avançar'
+        : 'Confirm this round\'s points and advance',
+    closeModal: lang === 'es'
+      ? 'Cerrar modal'
+      : lang === 'pt'
+        ? 'Fechar modal'
+        : 'Close modal',
+    closeMaterial: lang === 'es'
+      ? 'Cerrar material complementario'
+      : lang === 'pt'
+        ? 'Fechar material complementar'
+        : 'Close supplementary material',
+  },
 });
 
 // ============================================
@@ -157,6 +200,22 @@ export function TeamView({
   const displayRoundNumber = currentRound?.roundNumber ?? 0;
 
   // =========================
+  // ACCESIBILIDAD: Cerrar modal con Escape
+  // =========================
+  useEffect(() => {
+    if (!showMaterialModal) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowMaterialModal(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showMaterialModal]);
+
+  // =========================
   // Cargar material complementario
   // =========================
   const handleOpenMaterial = async () => {
@@ -202,13 +261,11 @@ export function TeamView({
       const ratings = round.ratings || {};
       const responded = round.hasResponded === true;
 
-      // ✅ CORREGIDO: usar setLiveRatings
       setLiveRatings(ratings);
       setLastRoundPoints(round.pointsAwarded || {});
       setHasResponded(responded);
       setPointsAlreadyConfirmed(round.pointsConfirmed === true);
 
-      // Solo leer validaciones para ratings que tienen campo 'userValidated'
       const validationsFromFirebase: { [playerId: string]: boolean } = {};
       for (const [playerId, rating] of Object.entries(ratings)) {
         const r = rating as any;
@@ -225,7 +282,6 @@ export function TeamView({
   // Reset valores puramente locales al cambiar de ronda
   useEffect(() => {
     setAllValidated(false);
-    // NO resetear hasResponded, liveRatings, validations - vienen de Firebase
   }, [currentRound?.roundNumber]);
 
   // =========================
@@ -335,7 +391,6 @@ export function TeamView({
     play('click');
     setValidations((prev) => ({ ...prev, [playerId]: value }));
     try {
-      // Guardar como 'userValidated' para distinguir de 'validated' por defecto
       const roundNumber = currentRound?.roundNumber ?? 0;
       await update(ref(database, `games/${gameId}/teams/${team.id}/stage1Rounds/${roundNumber}/ratings/${playerId}`), {
         userValidated: value
@@ -363,46 +418,33 @@ export function TeamView({
     const points: { [playerId: string]: number } = {};
     const ratingsArray = Object.values(liveRatings);
 
-    // Inicializar todos en 0
     team.players.forEach((p) => (points[p.id] = 0));
 
-    // Determinar qué ratings están efectivamente validados/aceptados
-    // - VERDE: siempre se considera aceptado automáticamente
-    // - AMARILLO/ROJO: necesitan validación explícita (validations[playerId] === true)
     const effectivelyAcceptedRatings = ratingsArray.filter((rating) => {
       if (rating.color === 'green') {
-        return true; // Verdes siempre aceptados
+        return true;
       }
-      // Amarillos y rojos necesitan validación explícita
       return validations[rating.playerId] === true;
     });
 
-    // Verificar si hay algún ROJO ACEPTADO
     const hasAcceptedRed = effectivelyAcceptedRatings.some((rating) => rating.color === 'red');
 
     if (hasAcceptedRed) {
-      // Respuesta INCORRECTA - solo los rojos aceptados reciben puntos
       effectivelyAcceptedRatings.forEach((rating) => {
         if (rating.color === 'red') {
           points[rating.playerId] = 10;
         }
-        // Verdes y amarillos quedan en 0
       });
-      // Respondedor NO recibe puntos (respuesta incorrecta)
       points[currentRound.respondingPlayerId] = 0;
     } else {
-      // NO hay rojos aceptados → Respuesta CORRECTA
-      // El respondedor recibe 12 puntos
       points[currentRound.respondingPlayerId] = 12;
 
-      // Distribuir puntos a los calificadores
       effectivelyAcceptedRatings.forEach((rating) => {
         if (rating.color === 'green') {
           points[rating.playerId] = 5;
         } else if (rating.color === 'yellow') {
           points[rating.playerId] = 10;
         }
-        // Rojos rechazados (no aceptados) quedan en 0
       });
     }
 
@@ -539,7 +581,6 @@ export function TeamView({
     );
   }, [team.players]);
 
-  // Helper para nombres de colores
   const getColorName = (color: string) => {
     if (color === 'green') return texts.rating.greenShort;
     if (color === 'yellow') return texts.rating.yellowShort;
@@ -598,6 +639,7 @@ export function TeamView({
               alignItems: 'center',
               gap: 8,
             }}
+            aria-label={texts.aria.openMaterial}
           >
             {texts.question.supportMaterial}
           </button>
@@ -627,6 +669,7 @@ export function TeamView({
             className="btn-responded"
             onClick={handleMarkResponded}
             disabled={hasResponded}
+            aria-label={hasResponded ? texts.aria.alreadyMarked : texts.aria.markAnswered}
           >
             {hasResponded ? texts.response.alreadyMarked : texts.response.markAnswered}
           </button>
@@ -685,22 +728,51 @@ export function TeamView({
                     </span>
                   </div>
                 ) : isCurrentTurn ? (
-                  <div className="color-buttons">
+                  // ACCESIBILIDAD: Grupo de radios con navegación por flechas
+                  <div
+                    className="color-buttons"
+                    role="radiogroup"
+                    aria-label={`Opciones de calificación para ${player.name}`}
+                    onKeyDown={(e) => {
+                      const buttons = e.currentTarget.querySelectorAll('button');
+                      const currentIndex = Array.from(buttons).indexOf(document.activeElement as HTMLButtonElement);
+                      
+                      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        const nextIndex = (currentIndex + 1) % buttons.length;
+                        (buttons[nextIndex] as HTMLButtonElement).focus();
+                      }
+                      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        const prevIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+                        (buttons[prevIndex] as HTMLButtonElement).focus();
+                      }
+                    }}
+                  >
                     <button
                       className="color-btn green"
                       onClick={() => handleRating(player.id, player.name, 'green')}
+                      role="radio"
+                      aria-checked={liveRatings[player.id]?.color === 'green'}
+                      aria-label="Verde - La respuesta es correcta y no quiero agregar nada"
                     >
                       🟩 {texts.rating.greenShort}
                     </button>
                     <button
                       className="color-btn yellow"
                       onClick={() => handleRating(player.id, player.name, 'yellow')}
+                      role="radio"
+                      aria-checked={liveRatings[player.id]?.color === 'yellow'}
+                      aria-label="Amarillo - La respuesta es correcta pero quiero agregar algo importante"
                     >
                       🟨 {texts.rating.yellowShort}
                     </button>
                     <button
                       className="color-btn red"
                       onClick={() => handleRating(player.id, player.name, 'red')}
+                      role="radio"
+                      aria-checked={liveRatings[player.id]?.color === 'red'}
+                      aria-label="Rojo - La respuesta es incorrecta y voy a explicar por qué"
                     >
                       🟥 {texts.rating.redShort}
                     </button>
@@ -780,12 +852,14 @@ export function TeamView({
                         <button
                           className={`validation-btn reject ${validations[player.id] === false ? 'selected' : ''}`}
                           onClick={() => handleSetValidation(player.id, false)}
+                          aria-label={`Rechazar justificación de ${player.name}`}
                         >
                           {texts.validation.reject}
                         </button>
                         <button
                           className={`validation-btn accept ${validations[player.id] === true ? 'selected' : ''}`}
                           onClick={() => handleSetValidation(player.id, true)}
+                          aria-label={`Aceptar justificación de ${player.name}`}
                         >
                           {texts.validation.accept}
                         </button>
@@ -809,6 +883,13 @@ export function TeamView({
             className="btn-confirm-points"
             onClick={handleConfirmPoints}
             disabled={isConfirmingPoints || !allValidated}
+            aria-label={
+              pointsAlreadyConfirmed
+                ? texts.aria.nextRound
+                : isConfirmingPoints
+                  ? texts.aria.confirmingPoints
+                  : texts.aria.confirmAndAdvance
+            }
           >
             {pointsAlreadyConfirmed
               ? texts.validation.nextRound
@@ -823,8 +904,7 @@ export function TeamView({
         <div className="pedagogical-tip">
           <div className="tip-icon">💡</div>
           <div className="tip-text">
-            {texts.pedagogicalTip.split('<strong>')[0]}
-            <strong>{texts.pedagogicalTip.split('<strong>')[1]?.split('</strong>')[0]}</strong>
+            {texts.pedagogicalTip}
           </div>
         </div>
       )}
@@ -847,9 +927,10 @@ export function TeamView({
         })}
       </div>
 
-      {/* Modal de material complementario */}
+      {/* Modal de material complementario - ACCESIBILIDAD MEJORADA */}
       {showMaterialModal && (
         <div
+          role="presentation"
           style={{
             position: 'fixed',
             top: 0,
@@ -864,8 +945,12 @@ export function TeamView({
             zIndex: 10000,
           }}
           onClick={() => setShowMaterialModal(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowMaterialModal(false); }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-title"
             style={{
               backgroundColor: 'white',
               borderRadius: 16,
@@ -887,7 +972,7 @@ export function TeamView({
                 alignItems: 'center',
               }}
             >
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1e293b' }}>
+              <h3 id="modal-title" style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1e293b' }}>
                 {texts.modal.title}
               </h3>
               <button
@@ -899,6 +984,8 @@ export function TeamView({
                   cursor: 'pointer',
                   color: '#64748b',
                 }}
+                aria-label={texts.aria.closeModal}
+                autoFocus // el foco va a este botón al abrir el modal
               >
                 ✕
               </button>
@@ -949,6 +1036,7 @@ export function TeamView({
                   borderRadius: 8,
                   cursor: 'pointer',
                 }}
+                aria-label={texts.aria.closeMaterial}
               >
                 {texts.modal.close}
               </button>

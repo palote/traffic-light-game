@@ -1,5 +1,5 @@
 // src/components/Stage2/Stage2ProgressPanel.tsx
-// Panel de progreso de equipos para Stage 2
+// Panel de progreso de equipos para Stage 2 - con internacionalización completa
 
 import { useMemo } from "react";
 import type { Game, Team, Stage2Round } from "../../types/game";
@@ -10,7 +10,7 @@ interface Stage2ProgressPanelProps {
   round: Stage2Round | null;
 }
 
-// Mapeo de fases a nombres amigables
+// Mapeo de fases a nombres amigables y colores (ya con soporte de idiomas)
 const PHASE_LABELS: Record<string, { es: string; en: string; pt: string; emoji: string; color: string }> = {
   hint: { es: "Pista", en: "Hint", pt: "Dica", emoji: "💡", color: "#FFC107" },
   designated: { es: "Designados", en: "Designated", pt: "Designados", emoji: "👥", color: "#2196F3" },
@@ -27,8 +27,9 @@ const PHASE_LABELS: Record<string, { es: string; en: string; pt: string; emoji: 
 export function Stage2ProgressPanel({ game, round }: Stage2ProgressPanelProps) {
   const { language } = useI18n();
 
-  // Textos traducidos
+  // 📦 Textos traducidos (todos los strings visibles)
   const texts = useMemo(() => ({
+    // Estados de calificación
     pending: language === 'es' ? '⏳ Pendiente' : 
              language === 'pt' ? '⏳ Pendente' : 
              '⏳ Pending',
@@ -50,6 +51,8 @@ export function Stage2ProgressPanel({ game, round }: Stage2ProgressPanelProps) {
     responded: language === 'es' ? '✅ Respondió' : 
                language === 'pt' ? '✅ Respondeu' : 
                '✅ Responded',
+    
+    // Títulos y etiquetas generales
     progressTitle: language === 'es' ? '📊 Progreso de Equipos' :
                    language === 'pt' ? '📊 Progresso das Equipes' :
                    '📊 Team Progress',
@@ -59,6 +62,46 @@ export function Stage2ProgressPanel({ game, round }: Stage2ProgressPanelProps) {
     ratings: language === 'es' ? 'Calificaciones' :
              language === 'pt' ? 'Avaliações' :
              'Ratings',
+    
+    // Cabeceras de tabla
+    tablePos: language === 'es' ? 'Pos' :
+              language === 'pt' ? 'Pos' :
+              'Pos',
+    tableTeam: language === 'es' ? 'Equipo' :
+               language === 'pt' ? 'Equipe' :
+               'Team',
+    tableRole: 'Rol',
+    tableRepresentative: language === 'es' ? 'Representante' :
+                          language === 'pt' ? 'Representante' :
+                          'Representative',
+    tableStatus: language === 'es' ? 'Estado' :
+                 language === 'pt' ? 'Estado' :
+                 'Status',
+    tableScore: language === 'es' ? 'Puntaje' :
+                language === 'pt' ? 'Pontuação' :
+                'Score',
+    
+    // Leyenda de colores (usada en la explicación)
+    legendCorrect: language === 'es' ? 'Correcto' :
+                   language === 'pt' ? 'Correto' :
+                   'Correct',
+    legendPartial: language === 'es' ? 'Parcial' :
+                   language === 'pt' ? 'Parcial' :
+                   'Partial',
+    legendIncorrect: language === 'es' ? 'Incorrecto' :
+                     language === 'pt' ? 'Incorreto' :
+                     'Incorrect',
+    legendNotRated: language === 'es' ? 'Sin calificar' :
+                    language === 'pt' ? 'Sem avaliar' :
+                    'Not rated',
+    
+    // Leyenda de roles (al pie)
+    roleResponding: language === 'es' ? 'Equipo que responde' :
+                    language === 'pt' ? 'Equipe que responde' :
+                    'Responding team',
+    roleRating: language === 'es' ? 'Equipos que califican' :
+                language === 'pt' ? 'Equipes que avaliam' :
+                'Rating teams',
   }), [language]);
 
   // ✅ Calcular total de rondas
@@ -85,9 +128,10 @@ export function Stage2ProgressPanel({ game, round }: Stage2ProgressPanelProps) {
 
   const currentPhase = round?.phase ?? "hint";
   const phaseInfo = PHASE_LABELS[currentPhase] ?? { es: currentPhase, en: currentPhase, pt: currentPhase, emoji: "❓", color: "#999" };
+  // Seleccionar label según idioma
   const phaseLabel = language === 'es' ? phaseInfo.es : language === 'pt' ? phaseInfo.pt : phaseInfo.en;
 
-  // ✅ FIX: Obtener info de cada equipo con lógica corregida
+  // Obtener info de cada equipo
   const getTeamRoundInfo = (team: Team) => {
     if (!round) return { role: "—", status: "—", rated: false };
 
@@ -95,7 +139,7 @@ export function Stage2ProgressPanel({ game, round }: Stage2ProgressPanelProps) {
     if (round.respondingTeam?.teamId === team.id) {
       const responding = round.respondingTeam;
       return {
-        role: "🎤 Responde",
+        role: "🎤 " + (language === 'es' ? 'Responde' : language === 'pt' ? 'Responde' : 'Responds'),
         playerName: responding.playerName,
         status: responding.responseGiven ? texts.responded : texts.waiting,
         isResponder: true,
@@ -106,10 +150,8 @@ export function Stage2ProgressPanel({ game, round }: Stage2ProgressPanelProps) {
     // ¿Es un equipo calificador?
     const rater = round.ratingTeams?.[team.id];
     if (rater) {
-      // ✅ FIX: Usar !! para verificar si tiene valor (no null NI undefined)
       const hasRated = !!rater.rating;
       
-      // ✅ Determinar el texto del estado según la calificación
       let statusText: string;
       if (!hasRated) {
         statusText = texts.pending;
@@ -124,7 +166,7 @@ export function Stage2ProgressPanel({ game, round }: Stage2ProgressPanelProps) {
       }
 
       return {
-        role: "🎨 Califica",
+        role: "🎨 " + (language === 'es' ? 'Califica' : language === 'pt' ? 'Avalia' : 'Rates'),
         playerName: rater.playerName,
         status: statusText,
         isRater: true,
@@ -142,7 +184,6 @@ export function Stage2ProgressPanel({ game, round }: Stage2ProgressPanelProps) {
     if (!round?.ratingTeams) return { rated: 0, total: 0 };
     const raters = Object.values(round.ratingTeams);
     return {
-      // ✅ FIX: Usar !! para contar correctamente
       rated: raters.filter(r => !!r.rating).length,
       total: raters.length,
     };
@@ -174,7 +215,7 @@ export function Stage2ProgressPanel({ game, round }: Stage2ProgressPanelProps) {
           alignItems: "center",
           gap: 12,
         }}>
-          {/* ✅ Ronda X de Y */}
+          {/* Ronda X de Y */}
           <div style={{
             padding: "6px 14px",
             backgroundColor: "#e3f2fd",
@@ -183,7 +224,7 @@ export function Stage2ProgressPanel({ game, round }: Stage2ProgressPanelProps) {
             fontWeight: 700,
             color: "#1976d2",
           }}>
-            Ronda {currentRoundNumber} {texts.roundOf} {totalRounds || '?'}
+            {language === 'es' ? 'Ronda' : language === 'pt' ? 'Rodada' : 'Round'} {currentRoundNumber} {texts.roundOf} {totalRounds || '?'}
           </div>
           
           {/* Fase actual */}
@@ -200,7 +241,7 @@ export function Stage2ProgressPanel({ game, round }: Stage2ProgressPanelProps) {
         </div>
       </div>
 
-      {/* ✅ Leyenda de colores */}
+      {/* Leyenda de colores */}
       <div style={{
         marginBottom: 16,
         padding: 10,
@@ -212,10 +253,10 @@ export function Stage2ProgressPanel({ game, round }: Stage2ProgressPanelProps) {
         flexWrap: "wrap",
         border: "1px solid #bae6fd",
       }}>
-        <span>🟩 {language === 'es' ? 'Correcto' : language === 'pt' ? 'Correto' : 'Correct'}</span>
-        <span>🟨 {language === 'es' ? 'Parcial' : 'Partial'}</span>
-        <span>🟥 {language === 'es' ? 'Incorrecto' : language === 'pt' ? 'Incorreto' : 'Incorrect'}</span>
-        <span>⬜ {language === 'es' ? 'Sin calificar' : language === 'pt' ? 'Sem avaliar' : 'Not rated'}</span>
+        <span>🟩 {texts.legendCorrect}</span>
+        <span>🟨 {texts.legendPartial}</span>
+        <span>🟥 {texts.legendIncorrect}</span>
+        <span>⬜ {texts.legendNotRated}</span>
       </div>
 
       {/* Barra de progreso de calificación (solo en fase rating) */}
@@ -256,12 +297,12 @@ export function Stage2ProgressPanel({ game, round }: Stage2ProgressPanelProps) {
       }}>
         <thead>
           <tr style={{ backgroundColor: "#1976d2", color: "white" }}>
-            <th style={{ padding: 12, textAlign: "left", fontSize: 14 }}>Pos</th>
-            <th style={{ padding: 12, textAlign: "left", fontSize: 14 }}>{language === 'es' ? 'Equipo' : language === 'pt' ? 'Equipe' : 'Team'}</th>
-            <th style={{ padding: 12, textAlign: "center", fontSize: 14 }}>Rol</th>
-            <th style={{ padding: 12, textAlign: "left", fontSize: 14 }}>{language === 'es' ? 'Representante' : language === 'pt' ? 'Representante' : 'Representative'}</th>
-            <th style={{ padding: 12, textAlign: "center", fontSize: 14 }}>{language === 'es' ? 'Estado' : language === 'pt' ? 'Estado' : 'Status'}</th>
-            <th style={{ padding: 12, textAlign: "right", fontSize: 14 }}>{language === 'es' ? 'Puntaje' : language === 'pt' ? 'Pontuação' : 'Score'}</th>
+            <th style={{ padding: 12, textAlign: "left", fontSize: 14 }}>{texts.tablePos}</th>
+            <th style={{ padding: 12, textAlign: "left", fontSize: 14 }}>{texts.tableTeam}</th>
+            <th style={{ padding: 12, textAlign: "center", fontSize: 14 }}>{texts.tableRole}</th>
+            <th style={{ padding: 12, textAlign: "left", fontSize: 14 }}>{texts.tableRepresentative}</th>
+            <th style={{ padding: 12, textAlign: "center", fontSize: 14 }}>{texts.tableStatus}</th>
+            <th style={{ padding: 12, textAlign: "right", fontSize: 14 }}>{texts.tableScore}</th>
           </tr>
         </thead>
         <tbody>
@@ -269,7 +310,7 @@ export function Stage2ProgressPanel({ game, round }: Stage2ProgressPanelProps) {
             const info = getTeamRoundInfo(team);
             const isLeader = index === 0 && (team.totalScore ?? 0) > 0;
 
-            // ✅ Determinar color de fondo del estado
+            // Determinar color de fondo del estado
             const getStatusStyle = () => {
               if (info.status.includes('🟩')) return { bg: '#dcfce7', color: '#166534' };
               if (info.status.includes('🟨')) return { bg: '#fef9c3', color: '#854d0e' };
@@ -340,8 +381,8 @@ export function Stage2ProgressPanel({ game, round }: Stage2ProgressPanelProps) {
         gap: 16,
         flexWrap: "wrap",
       }}>
-        <span><span style={{ backgroundColor: "#fff3e0", padding: "2px 6px", borderRadius: 4 }}>🎤</span> = {language === 'es' ? 'Equipo que responde' : language === 'pt' ? 'Equipe que responde' : 'Responding team'}</span>
-        <span><span style={{ backgroundColor: "#e3f2fd", padding: "2px 6px", borderRadius: 4 }}>🎨</span> = {language === 'es' ? 'Equipos que califican' : language === 'pt' ? 'Equipes que avaliam' : 'Rating teams'}</span>
+        <span><span style={{ backgroundColor: "#fff3e0", padding: "2px 6px", borderRadius: 4 }}>🎤</span> = {texts.roleResponding}</span>
+        <span><span style={{ backgroundColor: "#e3f2fd", padding: "2px 6px", borderRadius: 4 }}>🎨</span> = {texts.roleRating}</span>
       </div>
     </div>
   );

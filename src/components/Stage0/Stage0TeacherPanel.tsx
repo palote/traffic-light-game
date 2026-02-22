@@ -1,5 +1,6 @@
 // src/components/Stage0/Stage0TeacherPanel.tsx
 // Panel del docente para revisar propuestas de consignas en Stage 0
+// ✅ CORREGIDO: Internacionalización completa con portugués y textos faltantes
 
 import { useState, useMemo } from 'react';
 import type { Game, Stage0Proposal, ProposalType } from '../../types/game';
@@ -102,6 +103,77 @@ export function Stage0TeacherPanel({ game, onStartStage1 }: Stage0TeacherPanelPr
         // Save to library
         saveToLibrary: 'Guardar',
         savedToLibrary: '¡Guardada!',
+
+        // ✅ NUEVAS CLAVES
+        moreProposals: 'propuestas más...',
+        points: 'pts',
+        bonusPoints: 'puntos bonus',
+      }
+    : language === 'pt'
+    ? {
+        title: 'Painel Stage 0',
+        subtitle: 'Revise as propostas das equipes',
+        
+        // Phases
+        phaseReading: 'Fase: Leitura',
+        phaseProposing: 'Fase: Propostas',
+        phaseReviewing: 'Fase: Revisão',
+        phaseResults: 'Fase: Resultados',
+        
+        // Actions
+        startProposals: 'Iniciar propostas',
+        startReview: 'Iniciar revisão',
+        finishAndStart: 'Finalizar e começar Stage 1',
+        
+        // Filters
+        filterAll: 'Todas',
+        filterPending: 'Pendentes',
+        filterApproved: 'Aprovadas',
+        filterRejected: 'Rejeitadas',
+        allTeams: 'Todas as equipes',
+        
+        // Stats
+        totalProposals: 'Total propostas',
+        pendingCount: 'Pendentes',
+        approvedCount: 'Aprovadas',
+        rejectedCount: 'Rejeitadas',
+        teamsReady: 'Equipes prontas',
+        
+        // Proposal card
+        proposedBy: 'Proposto por',
+        relatedTo: 'Relacionado a',
+        hint: 'Dica',
+        
+        // Actions
+        approve: 'Aprovar',
+        reject: 'Rejeitar',
+        edit: 'Editar',
+        saveEdit: 'Salvar',
+        cancelEdit: 'Cancelar',
+        bonusLabel: 'Pontos bônus',
+        
+        // Status
+        pending: 'Pendente',
+        approved: 'Aprovada',
+        rejected: 'Rejeitada',
+        edited: 'Editada',
+        
+        // Empty
+        noProposals: 'Ainda não há propostas',
+        noProposalsFiltered: 'Nenhuma proposta com esses filtros',
+        
+        // Warnings
+        pendingWarning: 'Há propostas pendentes de revisão',
+        confirmStart: 'Iniciar Stage 1? Os pontos bônus serão aplicados automaticamente.',
+        
+        // Save to library
+        saveToLibrary: 'Salvar',
+        savedToLibrary: 'Salva!',
+
+        // ✅ NUEVAS CLAVES
+        moreProposals: 'propostas a mais...',
+        points: 'pts',
+        bonusPoints: 'pontos bônus',
       }
     : {
         title: 'Stage 0 Panel',
@@ -162,6 +234,11 @@ export function Stage0TeacherPanel({ game, onStartStage1 }: Stage0TeacherPanelPr
         // Save to library
         saveToLibrary: 'Save',
         savedToLibrary: 'Saved!',
+
+        // ✅ NUEVAS CLAVES
+        moreProposals: 'more proposals...',
+        points: 'pts',
+        bonusPoints: 'bonus points',
       };
 
   // Filtered proposals
@@ -701,7 +778,7 @@ export function Stage0TeacherPanel({ game, onStartStage1 }: Stage0TeacherPanelPr
                             cursor: 'pointer',
                           }}
                         >
-                          ✓ {t.approve} {(bonusPoints[proposal.id] || 0) > 0 && `(+${bonusPoints[proposal.id]} pts)`}
+                          ✓ {t.approve} {(bonusPoints[proposal.id] || 0) > 0 && `(+${bonusPoints[proposal.id]} ${t.points})`}
                         </button>
                       </>
                     )}
@@ -726,7 +803,7 @@ export function Stage0TeacherPanel({ game, onStartStage1 }: Stage0TeacherPanelPr
                         color: '#92400e',
                         fontWeight: 500,
                       }}>
-                        ⭐ +{proposal.bonusPoints} {t.bonusLabel.toLowerCase()}
+                        ⭐ +{proposal.bonusPoints} {t.bonusPoints}
                       </div>
                     )}
                     

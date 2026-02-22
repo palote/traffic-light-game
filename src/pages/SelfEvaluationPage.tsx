@@ -1,5 +1,7 @@
 // src/pages/SelfEvaluationPage.tsx
 // 📝 Formulario de autoevaluación individual para alumnos
+// ✅ ACTUALIZADO: Incluye metacognición (dificultad, confianza antes/después)
+// ✅ CORREGIDO: Texto "Cargando..." traducido
 
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
@@ -52,6 +54,11 @@ export function SelfEvaluationPage() {
     { concept: "", toWho: [], description: "" },
   ]);
 
+  // Metacognición
+  const [difficultyRating, setDifficultyRating] = useState<number>(0);
+  const [confidenceBefore, setConfidenceBefore] = useState<number>(0);
+  const [confidenceAfter, setConfidenceAfter] = useState<number>(0);
+
   const texts = {
     es: {
       title: "Autoevaluación",
@@ -79,6 +86,16 @@ export function SelfEvaluationPage() {
       gaveDescriptionLabel: "Describí cómo sucedió ese aprendizaje",
       gaveDescriptionPlaceholder: "Contá con la mayor cantidad de detalles posible cómo ayudaste",
       
+      // Metacognición
+      metacognitionTitle: "🧠 Reflexión sobre tu aprendizaje",
+      metacognitionDesc: "Pensá en cómo te sentiste durante el juego",
+      difficultyLabel: "¿Qué tan difícil te resultó el tema del juego?",
+      difficultyHint: "1 = Muy fácil, 5 = Muy difícil",
+      confidenceBeforeLabel: "¿Qué tan seguro/a te sentías sobre el tema ANTES del juego?",
+      confidenceBeforeHint: "1 = Nada seguro/a, 5 = Muy seguro/a",
+      confidenceAfterLabel: "¿Qué tan seguro/a te sentís sobre el tema DESPUÉS del juego?",
+      confidenceAfterHint: "1 = Nada seguro/a, 5 = Muy seguro/a",
+      
       addBlock: "+ Agregar otro",
       removeBlock: "Eliminar",
       submit: "Enviar autoevaluación",
@@ -95,6 +112,9 @@ export function SelfEvaluationPage() {
       
       anonymous: "Anónimo",
       selectMembers: "Seleccioná uno o más compañeros",
+      
+      // ✅ NUEVA CLAVE
+      loading: "Cargando...",
     },
     en: {
       title: "Self-Evaluation",
@@ -122,6 +142,16 @@ export function SelfEvaluationPage() {
       gaveDescriptionLabel: "Describe how that learning happened",
       gaveDescriptionPlaceholder: "Tell with as much detail as possible how you helped",
       
+      // Metacognition
+      metacognitionTitle: "🧠 Reflection on your learning",
+      metacognitionDesc: "Think about how you felt during the game",
+      difficultyLabel: "How difficult was the topic of the game for you?",
+      difficultyHint: "1 = Very easy, 5 = Very difficult",
+      confidenceBeforeLabel: "How confident did you feel about the topic BEFORE the game?",
+      confidenceBeforeHint: "1 = Not confident, 5 = Very confident",
+      confidenceAfterLabel: "How confident do you feel about the topic AFTER the game?",
+      confidenceAfterHint: "1 = Not confident, 5 = Very confident",
+      
       addBlock: "+ Add another",
       removeBlock: "Remove",
       submit: "Submit self-evaluation",
@@ -138,6 +168,9 @@ export function SelfEvaluationPage() {
       
       anonymous: "Anonymous",
       selectMembers: "Select one or more teammates",
+      
+      // ✅ NEW KEY
+      loading: "Loading...",
     },
     pt: {
       title: "Autoavaliação",
@@ -165,6 +198,16 @@ export function SelfEvaluationPage() {
       gaveDescriptionLabel: "Descreva como aconteceu esse aprendizado",
       gaveDescriptionPlaceholder: "Conte com o máximo de detalhes possível como você ajudou",
       
+      // Metacognição
+      metacognitionTitle: "🧠 Reflexão sobre seu aprendizado",
+      metacognitionDesc: "Pense em como você se sentiu durante o jogo",
+      difficultyLabel: "Quão difícil foi o tema do jogo para você?",
+      difficultyHint: "1 = Muito fácil, 5 = Muito difícil",
+      confidenceBeforeLabel: "Quão confiante você se sentia sobre o tema ANTES do jogo?",
+      confidenceBeforeHint: "1 = Nada confiante, 5 = Muito confiante",
+      confidenceAfterLabel: "Quão confiante você se sente sobre o tema DEPOIS do jogo?",
+      confidenceAfterHint: "1 = Nada confiante, 5 = Muito confiante",
+      
       addBlock: "+ Adicionar outro",
       removeBlock: "Remover",
       submit: "Enviar autoavaliação",
@@ -181,6 +224,9 @@ export function SelfEvaluationPage() {
       
       anonymous: "Anônimo",
       selectMembers: "Selecione um ou mais colegas",
+      
+      // ✅ NOVA CHAVE
+      loading: "Carregando...",
     },
   };
 
@@ -371,11 +417,15 @@ export function SelfEvaluationPage() {
         studentName: finalName,
         receivedHelp: receivedHelp.filter((h) => h.concept.trim() || h.description.trim()),
         gaveHelp: gaveHelp.filter((h) => h.concept.trim() || h.description.trim()),
+        // Metacognición (solo si se completó)
+        ...(difficultyRating > 0 && { difficultyRating }),
+        ...(confidenceBefore > 0 && { confidenceBefore }),
+        ...(confidenceAfter > 0 && { confidenceAfter }),
         submittedAt: Date.now(),
         language,
       };
 
-      await push(ref(database, `selfEvaluations/${gameId}`), evaluationData);
+      await push(ref(database, `games/${gameId}/selfEvaluations`), evaluationData);
 
       setSubmitted(true);
     } catch (err) {
@@ -386,13 +436,53 @@ export function SelfEvaluationPage() {
     setSubmitting(false);
   };
 
+  // Componente de rating con estrellas
+  const StarRating = ({
+    value,
+    onChange,
+    label,
+    hint,
+  }: {
+    value: number;
+    onChange: (v: number) => void;
+    label: string;
+    hint: string;
+  }) => (
+    <div style={{ marginBottom: 20 }}>
+      <label style={labelStyle}>{label}</label>
+      <p style={{ margin: "0 0 8px 0", fontSize: 12, color: "#94a3b8" }}>{hint}</p>
+      <div style={{ display: "flex", gap: 8 }}>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type="button"
+            onClick={() => onChange(star)}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 8,
+              border: "2px solid",
+              borderColor: value >= star ? "#8b5cf6" : "#e2e8f0",
+              backgroundColor: value >= star ? "#ede9fe" : "white",
+              fontSize: 20,
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            {value >= star ? "⭐" : "☆"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   // Pantalla de carga
   if (loading) {
     return (
       <div style={containerStyle}>
         <div style={{ textAlign: "center", padding: 40 }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
-          <div style={{ fontSize: 18, color: "#64748b" }}>Cargando...</div>
+          <div style={{ fontSize: 18, color: "#64748b" }}>{t.loading}</div>
         </div>
       </div>
     );
@@ -629,6 +719,35 @@ export function SelfEvaluationPage() {
           )}
         </div>
 
+        {/* Sección: Metacognición */}
+        <div style={{ ...sectionStyle, backgroundColor: "#faf5ff", border: "2px solid #8b5cf6" }}>
+          <h2 style={{ margin: "0 0 8px 0", fontSize: 18, fontWeight: 700, color: "#7c3aed" }}>
+            {t.metacognitionTitle}
+          </h2>
+          <p style={{ margin: "0 0 20px 0", fontSize: 13, color: "#64748b" }}>{t.metacognitionDesc}</p>
+
+          <StarRating
+            value={difficultyRating}
+            onChange={setDifficultyRating}
+            label={t.difficultyLabel}
+            hint={t.difficultyHint}
+          />
+
+          <StarRating
+            value={confidenceBefore}
+            onChange={setConfidenceBefore}
+            label={t.confidenceBeforeLabel}
+            hint={t.confidenceBeforeHint}
+          />
+
+          <StarRating
+            value={confidenceAfter}
+            onChange={setConfidenceAfter}
+            label={t.confidenceAfterLabel}
+            hint={t.confidenceAfterHint}
+          />
+        </div>
+
         {/* Botón enviar */}
         <button
           onClick={handleSubmit}
@@ -653,7 +772,7 @@ export function SelfEvaluationPage() {
   );
 }
 
-// Estilos
+// Estilos (sin cambios)
 const containerStyle: React.CSSProperties = {
   minHeight: "100vh",
   backgroundColor: "#f1f5f9",

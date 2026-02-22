@@ -7,15 +7,21 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "audit:a11y": "axe https://www.thetrafficlightgame.com --save audit-results.json"
   },
   "dependencies": {
+    "@sentry/browser": "^10.38.0",
+    "@sentry/react": "^10.38.0",
+    "@sentry/tracing": "^7.120.4",
     "firebase": "^12.7.0",
+    "gapi-script": "^1.2.0",
     "papaparse": "^5.5.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@axe-core/cli": "^4.11.1",
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
     "@types/papaparse": "^5.5.2",
@@ -26,7 +32,8 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
-    "typescript": "~5.9.3",
+    "terser": "^5.46.0",
+    "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "npm:rolldown-vite@7.2.5"
   },

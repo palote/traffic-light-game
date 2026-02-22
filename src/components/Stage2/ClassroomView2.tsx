@@ -4,6 +4,8 @@
 //   - Tarea 5: Leyenda de colores (🟩🟨🟥⬜)
 //   - Tarea 6: Estado "Pendiente" por equipo
 //   - Validación global con validateAllRatings (según Claude)
+//   - 🎯 FIX CONTRASTE WCAG: Ajustados colores para cumplir ratio 4.5:1
+//   - ♿ ACCESIBILIDAD: ARIA labels en todos los botones
 
 import { useEffect, useMemo, useState } from "react";
 import { ref, onValue, update } from "firebase/database";
@@ -40,14 +42,14 @@ import {
   validateResponse,
   isValidationComplete,
   calculateAndAwardPoints,
-  validateAllRatings, // ✅ Importado
+  validateAllRatings,
 } from "../../services/stage2Repository";
 import {
   startCountdownMusic,
   stopCountdownMusic,
   pauseCountdownMusic,
 } from "../../hooks/useCountdownMusic";
-import { ReconnectBadge } from "../ReconnectBadge"; // ✅ AGREGADO
+import { ReconnectBadge } from "../ReconnectBadge";
 
 interface ClassroomViewProps {
   gameId: string;
@@ -282,6 +284,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
             cursor: "pointer",
             fontWeight: 700,
           }}
+          aria-label="Iniciar la Etapa 2 del juego" // ACCESIBILIDAD
         >
           ▶️ INICIAR STAGE 2
         </button>
@@ -294,7 +297,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
       <div style={{ padding: 40 }}>
         <h1>🎯 ETAPA 2</h1>
         <p>No se encontró la ronda actual.</p>
-        <button onClick={() => startStage2Round(gameId)}>🔁 RECREAR RONDA</button>
+        <button onClick={() => startStage2Round(gameId)} aria-label="Recrear la ronda actual">🔁 RECREAR RONDA</button> {/* ACCESIBILIDAD */}
       </div>
     );
   }
@@ -355,6 +358,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
               cursor: "pointer",
               fontSize: 14,
             }}
+            aria-label={showProgressPanel ? "Ocultar panel de progreso" : "Mostrar panel de progreso"} // ACCESIBILIDAD
           >
             {showProgressPanel ? "📊 Ocultar Progreso" : "📊 Mostrar Progreso"}
           </button>
@@ -373,6 +377,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                 fontWeight: 800,
               }}
               title="Cerrar sesión del docente"
+              aria-label="Cerrar sesión del docente" // ACCESIBILIDAD
             >
               🚪 Salir
             </button>
@@ -396,7 +401,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
             marginBottom: 24,
           }}
         >
-          <h3 style={{ margin: "0 0 12px 0", color: "#d97706" }}>
+          <h3 style={{ margin: "0 0 12px 0", color: "#b45309" }}>
             🆘 Ayuda Docente Solicitada
           </h3>
           <p>
@@ -421,6 +426,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                   borderRadius: 6,
                   cursor: "pointer",
                 }}
+                aria-label="Iniciar el tiempo de ayuda para el equipo que responde" // ACCESIBILIDAD
               >
                 ▶️ Iniciar Ayuda
               </button>
@@ -437,6 +443,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                     borderRadius: 6,
                     cursor: "pointer",
                   }}
+                  aria-label="Pausar el tiempo de ayuda" // ACCESIBILIDAD
                 >
                   ⏸ Pausar
                 </button>
@@ -450,6 +457,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                     borderRadius: 6,
                     cursor: "pointer",
                   }}
+                  aria-label="Finalizar la ayuda y continuar con la siguiente fase" // ACCESIBILIDAD
                 >
                   ✅ Finalizar
                 </button>
@@ -543,12 +551,12 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                     {hasRated ? (
                       <>
                         {rating === 'green' ? '🟩' : rating === 'yellow' ? '🟨' : '🟥'}
-                        <span style={{ color: '#4b5563', fontSize: 14 }}>{ratingStatusText.rated}</span>
+                        <span style={{ color: '#334155', fontSize: 14 }}>{ratingStatusText.rated}</span>
                       </>
                     ) : (
                       <>
                         <span>⬜</span>
-                        <span style={{ color: '#dc2626', fontWeight: 600, fontSize: 14 }}>{ratingStatusText.pending}</span>
+                        <span style={{ color: '#7f1d1d', fontWeight: 600, fontSize: 14 }}>{ratingStatusText.pending}</span>
                       </>
                     )}
                   </div>
@@ -570,6 +578,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                 cursor: "pointer",
                 opacity: round.phase !== "rating" ? 0.5 : 1,
               }}
+              aria-label="Iniciar fase de calificación" // ACCESIBILIDAD
             >
               ▶️ Iniciar Calificación
             </button>
@@ -585,6 +594,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                     borderRadius: 6,
                     cursor: "pointer",
                   }}
+                  aria-label="Pausar el temporizador de calificación" // ACCESIBILIDAD
                 >
                   ⏸ Pausar Temporizador
                 </button>
@@ -598,6 +608,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                     borderRadius: 6,
                     cursor: "pointer",
                   }}
+                  aria-label="Detener el temporizador de calificación" // ACCESIBILIDAD
                 >
                   ✅ Finalizar Calificación
                 </button>
@@ -614,6 +625,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                   borderRadius: 6,
                   cursor: "pointer",
                 }}
+                aria-label="Revelar calificaciones de todos los equipos" // ACCESIBILIDAD
               >
                 ✅ Revelar Calificaciones
               </button>
@@ -652,12 +664,12 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                     {hasRated ? (
                       <>
                         {rating === 'green' ? '🟩' : rating === 'yellow' ? '🟨' : '🟥'}
-                        <span style={{ color: '#4b5563', fontSize: 14 }}>{ratingStatusText.rated}</span>
+                        <span style={{ color: '#334155', fontSize: 14 }}>{ratingStatusText.rated}</span>
                       </>
                     ) : (
                       <>
                         <span>⬜</span>
-                        <span style={{ color: '#dc2626', fontWeight: 600, fontSize: 14 }}>{ratingStatusText.pending}</span>
+                        <span style={{ color: '#7f1d1d', fontWeight: 600, fontSize: 14 }}>{ratingStatusText.pending}</span>
                       </>
                     )}
                   </div>
@@ -676,6 +688,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
               borderRadius: 6,
               cursor: "pointer",
             }}
+            aria-label="Iniciar fase de justificación" // ACCESIBILIDAD
           >
             ➡️ Iniciar Justificación
           </button>
@@ -706,6 +719,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                 borderRadius: 6,
                 cursor: "pointer",
               }}
+              aria-label="Marcar respuesta como correcta" // ACCESIBILIDAD
             >
               ✅ Correcta
             </button>
@@ -719,6 +733,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                 borderRadius: 6,
                 cursor: "pointer",
               }}
+              aria-label="Marcar respuesta como incorrecta" // ACCESIBILIDAD
             >
               ❌ Incorrecta
             </button>
@@ -726,7 +741,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
         </div>
       )}
 
-      {/* PANEL: VALIDACIÓN DE CALIFICACIONES */}
+      {/* PANEL: VALIDACIÓN DE CALIFICACIONES - 🎯 FIX CONTRASTE APLICADO */}
       {safePhase === "validation_ratings" && (
         <div
           style={{
@@ -796,9 +811,8 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                 ratingText = language === 'es' ? "Rojo" : language === 'pt' ? "Vermelho" : "Red";
                 isAutomatic = false;
                 acceptPoints = 12;
-                showWarning = responseCorrect; // Advertencia si respuesta fue correcta
+                showWarning = responseCorrect;
               } else {
-                // Sin calificar
                 isAutomatic = true;
                 automaticPoints = 0;
               }
@@ -837,27 +851,27 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                     border: `2px solid ${validated === true ? "#22c55e" : validated === false ? "#ef4444" : "#e2e8f0"}`,
                   }}
                 >
-                  {/* Header del equipo */}
+                  {/* Header del equipo - 🎯 FIX: color #64748b → #334155 */}
                   <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
                     <span style={{ fontSize: 24 }}>{ratingIcon}</span>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 16 }}>{team.name}</div>
-                      <div style={{ fontSize: 13, color: "#64748b" }}>{playerName}</div>
+                      <div style={{ fontSize: 13, color: "#334155" }}>{playerName}</div>
                     </div>
-                    <div style={{ marginLeft: "auto", fontSize: 14, fontWeight: 600, color: "#475569" }}>
+                    <div style={{ marginLeft: "auto", fontSize: 14, fontWeight: 600, color: "#334155" }}>
                       {ratingText}
                     </div>
                   </div>
 
-                  {/* Advertencia para rojo + respuesta correcta */}
+                  {/* Advertencia para rojo + respuesta correcta - 🎯 FIX: #fef3c7 → #fde68a, #92400e → #b45309 */}
                   {showWarning && (
                     <div style={{
                       padding: 10,
-                      backgroundColor: "#fef3c7",
+                      backgroundColor: "#fde68a",
                       borderRadius: 8,
                       marginBottom: 12,
                       fontSize: 13,
-                      color: "#92400e",
+                      color: "#b45309",
                       display: "flex",
                       alignItems: "center",
                       gap: 8,
@@ -874,14 +888,14 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                     </div>
                   )}
 
-                  {/* Contenido según si es automático o requiere validación */}
+                  {/* Contenido según si es automático o requiere validación - 🎯 FIX: #e0f2fe → #bae6fd, #0369a1 → #075985 */}
                   {isAutomatic ? (
                     <div style={{
                       padding: 10,
-                      backgroundColor: "#e0f2fe",
+                      backgroundColor: "#bae6fd",
                       borderRadius: 8,
                       fontSize: 14,
-                      color: "#0369a1",
+                      color: "#075985",
                       display: "flex",
                       alignItems: "center",
                       gap: 8,
@@ -906,6 +920,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                               fontWeight: 600,
                               fontSize: 14,
                             }}
+                            aria-label={`Aceptar calificación de ${team.name} (${acceptPoints} puntos)`} // ACCESIBILIDAD
                           >
                             ✅ Aceptar ({acceptPoints} pts)
                           </button>
@@ -922,6 +937,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                               fontWeight: 600,
                               fontSize: 14,
                             }}
+                            aria-label={`Rechazar calificación de ${team.name}`} // ACCESIBILIDAD
                           >
                             ❌ Rechazar
                           </button>
@@ -932,7 +948,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                           backgroundColor: validated ? "#dcfce7" : "#fee2e2",
                           borderRadius: 8,
                           fontSize: 14,
-                          color: validated ? "#166534" : "#991b1b",
+                          color: validated ? "#166534" : "#7f1d1d",
                           fontWeight: 600,
                           width: "100%",
                           textAlign: "center",
@@ -966,12 +982,16 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                 fontWeight: 700,
                 fontSize: 16,
               }}
+              aria-label={isValidationComplete(round)
+                ? "Calcular puntos y ver resultados de la ronda"
+                : "No se pueden calcular puntos hasta validar todas las calificaciones"
+              } // ACCESIBILIDAD
             >
               🏆 Calcular Puntos y Ver Resultados
             </button>
           </div>
 
-          {/* Botones globales (secundarios) */}
+          {/* Botones globales (secundarios) - 🎯 FIX: #64748b → #334155, #fef3c7 → #fde68a, #92400e → #b45309, #fee2e2 → #fecaca, #991b1b → #7f1d1d, #f1f5f9 → #e2e8f0, #475569 → #1e293b */}
           <div style={{
             marginTop: 16,
             paddingTop: 16,
@@ -980,20 +1000,21 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
             gap: 10,
             flexWrap: "wrap"
           }}>
-            <span style={{ fontSize: 13, color: "#64748b", alignSelf: "center" }}>
+            <span style={{ fontSize: 13, color: "#334155", alignSelf: "center" }}>
               Acciones rápidas:
             </span>
             <button
               onClick={() => validateAllRatings(gameId, true, "yellow")}
               style={{
                 padding: "8px 14px",
-                backgroundColor: "#fef3c7",
-                color: "#92400e",
+                backgroundColor: "#fde68a",
+                color: "#b45309",
                 border: "1px solid #fcd34d",
                 borderRadius: 6,
                 cursor: "pointer",
                 fontSize: 13,
               }}
+              aria-label="Aceptar todas las calificaciones amarillas pendientes" // ACCESIBILIDAD
             >
               🟨 Aceptar Amarillos
             </button>
@@ -1001,13 +1022,14 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
               onClick={() => validateAllRatings(gameId, true, "red")}
               style={{
                 padding: "8px 14px",
-                backgroundColor: "#fee2e2",
-                color: "#991b1b",
+                backgroundColor: "#fecaca",
+                color: "#7f1d1d",
                 border: "1px solid #fca5a5",
                 borderRadius: 6,
                 cursor: "pointer",
                 fontSize: 13,
               }}
+              aria-label="Aceptar todas las calificaciones rojas pendientes" // ACCESIBILIDAD
             >
               🟥 Aceptar Rojos
             </button>
@@ -1015,24 +1037,25 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
               onClick={() => validateAllRatings(gameId, false)}
               style={{
                 padding: "8px 14px",
-                backgroundColor: "#f1f5f9",
-                color: "#475569",
+                backgroundColor: "#e2e8f0",
+                color: "#1e293b",
                 border: "1px solid #cbd5e1",
                 borderRadius: 6,
                 cursor: "pointer",
                 fontSize: 13,
               }}
+              aria-label="Rechazar todas las calificaciones pendientes (amarillas y rojas)" // ACCESIBILIDAD
             >
               ❌ Rechazar Pendientes
             </button>
           </div>
         </div>
       )}
-      {/* CONTROLES DOCENTE */}
+      {/* CONTROLES DOCENTE - 🎯 FIX: #f5f5f5 → #e5e5e5, #cbd5e1 → #94a3b8 */}
       <div style={{
         marginTop: 20,
         padding: 16,
-        backgroundColor: "#f5f5f5",
+        backgroundColor: "#e5e5e5",
         borderRadius: 8,
         display: "flex",
         gap: 12,
@@ -1043,11 +1066,12 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
           onClick={() => setStage2Phase(gameId, "hint")}
           style={{
             padding: "8px 12px",
-            backgroundColor: "#cbd5e1",
+            backgroundColor: "#94a3b8",
             border: "none",
             borderRadius: 4,
             cursor: "pointer",
           }}
+          aria-label="Cambiar a fase de pista (hint)" // ACCESIBILIDAD
         >
           Hint
         </button>
@@ -1055,11 +1079,12 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
           onClick={() => setStage2Phase(gameId, "designated")}
           style={{
             padding: "8px 12px",
-            backgroundColor: "#cbd5e1",
+            backgroundColor: "#94a3b8",
             border: "none",
             borderRadius: 4,
             cursor: "pointer",
           }}
+          aria-label="Designar representantes de los equipos" // ACCESIBILIDAD
         >
           Designar
         </button>
@@ -1067,11 +1092,12 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
           onClick={() => setStage2Phase(gameId, "rating")}
           style={{
             padding: "8px 12px",
-            backgroundColor: "#cbd5e1",
+            backgroundColor: "#94a3b8",
             border: "none",
             borderRadius: 4,
             cursor: "pointer",
           }}
+          aria-label="Iniciar fase de calificación" // ACCESIBILIDAD
         >
           Rating
         </button>
@@ -1079,11 +1105,12 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
           onClick={() => setStage2Phase(gameId, "rating_reveal")}
           style={{
             padding: "8px 12px",
-            backgroundColor: "#cbd5e1",
+            backgroundColor: "#94a3b8",
             border: "none",
             borderRadius: 4,
             cursor: "pointer",
           }}
+          aria-label="Revelar calificaciones" // ACCESIBILIDAD
         >
           Reveal
         </button>
@@ -1091,11 +1118,12 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
           onClick={() => setStage2Phase(gameId, "justification")}
           style={{
             padding: "8px 12px",
-            backgroundColor: "#cbd5e1",
+            backgroundColor: "#94a3b8",
             border: "none",
             borderRadius: 4,
             cursor: "pointer",
           }}
+          aria-label="Iniciar fase de justificación" // ACCESIBILIDAD
         >
           Justify
         </button>
@@ -1103,11 +1131,12 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
           onClick={() => setStage2Phase(gameId, "validation_ratings")}
           style={{
             padding: "8px 12px",
-            backgroundColor: "#cbd5e1",
+            backgroundColor: "#94a3b8",
             border: "none",
             borderRadius: 4,
             cursor: "pointer",
           }}
+          aria-label="Validar calificaciones" // ACCESIBILIDAD
         >
           Validate
         </button>
@@ -1115,11 +1144,12 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
           onClick={() => setStage2Phase(gameId, "results")}
           style={{
             padding: "8px 12px",
-            backgroundColor: "#cbd5e1",
+            backgroundColor: "#94a3b8",
             border: "none",
             borderRadius: 4,
             cursor: "pointer",
           }}
+          aria-label="Ver resultados de la ronda" // ACCESIBILIDAD
         >
           Results
         </button>
@@ -1162,7 +1192,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
             );
           })()}
 
-          {/* Puntos de la ronda */}
+          {/* Puntos de la ronda - 🎯 FIX: #22c55e → #166534, #94a3b8 → #475569 */}
           <div style={{
             backgroundColor: "white",
             borderRadius: 16,
@@ -1189,7 +1219,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                 <span style={{
                   fontWeight: 800,
                   fontSize: 20,
-                  color: r.roundPoints > 0 ? "#22c55e" : "#94a3b8"
+                  color: r.roundPoints > 0 ? "#166534" : "#475569"
                 }}>
                   +{r.roundPoints}
                 </span>
@@ -1230,6 +1260,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                   width: "100%",
                   justifyContent: "center"
                 }}
+                aria-label={`Avanzar a la siguiente ronda (ronda ${currentRoundNum + 2} de ${stage2Questions.length})`} // ACCESIBILIDAD
               >
                 ➡️ SIGUIENTE RONDA ({currentRoundNum + 2} de {stage2Questions.length})
               </button>
@@ -1257,6 +1288,7 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
                   width: "100%",
                   justifyContent: "center"
                 }}
+                aria-label="Finalizar el juego y mostrar podio final" // ACCESIBILIDAD
               >
                 🏆 FINALIZAR JUEGO
               </button>
@@ -1265,9 +1297,9 @@ export function ClassroomViewImproved({ gameId }: ClassroomViewProps) {
         </div>
       )}
 
-      {/* Representantes info */}
+      {/* Representantes info - 🎯 FIX: #64748b → #334155 */}
       {responding && safePhase !== "results" && (
-        <div style={{ marginTop: 20, fontSize: 14, color: "#64748b" }}>
+        <div style={{ marginTop: 20, fontSize: 14, color: "#334155" }}>
           👤 Representantes: {responding.players?.map(p => p.name).join(", ") || "No asignados"}
         </div>
       )}

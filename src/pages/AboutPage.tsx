@@ -1,5 +1,6 @@
 // src/pages/AboutPage.tsx
 // Página de información sobre el proyecto - Actualizada
+// ✅ NUEVO: Botón para acceder a la guía teórica completa (TeacherGuide)
 
 import { useNavigate } from "react-router-dom";
 import { useGameMode } from "../contexts/GameModeContext";
@@ -15,6 +16,10 @@ export function AboutPage() {
     title: "Acerca del Proyecto",
     subtitle: "El Juego del Semáforo / The Coopetition Game",
     intro: "Un juego educativo que integra colaboración y competencia para fortalecer la comprensión, la motivación y el rendimiento colectivo.",
+    
+    // ✅ NUEVO: Botón de teoría
+    theoryButtonText: "📚 Ver guía teórica completa",
+    theoryButtonDesc: "Accedé a la guía pedagógica con fundamentos teóricos, estrategias de evaluación y dispositivos opcionales.",
     
     pedagogyTitle: "Enfoque pedagógico",
     pedagogyDesc: "El Juego del Semáforo se inscribe en un enfoque educativo integral que articula evaluación formativa, aprendizaje entre pares y dinámicas lúdicas estructuradas.\n\nSu premisa central es que el aprendizaje mejora cuando se equilibran deliberadamente la colaboración interna y la competencia externa, generando condiciones de coopetición que incrementan la motivación sin perder profundidad cognitiva.\n\nEl juego no reemplaza la enseñanza ni el estudio previo, sino que funciona como un dispositivo pedagógico que organiza la comprensión, la autoevaluación y la interacción grupal de manera visible y significativa.",
@@ -54,11 +59,63 @@ export function AboutPage() {
     bookLinkEn: "Edición en inglés",
     
     contact: "Contacto",
+  } : language === 'pt' ? {
+    // PORTUGUÉS
+    title: "Sobre o Projeto",
+    subtitle: "O Jogo do Semáforo / The Coopetition Game",
+    intro: "Um jogo educativo que integra colaboração e competição para fortalecer a compreensão, a motivação e o desempenho coletivo.",
+    
+    // ✅ NOVO: Botão de teoria
+    theoryButtonText: "📚 Ver guia teórica completa",
+    theoryButtonDesc: "Acesse o guia pedagógico com fundamentos teóricos, estratégias de avaliação e dispositivos opcionais.",
+    
+    pedagogyTitle: "Abordagem pedagógica",
+    pedagogyDesc: "O Jogo do Semáforo se inscreve em uma abordagem educacional integral que articula avaliação formativa, aprendizagem entre pares e dinâmicas lúdicas estruturadas.\n\nSua premissa central é que a aprendizagem melhora quando se equilibram deliberadamente a colaboração interna e a competição externa, gerando condições de coopetição que aumentam a motivação sem perder profundidade cognitiva.\n\nO jogo não substitui o ensino nem o estudo prévio, mas funciona como um dispositivo pedagógico que organiza a compreensão, a autoavaliação e a interação grupal de maneira visível e significativa.",
+    
+    howItWorks: "Como funciona o jogo?",
+    stages: [
+      { 
+        title: "Stage 0 – Preparação (antes do jogo)", 
+        desc: "Antes de jogar, os estudantes trabalham com os conteúdos propostos pelo professor através de aulas, leituras, atividades ou outros materiais didáticos.\n\nDe uma perspectiva pedagógica, o processo mental de antecipar que esses conteúdos serão utilizados depois em um jogo competitivo entre equipes cumpre um papel chave.\n\nEssa expectativa aumenta a motivação, mas também melhora a compreensão, já que os estudantes tendem a organizar melhor as ideias, identificar o que realmente entendem e detectar lacunas conceituais antes de jogar." 
+      },
+      { 
+        title: "Stage 1 – Compreensão individual com colaboração interna", 
+        desc: "Os estudantes respondem questões de maneira individual, mas sempre como parte de uma equipe estável.\n\nAs respostas são avaliadas através de um sistema de cores tipo semáforo (verde, amarelo, vermelho), que permite visualizar o nível de compreensão sem uma lógica punitiva.\n\nNesta etapa não há competição entre equipes. Cada equipe utiliza o jogo para saber se está realmente preparada para competir. Quando aparecem dificuldades, o próprio dispositivo habilita instâncias para ajustar a compreensão, ajudar-se entre pares e preparar-se melhor.\n\nDesta forma, o Stage 1 funciona como um espaço diagnóstico e formativo, onde a colaboração interna é uma condição central da aprendizagem." 
+      },
+      { 
+        title: "Stage 2 – Competição entre equipes baseada na colaboração", 
+        desc: "As equipes competem entre si resolvendo desafios de maior complexidade cognitiva.\n\nEsta etapa se apoia no trabalho realizado durante o Stage 1 e coloca em jogo:\n• Argumentação e justificativa\n• Tomada de decisões coletivas\n• Representação da equipe\n• Avaliação entre pares\n\nO princípio que organiza esta etapa é claro: somente as equipes que colaboram eficazmente internamente podem competir com sucesso externamente." 
+      },
+    ],
+    
+    benefitsTitle: "Principais benefícios educacionais",
+    benefits: [
+      "Aumenta a participação ativa de todos os estudantes",
+      "Reduz a ansiedade associada às avaliações tradicionais",
+      "Torna visível a compreensão real, não apenas o resultado final",
+      "Favorece a aprendizagem entre pares",
+      "Integra motivação, avaliação e conteúdo em um mesmo dispositivo",
+      "Permite ao professor observar processos de aprendizagem, não apenas respostas",
+    ],
+    
+    authorTitle: "Autor",
+    authorDesc: "Pablo Parente, professor e assessor pedagógico com mais de 30 anos de experiência em educação secundária e técnica.\n\nO Jogo do Semáforo surge de um trabalho sustentado em salas de aula reais, projetos institucionais e dispositivos de acompanhamento de trajetórias educacionais, integrando pedagogia, avaliação e dinâmicas grupais.",
+    
+    bookTitle: "Livro: A Era da Integração",
+    bookDesc: "O Jogo do Semáforo faz parte de uma pesquisa mais ampla que explora como os princípios de integração —entre competição e colaboração, indivíduo e grupo— podem ser aplicados à educação, às organizações e à sociedade.",
+    bookLinkEs: "Edição em espanhol",
+    bookLinkEn: "Edição em inglês",
+    
+    contact: "Contato",
   } : {
     // ENGLISH
     title: "About the Project",
     subtitle: "Traffic Light Game / The Coopetition Game",
     intro: "An educational game that integrates collaboration and competition to strengthen understanding, motivation, and collective performance.",
+    
+    // ✅ NEW: Theory button
+    theoryButtonText: "📚 View complete theory guide",
+    theoryButtonDesc: "Access the pedagogical guide with theoretical foundations, assessment strategies, and optional devices.",
     
     pedagogyTitle: "Pedagogical Approach",
     pedagogyDesc: "The Traffic Light Game is grounded in an integral educational approach that combines formative assessment, peer learning, and structured game-based dynamics.\n\nIts core premise is that learning improves when internal collaboration and external competition are deliberately balanced, creating conditions of coopetition that enhance motivation while preserving cognitive depth.\n\nRather than replacing teaching or prior study, the game functions as a pedagogical device that organizes understanding, self-assessment, and group interaction in a visible and meaningful way.",
@@ -173,6 +230,48 @@ export function AboutPage() {
           }}>
             {content.intro}
           </p>
+        </div>
+
+        {/* ✅ NUEVO: Botón para ver teoría completa */}
+        <div style={{
+          backgroundColor: "#faf5ff",
+          borderRadius: 16,
+          padding: 24,
+          marginBottom: 32,
+          border: "2px solid #c4b5fd",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          textAlign: "center",
+          gap: 12,
+        }}>
+          <p style={{
+            margin: 0,
+            fontSize: 14,
+            color: "#7c3aed",
+            maxWidth: 500,
+          }}>
+            {content.theoryButtonDesc}
+          </p>
+          <button
+            onClick={() => navigate("/teacher-guide")}
+            style={{
+              padding: "14px 28px",
+              fontSize: 16,
+              fontWeight: 700,
+              borderRadius: 12,
+              border: "none",
+              background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
+              color: "white",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              boxShadow: "0 4px 15px rgba(139, 92, 246, 0.3)",
+            }}
+          >
+            {content.theoryButtonText}
+          </button>
         </div>
 
         {/* Pedagogical Approach */}

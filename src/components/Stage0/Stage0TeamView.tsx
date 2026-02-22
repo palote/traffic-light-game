@@ -2,7 +2,7 @@
 // Vista del equipo en Stage 0 - Material + Propuestas de consignas
 
 import { useState, useEffect } from 'react';
-import type { Game, Team, Stage0Proposal, ProposalType } from '../../types/game';
+import type { Game, Team, ProposalType } from '../../types/game';
 import { 
   submitProposal, 
   deleteProposal,
@@ -11,6 +11,7 @@ import {
   getProposalTypeLabel,
   getProposalTypeDescription,
 } from '../../services/stage0Service';
+import { useI18n } from '../../i18n'; // ✅ Hook global
 
 interface Stage0TeamViewProps {
   game: Game;
@@ -27,15 +28,16 @@ const PROPOSAL_TYPES: ProposalType[] = [
 ];
 
 export function Stage0TeamView({ game, team }: Stage0TeamViewProps) {
+  const { language } = useI18n(); // ✅ Idioma desde el hook
+
   const config = game.config;
   const stage0Config = config.stage0Config;
   const stage0State = game.stage0;
   const material = stage0Config?.material;
-  const language = config.language || 'es';
   const maxProposals = stage0Config?.maxProposalsPerTeam || 5;
   const proposalsEnabled = stage0Config?.proposalsEnabled ?? false;
 
-  // Get team's proposals from game state
+  // Propuestas del equipo
   const teamProposals = stage0State?.proposals 
     ? Object.values(stage0State.proposals).filter(p => p.teamId === team.id)
     : [];
@@ -43,7 +45,7 @@ export function Stage0TeamView({ game, team }: Stage0TeamViewProps) {
   const isTeamReady = stage0State?.readyTeams?.includes(team.id) ?? false;
   const currentPhase = stage0State?.phase || 'reading';
 
-  // Form state
+  // Estado del formulario
   const [showForm, setShowForm] = useState(false);
   const [proposalType, setProposalType] = useState<ProposalType>('comprehension');
   const [questionText, setQuestionText] = useState('');
@@ -53,120 +55,163 @@ export function Stage0TeamView({ game, team }: Stage0TeamViewProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Timer state
+  // Temporizador
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
 
-  const t = language === 'es'
-    ? {
-        title: 'Etapa 0: Preparación',
-        subtitle: 'Lean el material antes de comenzar el juego',
-        teamName: 'Equipo:',
-        materialTitle: 'Material de estudio',
-        openLink: 'Abrir material',
-        waiting: 'Esperando que el docente inicie el juego...',
-        noMaterial: 'El docente no ha cargado material de preparación.',
-        readCarefully: 'Lean con atención, este contenido les ayudará en el juego.',
-        
-        // Proposals
-        proposalsTitle: 'Proponer Consignas',
-        proposalsSubtitle: 'Propongan consignas basadas en el material',
-        proposalCount: 'propuestas',
-        addProposal: 'Agregar consigna',
-        proposalType: 'Tipo de consigna',
-        questionText: 'Tu consigna',
-        questionPlaceholder: 'Escribí la consigna que proponés...',
-        hintLabel: 'Pista para responder (opcional)',
-        hintPlaceholder: 'Una pista que ayude a pensar la respuesta...',
-        relatedTopicLabel: '¿Con qué tema se relaciona?',
-        relatedTopicPlaceholder: 'Ej: Ciclo del agua, Fracciones...',
-        submittedByLabel: '¿Quién la propone? (opcional)',
-        submittedByPlaceholder: 'Nombre del integrante...',
-        submit: 'Enviar consigna',
-        cancel: 'Cancelar',
-        delete: 'Eliminar',
-        
-        // Status
-        pending: 'Pendiente',
-        approved: 'Aprobada',
-        rejected: 'Rechazada',
-        edited: 'Editada',
-        
-        // Ready
-        markReady: 'Terminamos de proponer',
-        unmarkReady: 'Queremos seguir proponiendo',
-        teamReady: '¡Equipo listo!',
-        waitingReview: 'Esperando que el docente revise las propuestas...',
-        
-        // Timer
-        timeRemaining: 'Tiempo restante',
-        
-        // Results phase
-        resultsTitle: 'Resultados Stage 0',
-        approvedCount: 'consignas aprobadas',
-        bonusPoints: 'puntos bonus',
-        waitingStart: 'Esperando que el docente inicie Stage 1...',
-        
-        // Errors
-        errorEmpty: 'Escribí una consigna',
-        errorRelated: 'Indicá con qué tema se relaciona',
-        maxReached: 'Ya enviaron el máximo de consignas',
-      }
-    : {
-        title: 'Stage 0: Preparation',
-        subtitle: 'Read the material before starting the game',
-        teamName: 'Team:',
-        materialTitle: 'Study material',
-        openLink: 'Open material',
-        waiting: 'Waiting for the teacher to start the game...',
-        noMaterial: 'The teacher has not uploaded preparation material.',
-        readCarefully: 'Read carefully, this content will help you in the game.',
-        
-        // Proposals
-        proposalsTitle: 'Propose Prompts',
-        proposalsSubtitle: 'Propose prompts based on the material',
-        proposalCount: 'proposals',
-        addProposal: 'Add prompt',
-        proposalType: 'Prompt type',
-        questionText: 'Your prompt',
-        questionPlaceholder: 'Write your proposed prompt...',
-        hintLabel: 'Hint to answer (optional)',
-        hintPlaceholder: 'A hint to help think about the answer...',
-        relatedTopicLabel: 'What topic does it relate to?',
-        relatedTopicPlaceholder: 'E.g.: Water cycle, Fractions...',
-        submittedByLabel: 'Who proposes it? (optional)',
-        submittedByPlaceholder: 'Team member name...',
-        submit: 'Submit prompt',
-        cancel: 'Cancel',
-        delete: 'Delete',
-        
-        // Status
-        pending: 'Pending',
-        approved: 'Approved',
-        rejected: 'Rejected',
-        edited: 'Edited',
-        
-        // Ready
-        markReady: 'We finished proposing',
-        unmarkReady: 'We want to keep proposing',
-        teamReady: 'Team ready!',
-        waitingReview: 'Waiting for the teacher to review proposals...',
-        
-        // Timer
-        timeRemaining: 'Time remaining',
-        
-        // Results phase
-        resultsTitle: 'Stage 0 Results',
-        approvedCount: 'approved prompts',
-        bonusPoints: 'bonus points',
-        waitingStart: 'Waiting for the teacher to start Stage 1...',
-        
-        // Errors
-        errorEmpty: 'Write a prompt',
-        errorRelated: 'Indicate what topic it relates to',
-        maxReached: 'Maximum proposals reached',
-      };
+  // 📦 Textos traducidos (es, en, pt)
+  const texts = {
+    es: {
+      title: 'Etapa 0: Preparación',
+      subtitle: 'Lean el material antes de comenzar el juego',
+      teamName: 'Equipo:',
+      materialTitle: 'Material de estudio',
+      openLink: 'Abrir material',
+      waiting: 'Esperando que el docente inicie el juego...',
+      noMaterial: 'El docente no ha cargado material de preparación.',
+      readCarefully: 'Lean con atención, este contenido les ayudará en el juego.',
+      
+      proposalsTitle: 'Proponer Consignas',
+      proposalsSubtitle: 'Propongan consignas basadas en el material',
+      proposalCount: 'propuestas',
+      addProposal: 'Agregar consigna',
+      proposalType: 'Tipo de consigna',
+      questionText: 'Tu consigna',
+      questionPlaceholder: 'Escribí la consigna que proponés...',
+      hintLabel: 'Pista para responder (opcional)',
+      hintPlaceholder: 'Una pista que ayude a pensar la respuesta...',
+      relatedTopicLabel: '¿Con qué tema se relaciona?',
+      relatedTopicPlaceholder: 'Ej: Ciclo del agua, Fracciones...',
+      submittedByLabel: '¿Quién la propone? (opcional)',
+      submittedByPlaceholder: 'Nombre del integrante...',
+      submit: 'Enviar consigna',
+      cancel: 'Cancelar',
+      delete: 'Eliminar',
+      
+      pending: 'Pendiente',
+      approved: 'Aprobada',
+      rejected: 'Rechazada',
+      edited: 'Editada',
+      
+      markReady: 'Terminamos de proponer',
+      unmarkReady: 'Queremos seguir proponiendo',
+      teamReady: '¡Equipo listo!',
+      waitingReview: 'Esperando que el docente revise las propuestas...',
+      
+      timeRemaining: 'Tiempo restante',
+      
+      resultsTitle: 'Resultados Stage 0',
+      approvedCount: 'consignas aprobadas',
+      bonusPoints: 'puntos bonus',
+      waitingStart: 'Esperando que el docente inicie Stage 1...',
+      
+      errorEmpty: 'Escribí una consigna',
+      errorRelated: 'Indicá con qué tema se relaciona',
+      maxReached: 'Ya enviaron el máximo de consignas',
+      errorSubmit: 'Error al enviar',
+    },
+    en: {
+      title: 'Stage 0: Preparation',
+      subtitle: 'Read the material before starting the game',
+      teamName: 'Team:',
+      materialTitle: 'Study material',
+      openLink: 'Open material',
+      waiting: 'Waiting for the teacher to start the game...',
+      noMaterial: 'The teacher has not uploaded preparation material.',
+      readCarefully: 'Read carefully, this content will help you in the game.',
+      
+      proposalsTitle: 'Propose Prompts',
+      proposalsSubtitle: 'Propose prompts based on the material',
+      proposalCount: 'proposals',
+      addProposal: 'Add prompt',
+      proposalType: 'Prompt type',
+      questionText: 'Your prompt',
+      questionPlaceholder: 'Write your proposed prompt...',
+      hintLabel: 'Hint to answer (optional)',
+      hintPlaceholder: 'A hint to help think about the answer...',
+      relatedTopicLabel: 'What topic does it relate to?',
+      relatedTopicPlaceholder: 'E.g.: Water cycle, Fractions...',
+      submittedByLabel: 'Who proposes it? (optional)',
+      submittedByPlaceholder: 'Team member name...',
+      submit: 'Submit prompt',
+      cancel: 'Cancel',
+      delete: 'Delete',
+      
+      pending: 'Pending',
+      approved: 'Approved',
+      rejected: 'Rejected',
+      edited: 'Edited',
+      
+      markReady: 'We finished proposing',
+      unmarkReady: 'We want to keep proposing',
+      teamReady: 'Team ready!',
+      waitingReview: 'Waiting for the teacher to review proposals...',
+      
+      timeRemaining: 'Time remaining',
+      
+      resultsTitle: 'Stage 0 Results',
+      approvedCount: 'approved prompts',
+      bonusPoints: 'bonus points',
+      waitingStart: 'Waiting for the teacher to start Stage 1...',
+      
+      errorEmpty: 'Write a prompt',
+      errorRelated: 'Indicate what topic it relates to',
+      maxReached: 'Maximum proposals reached',
+      errorSubmit: 'Error submitting',
+    },
+    pt: {
+      title: 'Etapa 0: Preparação',
+      subtitle: 'Leiam o material antes de começar o jogo',
+      teamName: 'Equipe:',
+      materialTitle: 'Material de estudo',
+      openLink: 'Abrir material',
+      waiting: 'Aguardando o professor iniciar o jogo...',
+      noMaterial: 'O professor não carregou material de preparação.',
+      readCarefully: 'Leiam com atenção, este conteúdo ajudará no jogo.',
+      
+      proposalsTitle: 'Propor Tarefas',
+      proposalsSubtitle: 'Proponham tarefas baseadas no material',
+      proposalCount: 'propostas',
+      addProposal: 'Adicionar tarefa',
+      proposalType: 'Tipo de tarefa',
+      questionText: 'Sua tarefa',
+      questionPlaceholder: 'Escreva a tarefa que você propõe...',
+      hintLabel: 'Dica para responder (opcional)',
+      hintPlaceholder: 'Uma dica para ajudar a pensar na resposta...',
+      relatedTopicLabel: 'Com qual tema se relaciona?',
+      relatedTopicPlaceholder: 'Ex: Ciclo da água, Frações...',
+      submittedByLabel: 'Quem propõe? (opcional)',
+      submittedByPlaceholder: 'Nome do integrante...',
+      submit: 'Enviar tarefa',
+      cancel: 'Cancelar',
+      delete: 'Excluir',
+      
+      pending: 'Pendente',
+      approved: 'Aprovada',
+      rejected: 'Rejeitada',
+      edited: 'Editada',
+      
+      markReady: 'Terminamos de propor',
+      unmarkReady: 'Queremos continuar propondo',
+      teamReady: 'Equipe pronta!',
+      waitingReview: 'Aguardando o professor revisar as propostas...',
+      
+      timeRemaining: 'Tempo restante',
+      
+      resultsTitle: 'Resultados Etapa 0',
+      approvedCount: 'tarefas aprovadas',
+      bonusPoints: 'pontos bônus',
+      waitingStart: 'Aguardando o professor iniciar a Etapa 1...',
+      
+      errorEmpty: 'Escreva uma tarefa',
+      errorRelated: 'Indique com qual tema se relaciona',
+      maxReached: 'Máximo de propostas atingido',
+      errorSubmit: 'Erro ao enviar',
+    },
+  };
 
-  // Timer effect
+  const t = texts[language] || texts.es;
+
+  // Efecto del temporizador
   useEffect(() => {
     if (!stage0Config?.timerMinutes || !stage0State?.timerStartedAt) {
       setTimeRemaining(null);
@@ -185,13 +230,13 @@ export function Stage0TeamView({ game, team }: Stage0TeamViewProps) {
     return () => clearInterval(interval);
   }, [stage0Config?.timerMinutes, stage0State?.timerStartedAt]);
 
-  // Colors based on game mode
+  // Colores según modo de juego
   const isCoopetition = config.gameMode === 'coopetition';
   const primaryColor = isCoopetition ? '#6366f1' : '#22c55e';
   const bgColor = isCoopetition ? '#eef2ff' : '#f0fdf4';
   const icon = isCoopetition ? '🎯' : '🚦';
 
-  // Handle submit
+  // Enviar propuesta
   const handleSubmit = async () => {
     setError(null);
 
@@ -222,7 +267,6 @@ export function Stage0TeamView({ game, team }: Stage0TeamViewProps) {
         submittedBy: submittedBy.trim() || undefined,
       });
 
-      // Reset form
       setQuestionText('');
       setHint('');
       setRelatedTopic('');
@@ -230,13 +274,13 @@ export function Stage0TeamView({ game, team }: Stage0TeamViewProps) {
       setShowForm(false);
     } catch (err) {
       console.error('Error submitting proposal:', err);
-      setError('Error al enviar');
+      setError(t.errorSubmit);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Handle delete
+  // Eliminar propuesta
   const handleDelete = async (proposalId: string) => {
     try {
       await deleteProposal(game.id, proposalId);
@@ -245,7 +289,7 @@ export function Stage0TeamView({ game, team }: Stage0TeamViewProps) {
     }
   };
 
-  // Handle ready toggle
+  // Marcar/desmarcar listo
   const handleReadyToggle = async () => {
     try {
       if (isTeamReady) {
@@ -258,7 +302,7 @@ export function Stage0TeamView({ game, team }: Stage0TeamViewProps) {
     }
   };
 
-  // Get status badge
+  // Badge de estado
   const getStatusBadge = (status: string) => {
     const styles: Record<string, { bg: string; color: string; label: string }> = {
       pending: { bg: '#fef3c7', color: '#92400e', label: t.pending },
@@ -281,18 +325,18 @@ export function Stage0TeamView({ game, team }: Stage0TeamViewProps) {
     );
   };
 
-  // Format time
+  // Formato de tiempo
   const formatTime = (ms: number) => {
     const minutes = Math.floor(ms / 60000);
     const seconds = Math.floor((ms % 60000) / 1000);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Calculate team results
+  // Resultados del equipo
   const approvedProposals = teamProposals.filter(p => p.status === 'approved' || p.status === 'edited');
   const totalBonus = approvedProposals.reduce((sum, p) => sum + (p.bonusPoints || 0), 0);
 
-  // RESULTS PHASE
+  // FASE DE RESULTADOS
   if (currentPhase === 'results') {
     return (
       <div style={{
@@ -308,12 +352,7 @@ export function Stage0TeamView({ game, team }: Stage0TeamViewProps) {
           {t.resultsTitle}
         </h1>
         
-        <div style={{
-          display: 'flex',
-          gap: 24,
-          marginTop: 32,
-          marginBottom: 32,
-        }}>
+        <div style={{ display: 'flex', gap: 24, marginTop: 32, marginBottom: 32 }}>
           <div style={{
             padding: '24px 32px',
             backgroundColor: 'white',
@@ -372,6 +411,7 @@ export function Stage0TeamView({ game, team }: Stage0TeamViewProps) {
     );
   }
 
+  // VISTA PRINCIPAL
   return (
     <div style={{
       minHeight: '100vh',

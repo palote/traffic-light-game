@@ -4,6 +4,9 @@
 // ✅ NUEVO: Tarjeta de estadísticas del docente
 // ✅ NUEVO: Botones para juegos finalizados y conteo de autoevaluaciones
 // ✅ MODIFICACIÓN: Agregado botón "Ir al Podio" para juegos finalizados sin autoevaluaciones
+// ✅ FIX CONTRASTE WCAG: Ajustados colores de números en tarjetas amarilla y morada
+// ✅ NUEVO: Ícono 📚 en header para acceso rápido a la guía teórica
+// ✅ CORREGIDO: Textos hardcodeados reemplazados por traducciones
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -65,6 +68,7 @@ function TeacherStatsCard({ stats, loading }: { stats: TeacherStats | null; load
       games: "Juegos",
       created: "creados",
       completed: "completados",
+      loading: "⏳ Cargando estadísticas...",
     },
     en: {
       title: "Your activity",
@@ -75,6 +79,7 @@ function TeacherStatsCard({ stats, loading }: { stats: TeacherStats | null; load
       games: "Games",
       created: "created",
       completed: "completed",
+      loading: "⏳ Loading statistics...",
     },
     pt: {
       title: "Sua atividade",
@@ -85,6 +90,7 @@ function TeacherStatsCard({ stats, loading }: { stats: TeacherStats | null; load
       games: "Jogos",
       created: "criados",
       completed: "completados",
+      loading: "⏳ Carregando estatísticas...",
     },
   };
 
@@ -100,10 +106,10 @@ function TeacherStatsCard({ stats, loading }: { stats: TeacherStats | null; load
           boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
           marginBottom: 24,
           textAlign: "center",
-          color: "#64748b",
+          color: "#1e40af",
         }}
       >
-        ⏳ Cargando estadísticas...
+        {t.loading}
       </div>
     );
   }
@@ -145,15 +151,15 @@ function TeacherStatsCard({ stats, loading }: { stats: TeacherStats | null; load
           style={{
             padding: 16,
             borderRadius: 12,
-            backgroundColor: "#eff6ff",
+            backgroundColor: "#dbeafe",
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>⏱️ {t.time}</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: "#3b82f6" }}>
+          <div style={{ fontSize: 12, color: "#1e40af", marginBottom: 4 }}>⏱️ {t.time}</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#1e40af" }}>
             {formatDuration(stats.monthDurationSec)}
           </div>
-          <div style={{ fontSize: 11, color: "#64748b" }}>{t.thisMonth}</div>
+          <div style={{ fontSize: 11, color: "#1e40af" }}>{t.thisMonth}</div>
         </div>
 
         {/* Sesiones este mes */}
@@ -161,13 +167,13 @@ function TeacherStatsCard({ stats, loading }: { stats: TeacherStats | null; load
           style={{
             padding: 16,
             borderRadius: 12,
-            backgroundColor: "#f0fdf4",
+            backgroundColor: "#dcfce7",
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>🔐 {t.sessions}</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: "#22c55e" }}>{stats.monthSessions}</div>
-          <div style={{ fontSize: 11, color: "#64748b" }}>{t.thisMonth}</div>
+          <div style={{ fontSize: 12, color: "#1e40af", marginBottom: 4 }}>🔐 {t.sessions}</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#166534" }}>{stats.monthSessions}</div>
+          <div style={{ fontSize: 11, color: "#1e40af" }}>{t.thisMonth}</div>
         </div>
 
         {/* Juegos creados */}
@@ -175,13 +181,13 @@ function TeacherStatsCard({ stats, loading }: { stats: TeacherStats | null; load
           style={{
             padding: 16,
             borderRadius: 12,
-            backgroundColor: "#fef3c7",
+            backgroundColor: "#fde68a",
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>🎮 {t.games}</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: "#f59e0b" }}>{stats.gamesCreated}</div>
-          <div style={{ fontSize: 11, color: "#64748b" }}>{t.created}</div>
+          <div style={{ fontSize: 12, color: "#1e40af", marginBottom: 4 }}>🎮 {t.games}</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#b45309" }}>{stats.gamesCreated}</div>
+          <div style={{ fontSize: 11, color: "#1e40af" }}>{t.created}</div>
         </div>
 
         {/* Juegos completados */}
@@ -189,13 +195,13 @@ function TeacherStatsCard({ stats, loading }: { stats: TeacherStats | null; load
           style={{
             padding: 16,
             borderRadius: 12,
-            backgroundColor: "#ede9fe",
+            backgroundColor: "#ddd6fe",
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>✅ {t.games}</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: "#8b5cf6" }}>{stats.gamesCompleted}</div>
-          <div style={{ fontSize: 11, color: "#64748b" }}>{t.completed}</div>
+          <div style={{ fontSize: 12, color: "#1e40af", marginBottom: 4 }}>✅ {t.games}</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#5b21b6" }}>{stats.gamesCompleted}</div>
+          <div style={{ fontSize: 11, color: "#1e40af" }}>{t.completed}</div>
         </div>
       </div>
 
@@ -209,7 +215,7 @@ function TeacherStatsCard({ stats, loading }: { stats: TeacherStats | null; load
           justifyContent: "center",
           gap: 24,
           fontSize: 12,
-          color: "#64748b",
+          color: "#1e40af",
         }}
       >
         <span>
@@ -262,7 +268,7 @@ function EvaluationsSection({
         }}
       >
         <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#1e293b" }}>
-          📊 {t.dashboard.evaluationsTitle || "Evaluaciones para revisar"}
+          📊 {t.dashboard.evaluationsTitle}
         </h3>
       </div>
 
@@ -293,7 +299,7 @@ function EvaluationsSection({
             <div>
               <div style={{ fontWeight: 600, color: "#1e293b" }}>{game.gameName}</div>
               {game.subject && (
-                <div style={{ fontSize: 12, color: "#64748b" }}>{game.subject}</div>
+                <div style={{ fontSize: 12, color: "#1e40af" }}>{game.subject}</div>
               )}
             </div>
 
@@ -313,7 +319,7 @@ function EvaluationsSection({
               >
                 📝 {game.evalCount}
               </div>
-              <span style={{ color: "#94a3b8" }}>→</span>
+              <span style={{ color: "#64748b" }}>→</span>
             </div>
           </div>
         ))}
@@ -321,7 +327,7 @@ function EvaluationsSection({
 
       {gamesWithEvaluations.length > 5 && (
         <div style={{ textAlign: "center", marginTop: 12 }}>
-          <span style={{ fontSize: 13, color: "#64748b" }}>
+          <span style={{ fontSize: 13, color: "#1e40af" }}>
             +{gamesWithEvaluations.length - 5} {t.dashboard.moreGames || "juegos más"}
           </span>
         </div>
@@ -407,7 +413,7 @@ function ModeSelectorModal({ isOpen, onClose, onSelect, currentMode }: ModeSelec
           style={{
             margin: "0 0 24px 0",
             fontSize: 14,
-            color: "#64748b",
+            color: "#1e40af",
             textAlign: "center",
           }}
         >
@@ -483,7 +489,7 @@ function ModeSelectorModal({ isOpen, onClose, onSelect, currentMode }: ModeSelec
                 <div
                   style={{
                     fontSize: 13,
-                    color: "#64748b",
+                    color: "#1e40af",
                     lineHeight: 1.4,
                   }}
                 >
@@ -518,7 +524,7 @@ function ModeSelectorModal({ isOpen, onClose, onSelect, currentMode }: ModeSelec
             borderRadius: 12,
             border: "2px solid #e2e8f0",
             backgroundColor: "white",
-            color: "#64748b",
+            color: "#1e40af",
             cursor: "pointer",
           }}
         >
@@ -537,7 +543,7 @@ interface GameCardProps {
   game: ActiveGame;
   onContinue: (game: ActiveGame) => void;
   onDelete: (game: ActiveGame) => void;
-  selfEvalCount?: number;  // ✅ AGREGAR ESTA LÍNEA
+  selfEvalCount?: number;
 }
 
 function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardProps) {
@@ -552,7 +558,7 @@ function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardPro
     if (status === "finished" || status === "ended" || status === "game_complete") {
       return {
         label: t.dashboard.status.finished,
-        color: "#64748b",
+        color: "#1e40af",
         bg: "#f1f5f9",
         icon: "✅",
       };
@@ -586,7 +592,7 @@ function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardPro
     if (stage === 1 || status === "stage1") {
       return {
         label: t.dashboard.status.stage1Playing,
-        color: "#22c55e",
+        color: "#166534",
         bg: "#dcfce7",
         icon: "🎮",
       };
@@ -595,7 +601,7 @@ function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardPro
     if (status === "transition") {
       return {
         label: t.dashboard.status.transitionStage2,
-        color: "#f59e0b",
+        color: "#b45309",
         bg: "#fef3c7",
         icon: "⏳",
       };
@@ -604,7 +610,7 @@ function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardPro
     if (stage === 2 || status === "stage2") {
       return {
         label: t.dashboard.status.stage2Playing,
-        color: "#3b82f6",
+        color: "#1e40af",
         bg: "#dbeafe",
         icon: "🏆",
       };
@@ -612,7 +618,7 @@ function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardPro
 
     return {
       label: t.dashboard.status.preparing,
-      color: "#64748b",
+      color: "#1e40af",
       bg: "#f1f5f9",
       icon: "⚙️",
     };
@@ -672,7 +678,7 @@ function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardPro
               style={{
                 margin: 0,
                 fontSize: 13,
-                color: "#64748b",
+                color: "#1e40af",
               }}
             >
               {game.subject}
@@ -704,7 +710,7 @@ function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardPro
           gap: 16,
           marginBottom: 16,
           fontSize: 13,
-          color: "#64748b",
+          color: "#1e40af",
           flexWrap: "wrap",
         }}
       >
@@ -817,7 +823,6 @@ function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardPro
               </button>
             )}
 
-            {/* ✅ MODIFICACIÓN: Botón Ir al Podio (si no hay autoevaluaciones) */}
             {selfEvalCount === 0 && (
               <button
                 onClick={() => navigate(`/stage2/classroom/${game.id}`)}
@@ -828,7 +833,7 @@ function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardPro
                   borderRadius: 8,
                   border: "2px solid #f59e0b",
                   backgroundColor: "#fffbeb",
-                  color: "#d97706",
+                  color: "#b45309",
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
@@ -837,7 +842,7 @@ function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardPro
                 }}
               >
                 <span>🏆</span>
-                {t.dashboard.goToPodium || "Ir al Podio"}
+                {t.dashboard.goToPodium}
               </button>
             )}
           </>
@@ -873,7 +878,7 @@ function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardPro
                 borderRadius: 8,
                 border: "1px solid #e2e8f0",
                 backgroundColor: "white",
-                color: "#64748b",
+                color: "#1e40af",
                 cursor: "pointer",
               }}
             >
@@ -890,7 +895,7 @@ function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardPro
               borderRadius: 8,
               border: "1px solid #fecaca",
               backgroundColor: "#fef2f2",
-              color: "#ef4444",
+              color: "#dc2626",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
@@ -914,23 +919,20 @@ function GameCard({ game, onContinue, onDelete, selfEvalCount = 0 }: GameCardPro
 export function DashboardPage() {
   const navigate = useNavigate();
   const { user, logout, isAdmin } = useAuth();
-  const { mode, setMode, getLocalizedTheme } = useGameMode(); // ✅ MODIFICADO
-  const { t, language } = useI18n(); // ✅ AGREGADO language
-  const theme = getLocalizedTheme(language); // ✅ NUEVO: obtener tema localizado
+  const { mode, setMode, getLocalizedTheme } = useGameMode();
+  const { t, language } = useI18n();
+  const theme = getLocalizedTheme(language);
 
   const [showModeSelector, setShowModeSelector] = useState(false);
 
   const [activeGames, setActiveGames] = useState<ActiveGame[]>([]);
   const [loadingGames, setLoadingGames] = useState(true);
 
-  // ✅ NUEVO: Estado para estadísticas del docente
   const [teacherStats, setTeacherStats] = useState<TeacherStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
 
-  // ✅ NUEVO: Estado para conteo de autoevaluaciones por juego
   const [selfEvalCounts, setSelfEvalCounts] = useState<Record<string, number>>({});
 
-  // ✅ NUEVO: Paso 1 - Agregar estado para juegos con evaluaciones
   const [gamesWithEvaluations, setGamesWithEvaluations] = useState<Array<{
     gameId: string;
     gameName: string;
@@ -987,7 +989,7 @@ export function DashboardPage() {
     return () => off(gamesRef);
   }, [user?.uid]);
 
-  // ✅ NUEVO: Cargar estadísticas del docente
+  // Cargar estadísticas del docente
   useEffect(() => {
     async function loadStats() {
       if (!user?.uid) {
@@ -996,14 +998,12 @@ export function DashboardPage() {
       }
 
       try {
-        // Cargar métricas del docente
         const metricsSnap = await get(ref(database, `metrics/teachers/${user.uid}`));
         const gamesSnap = await get(ref(database, "games"));
 
         const metricsData = metricsSnap.val();
         const gamesData = gamesSnap.val() || {};
 
-        // Calcular estadísticas de sesiones
         const sessions = metricsData?.sessions ? Object.values(metricsData.sessions) : [];
         const now = Date.now();
         const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
@@ -1026,7 +1026,6 @@ export function DashboardPage() {
           }
         }
 
-        // Calcular juegos creados y completados
         let gamesCreated = 0;
         let gamesCompleted = 0;
 
@@ -1059,7 +1058,7 @@ export function DashboardPage() {
     loadStats();
   }, [user?.uid]);
 
-  // ✅ NUEVO: Paso 2 - Modificar el efecto que carga autoevaluaciones
+  // Cargar autoevaluaciones - CORREGIDO: leer de games/${gameId}/selfEvaluations
   useEffect(() => {
     async function loadSelfEvalCounts() {
       const finishedGames = activeGames.filter(
@@ -1083,11 +1082,11 @@ export function DashboardPage() {
 
       for (const game of finishedGames) {
         try {
-          const snap = await get(ref(database, `selfEvaluations/${game.id}`));
+          // ✅ CORREGIDO: Leer de games/${gameId}/selfEvaluations
+          const snap = await get(ref(database, `games/${game.id}/selfEvaluations`));
           const count = snap.exists() ? Object.keys(snap.val()).length : 0;
           counts[game.id] = count;
 
-          // Agregar a la lista si tiene evaluaciones
           if (count > 0) {
             gamesWithEvals.push({
               gameId: game.id,
@@ -1102,7 +1101,6 @@ export function DashboardPage() {
         }
       }
 
-      // Ordenar por cantidad de evaluaciones (más primero)
       gamesWithEvals.sort((a, b) => b.evalCount - a.evalCount);
 
       setSelfEvalCounts(counts);
@@ -1186,7 +1184,6 @@ export function DashboardPage() {
     (g) => g.status === "finished" || g.status === "ended" || g.status === "game_complete"
   );
 
-  // ✅ MODIFICADO: usar theme.name en lugar de t.gameModes
   const appTitle = theme.name;
 
   return (
@@ -1220,8 +1217,8 @@ export function DashboardPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 32 }}>{theme.icon}</span>
               <div>
-                <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{theme.name}</h1> {/* ✅ MODIFICADO */}
-                <p style={{ margin: 0, fontSize: 12, opacity: 0.9 }}>{theme.tagline}</p> {/* ✅ MODIFICADO */}
+                <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{theme.name}</h1>
+                <p style={{ margin: 0, fontSize: 12, opacity: 0.9 }}>{theme.tagline}</p>
               </div>
             </div>
 
@@ -1246,6 +1243,27 @@ export function DashboardPage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {/* ✅ NUEVO: Botón acceso a teoría */}
+            <button
+              onClick={() => navigate("/teacher-guide")}
+              title={t.dashboard.theoryGuide}
+              style={{
+                padding: "8px 12px",
+                fontSize: 14,
+                fontWeight: 600,
+                borderRadius: 8,
+                border: "2px solid rgba(255,255,255,0.3)",
+                backgroundColor: "rgba(255,255,255,0.1)",
+                color: "white",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              📚
+            </button>
+
             <LanguageSelector compact />
 
             <span style={{ fontSize: 14, opacity: 0.9 }}>{user?.email}</span>
@@ -1264,7 +1282,7 @@ export function DashboardPage() {
                   cursor: "pointer",
                 }}
               >
-                ⚙️ Admin
+                ⚙️ {t.common.admin}
               </button>
             )}
 
@@ -1309,24 +1327,19 @@ export function DashboardPage() {
             style={{
               margin: 0,
               fontSize: 18,
-              color: "#64748b",
+              color: "#1e40af",
             }}
           >
             {t.dashboard.title}
           </p>
         </div>
 
-        {/* ✅ BANNERS DE REFERIDOS Y WEBINAR */}
         <DashboardBanners />
 
-        {/* ✅ NUEVO: Paso 4 - Renderizar la sección en el Dashboard */}
-        {/* Sección de Evaluaciones */}
         <EvaluationsSection gamesWithEvaluations={gamesWithEvaluations} t={t} />
 
-        {/* ✅ NUEVO: TARJETA DE ESTADÍSTICAS */}
         <TeacherStatsCard stats={teacherStats} loading={loadingStats} />
 
-        {/* Aquí comienzan las tarjetas de acción principales */}
         <div
           style={{
             display: "grid",
@@ -1391,7 +1404,7 @@ export function DashboardPage() {
                   style={{
                     margin: 0,
                     fontSize: 14,
-                    color: "#64748b",
+                    color: "#1e40af",
                     lineHeight: 1.5,
                   }}
                 >
@@ -1434,7 +1447,7 @@ export function DashboardPage() {
                   padding: "2px 8px",
                   borderRadius: 12,
                   backgroundColor: "#dcfce7",
-                  color: "#15803d",
+                  color: "#166534",
                   fontSize: 13,
                   fontWeight: 600,
                 }}
@@ -1449,7 +1462,7 @@ export function DashboardPage() {
               style={{
                 padding: 40,
                 textAlign: "center",
-                color: "#64748b",
+                color: "#1e40af",
               }}
             >
               ⏳ {t.dashboard.loadingGames}
@@ -1465,7 +1478,7 @@ export function DashboardPage() {
               }}
             >
               <div style={{ fontSize: 48, marginBottom: 12 }}>🎲</div>
-              <p style={{ margin: 0, color: "#64748b", fontSize: 15 }}>{t.dashboard.noGamesCreated}</p>
+              <p style={{ margin: 0, color: "#1e40af", fontSize: 15 }}>{t.dashboard.noGamesCreated}</p>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1492,7 +1505,7 @@ export function DashboardPage() {
                       borderRadius: 12,
                       fontSize: 14,
                       fontWeight: 600,
-                      color: "#64748b",
+                      color: "#1e40af",
                       listStyle: "none",
                       display: "flex",
                       alignItems: "center",
@@ -1541,7 +1554,7 @@ export function DashboardPage() {
           >
             <span style={{ fontSize: 24 }}>{theme.icon}</span>
             <div>
-              <div style={{ fontSize: 12, color: "#64748b", fontWeight: 500 }}>{t.dashboard.currentMode}</div>
+              <div style={{ fontSize: 12, color: "#1e40af", fontWeight: 500 }}>{t.dashboard.currentMode}</div>
               <div style={{ fontSize: 16, fontWeight: 700, color: theme.primary }}>{appTitle}</div>
             </div>
             <button
@@ -1567,7 +1580,7 @@ export function DashboardPage() {
         style={{
           padding: "24px",
           textAlign: "center",
-          color: "#94a3b8",
+          color: "#64748b",
           fontSize: 14,
         }}
       >
@@ -1576,7 +1589,7 @@ export function DashboardPage() {
           style={{
             background: "none",
             border: "none",
-            color: "#64748b",
+            color: "#1e40af",
             cursor: "pointer",
             fontSize: 14,
             textDecoration: "underline",

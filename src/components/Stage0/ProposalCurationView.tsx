@@ -1,6 +1,7 @@
 // src/components/Stage0/ProposalCurationView.tsx
 // Pantalla donde el profesor cura las propuestas de los equipos
 // ✅ ACTUALIZADO: Incluye campo de hint para Stage 2
+// ✅ CORREGIDO: Textos hardcodeados reemplazados por traducciones
 
 import { useState, useEffect } from "react";
 import { ref, onValue, off, update, get } from "firebase/database";
@@ -39,7 +40,6 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
   const { language } = useI18n();
   
   const [proposals, setProposals] = useState<Proposal[]>([]);
-  // ✅ MODIFICADO: Ahora incluye hint
   const [selectedProposals, setSelectedProposals] = useState<Map<string, SelectedProposal>>(new Map());
   const [bonusPoints, setBonusPoints] = useState<Record<string, number>>({});
   const [filter, setFilter] = useState<'all' | 'pending' | 'accepted'>('all');
@@ -53,56 +53,62 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
 
   // Traducciones
   const t = {
-    title: language === 'es' ? 'Curado de propuestas' : 'Proposal curation',
-    subtitle: language === 'es' ? 'Seleccioná las consignas para el juego' : 'Select questions for the game',
+    title: language === 'es' ? 'Curado de propuestas' : language === 'pt' ? 'Curadoria de propostas' : 'Proposal curation',
+    subtitle: language === 'es' ? 'Seleccioná las consignas para el juego' : language === 'pt' ? 'Selecione as questões para o jogo' : 'Select questions for the game',
     
-    received: language === 'es' ? 'recibidas' : 'received',
-    selected: language === 'es' ? 'seleccionadas' : 'selected',
+    received: language === 'es' ? 'recibidas' : language === 'pt' ? 'recebidas' : 'received',
+    selected: language === 'es' ? 'seleccionadas' : language === 'pt' ? 'selecionadas' : 'selected',
     
-    filterAll: language === 'es' ? 'Todas' : 'All',
-    filterPending: language === 'es' ? 'Pendientes' : 'Pending',
-    filterAccepted: language === 'es' ? 'Aceptadas' : 'Accepted',
+    filterAll: language === 'es' ? 'Todas' : language === 'pt' ? 'Todas' : 'All',
+    filterPending: language === 'es' ? 'Pendientes' : language === 'pt' ? 'Pendentes' : 'Pending',
+    filterAccepted: language === 'es' ? 'Aceptadas' : language === 'pt' ? 'Aceitas' : 'Accepted',
     
-    tipTitle: language === 'es' ? '💡 Para Etapa 2' : '💡 For Stage 2',
+    tipTitle: language === 'es' ? '💡 Para Etapa 2' : language === 'pt' ? '💡 Para Etapa 2' : '💡 For Stage 2',
     tipContent: language === 'es'
       ? 'Priorizá consignas que impliquen comprensión profunda, relaciones entre ideas, explicaciones, justificaciones o puntos de vista.'
+      : language === 'pt'
+      ? 'Priorize questões que envolvam compreensão profunda, relações entre ideias, explicações, justificativas ou pontos de vista.'
       : 'Prioritize prompts that involve deep understanding, relationships between ideas, explanations, justifications, or points of view.',
     
-    stage1: language === 'es' ? 'Etapa 1' : 'Stage 1',
-    stage2: language === 'es' ? 'Etapa 2' : 'Stage 2',
+    stage1: language === 'es' ? 'Etapa 1' : language === 'pt' ? 'Etapa 1' : 'Stage 1',
+    stage2: language === 'es' ? 'Etapa 2' : language === 'pt' ? 'Etapa 2' : 'Stage 2',
     
-    accept: language === 'es' ? 'Aceptar' : 'Accept',
-    edit: language === 'es' ? 'Editar' : 'Edit',
-    reject: language === 'es' ? 'Rechazar' : 'Reject',
-    save: language === 'es' ? 'Guardar' : 'Save',
-    cancel: language === 'es' ? 'Cancelar' : 'Cancel',
+    accept: language === 'es' ? 'Aceptar' : language === 'pt' ? 'Aceitar' : 'Accept',
+    edit: language === 'es' ? 'Editar' : language === 'pt' ? 'Editar' : 'Edit',
+    reject: language === 'es' ? 'Rechazar' : language === 'pt' ? 'Rejeitar' : 'Reject',
+    save: language === 'es' ? 'Guardar' : language === 'pt' ? 'Salvar' : 'Save',
+    cancel: language === 'es' ? 'Cancelar' : language === 'pt' ? 'Cancelar' : 'Cancel',
     
-    addManual: language === 'es' ? '+ Agregar consigna propia' : '+ Add own question',
-    manualPlaceholder: language === 'es' ? 'Escribí tu consigna...' : 'Write your question...',
+    addManual: language === 'es' ? '+ Agregar consigna propia' : language === 'pt' ? '+ Adicionar questão própria' : '+ Add own question',
+    manualPlaceholder: language === 'es' ? 'Escribí tu consigna...' : language === 'pt' ? 'Escreva sua questão...' : 'Write your question...',
     
-    // ✅ NUEVO: Traducciones para hint
-    hint: language === 'es' ? 'Pista' : 'Hint',
-    hintPlaceholder: language === 'es' ? 'Pista opcional para Etapa 2 (se muestra antes de responder)' : 'Optional hint for Stage 2 (shown before answering)',
-    hintDesc: language === 'es' ? 'La pista ayuda a orientar la respuesta en Etapa 2' : 'The hint helps guide the answer in Stage 2',
-    addHint: language === 'es' ? '+ Agregar pista' : '+ Add hint',
+    hint: language === 'es' ? 'Pista' : language === 'pt' ? 'Dica' : 'Hint',
+    hintPlaceholder: language === 'es' ? 'Pista opcional para Etapa 2 (se muestra antes de responder)' : language === 'pt' ? 'Dica opcional para Etapa 2 (mostrada antes de responder)' : 'Optional hint for Stage 2 (shown before answering)',
+    hintDesc: language === 'es' ? 'La pista ayuda a orientar la respuesta en Etapa 2' : language === 'pt' ? 'A dica ajuda a orientar a resposta na Etapa 2' : 'The hint helps guide the answer in Stage 2',
+    addHint: language === 'es' ? '+ Agregar pista' : language === 'pt' ? '+ Adicionar dica' : '+ Add hint',
     
-    summary: language === 'es' ? 'Resumen' : 'Summary',
-    stage1Questions: language === 'es' ? 'consignas Etapa 1' : 'Stage 1 questions',
-    stage2Questions: language === 'es' ? 'consignas Etapa 2' : 'Stage 2 questions',
-    minimum: language === 'es' ? 'mínimo' : 'minimum',
+    summary: language === 'es' ? 'Resumen' : language === 'pt' ? 'Resumo' : 'Summary',
+    stage1Questions: language === 'es' ? 'consignas Etapa 1' : language === 'pt' ? 'questões Etapa 1' : 'Stage 1 questions',
+    stage2Questions: language === 'es' ? 'consignas Etapa 2' : language === 'pt' ? 'questões Etapa 2' : 'Stage 2 questions',
+    minimum: language === 'es' ? 'mínimo' : language === 'pt' ? 'mínimo' : 'minimum',
     
-    bonusTitle: language === 'es' ? 'Puntos bonus por equipo' : 'Bonus points by team',
+    bonusTitle: language === 'es' ? 'Puntos bonus por equipo' : language === 'pt' ? 'Pontos bônus por equipe' : 'Bonus points by team',
     bonusDesc: language === 'es' 
       ? 'Asigná puntos bonus según el aporte de cada equipo'
+      : language === 'pt'
+      ? 'Atribua pontos bônus conforme a contribuição de cada equipe'
       : 'Assign bonus points based on each team\'s contribution',
-    points: language === 'es' ? 'pts' : 'pts',
+    points: language === 'es' ? 'pts' : language === 'pt' ? 'pts' : 'pts',
+    accepted: language === 'es' ? 'aceptadas' : language === 'pt' ? 'aceitas' : 'accepted', // ✅ NUEVA CLAVE
     
-    finish: language === 'es' ? '✓ Finalizar curado y comenzar' : '✓ Finish curation and start',
+    finish: language === 'es' ? '✓ Finalizar curado y comenzar' : language === 'pt' ? '✓ Finalizar curadoria e começar' : '✓ Finish curation and start',
     needMore: language === 'es' 
       ? 'Necesitás al menos 10 consignas por etapa'
+      : language === 'pt'
+      ? 'Você precisa de pelo menos 10 questões por etapa'
       : 'You need at least 10 questions per stage',
     
-    back: language === 'es' ? '← Volver' : '← Back',
+    back: language === 'es' ? '← Volver' : language === 'pt' ? '← Voltar' : '← Back',
   };
 
   // Cargar propuestas
@@ -205,7 +211,7 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
     const newProposal: Proposal = {
       id: manualId,
       teamId: 'teacher',
-      teamName: language === 'es' ? 'Profesor' : 'Teacher',
+      teamName: language === 'es' ? 'Profesor' : language === 'pt' ? 'Professor' : 'Teacher',
       teamEmoji: '👨‍🏫',
       questionText: manualQuestion.trim(),
       suggestedStage: manualStage,
@@ -401,7 +407,6 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
                 }}
               />
               
-              {/* ✅ NUEVO: Campo de hint en manual */}
               {manualStage === 2 && (
                 <div style={{ marginBottom: 12 }}>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#7c3aed', marginBottom: 4 }}>
@@ -554,7 +559,6 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
                         }}
                       />
                       
-                      {/* ✅ NUEVO: Campo de hint en edición */}
                       <div style={{ marginBottom: 8 }}>
                         <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#7c3aed', marginBottom: 4 }}>
                           💡 {t.hint}
@@ -619,7 +623,6 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
                         "{selectedData?.text || proposal.questionText}"
                       </p>
                       
-                      {/* ✅ NUEVO: Mostrar hint si existe y está seleccionada para Stage 2 */}
                       {isSelected && isStage2 && (
                         <div style={{ marginBottom: 12 }}>
                           {selectedData?.hint ? (
@@ -861,7 +864,7 @@ export function ProposalCurationView({ gameId, teams, onComplete, onBack }: Prop
                         {team.name}
                       </div>
                       <div style={{ fontSize: 11, color: '#64748b' }}>
-                        {teamAcceptedCount}/{teamProposalCount} {language === 'es' ? 'aceptadas' : 'accepted'}
+                        {teamAcceptedCount}/{teamProposalCount} {t.accepted} {/* ✅ CORREGIDO */}
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

@@ -5,7 +5,7 @@
 // ============================================
 
 export type GameLevel = "primary" | "secondary";
-export type Language = "en" | "es";
+export type Language = "en" | "es" | "pt";
 export type RatingColor = "green" | "yellow" | "red";
 
 // ✅ NUEVO: Modo de juego
@@ -172,6 +172,33 @@ export interface Stage0Config {
 }
 
 // ============================================
+// 🆕 DISPOSITIVOS PEDAGÓGICOS (Post-Game)
+// ============================================
+
+export type GroupReflectionStrategy = 'top3' | 'onePerTeam' | 'manual';
+
+export interface PedagogicalDevices {
+  // Módulo 1: Reflexión Inicial (antes de empezar)
+  preReflection?: {
+    enabled: boolean;
+  };
+  
+  // Módulo 2: Autoevaluación Individual (después del podio)
+  selfEvaluation?: {
+    enabled: boolean;
+    includeMetacognition: boolean;   // preguntas metacognitivas adicionales
+    requiresValidation: boolean;     // requiere que el docente valide
+  };
+  
+  // Módulo 3: Reflexión Grupal (cierre pedagógico)
+  groupReflection?: {
+    enabled: boolean;
+    strategy: GroupReflectionStrategy;
+    timeMinutes: number;             // tiempo asignado para la reflexión
+  };
+}
+
+// ============================================
 // CONFIGURACIÓN DEL JUEGO
 // ============================================
 
@@ -190,11 +217,17 @@ export interface GameConfig {
   studentsPerTeam: number;
 
   csvFileName?: string;
+  
+  // ✅ Path al material de texto complementario (si existe)
+  sourceTextPath?: string;
 
   ratingMode: "devices" | "physical-cards";
 
-  // ✅ NUEVO: Configuración Stage 0
+  // ✅ Configuración Stage 0
   stage0Config?: Stage0Config;
+  
+  // 🆕 Dispositivos Pedagógicos Opcionales
+  pedagogicalDevices?: PedagogicalDevices;
 
   timers: {
     stage1Rating: number;

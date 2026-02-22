@@ -1,0 +1,102 @@
+/* src/components/PWAMiniBadge.css */
+/* Versión minimalista y sutil */
+
+.pwa-mini-badge {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  background: rgba(100, 108, 255, 0.95);
+  backdrop-filter: blur(10px);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 12px rgba(100, 108, 255, 0.3);
+  z-index: 9998;
+  animation: slideInDown 0.3s ease-out;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+@keyframes slideInDown {
+  from {
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.pwa-mini-badge:hover {
+  background: rgba(83, 91, 242, 0.95);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(100, 108, 255, 0.4);
+}
+
+.mini-badge-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.mini-badge-text {
+  white-space: nowrap;
+}
+
+.mini-badge-platform {
+  opacity: 0.8;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.mini-badge-close {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 0 0 8px;
+  margin-left: 4px;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.mini-badge-close:hover {
+  opacity: 1;
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+  .pwa-mini-badge {
+    top: 12px;
+    right: 12px;
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+
+  .mini-badge-icon {
+    font-size: 14px;
+  }
+
+  .mini-badge-platform {
+    display: none; /* Ocultar en móvil por espacio */
+  }
+}
+
+/* Variant: Bottom position */
+.pwa-mini-badge.bottom {
+  top: auto;
+  bottom: 80px;
+}
+
+/* Variant: Left position */
+.pwa-mini-badge.left {
+  right: auto;
+  left: 16px;
+}

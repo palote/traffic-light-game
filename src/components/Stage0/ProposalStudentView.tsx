@@ -1,5 +1,6 @@
 // src/components/Stage0/ProposalStudentView.tsx
 // Vista del alumno/equipo para crear y enviar propuestas de consignas
+// ✅ CORREGIDO: Internacionalización completa con portugués y textos faltantes
 
 import { useState, useEffect } from "react";
 import { ref, onValue, off, push, get, update, set } from "firebase/database";
@@ -31,25 +32,30 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
   const [showMaterial, setShowMaterial] = useState<string | null>(null);
-  // ✅ CORREGIDO: Agregar 'waiting' como fase válida
   const [phase, setPhase] = useState<'waiting' | 'collecting' | 'curating' | 'done'>('waiting');
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
   // Traducciones
   const t = {
-    title: language === 'es' ? 'Proponé consignas' : 'Propose questions',
-    timeRemaining: language === 'es' ? 'Tiempo restante' : 'Time remaining',
+    title: language === 'es' ? 'Proponé consignas' : language === 'pt' ? 'Proponha questões' : 'Propose questions',
+    timeRemaining: language === 'es' ? 'Tiempo restante' : language === 'pt' ? 'Tempo restante' : 'Time remaining',
 
-    materials: language === 'es' ? 'Material de referencia' : 'Reference material',
-    viewMaterial: language === 'es' ? 'Ver' : 'View',
-    closeMaterial: language === 'es' ? 'Cerrar' : 'Close',
+    materials: language === 'es' ? 'Material de referencia' : language === 'pt' ? 'Material de referência' : 'Reference material',
+    viewMaterial: language === 'es' ? 'Ver' : language === 'pt' ? 'Ver' : 'View',
+    closeMaterial: language === 'es' ? 'Cerrar' : language === 'pt' ? 'Fechar' : 'Close',
 
-    tipTitle: language === 'es' ? '💡 Podés proponer:' : '💡 You can propose:',
+    tipTitle: language === 'es' ? '💡 Podés proponer:' : language === 'pt' ? '💡 Você pode propor:' : '💡 You can propose:',
     tipItems: language === 'es'
       ? [
         'Preguntas de comprensión',
         'Consignas que pidan relacionar ideas',
         'Actividades: "Explicá...", "Compará...", "Justificá..."',
+      ]
+      : language === 'pt'
+      ? [
+        'Perguntas de compreensão',
+        'Questões que peçam relacionar ideias',
+        'Atividades: "Explique...", "Compare...", "Justifique..."',
       ]
       : [
         'Comprehension questions',
@@ -58,58 +64,78 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
       ],
     tipStage2: language === 'es'
       ? 'Para Etapa 2 pensá en consignas más profundas que requieran explicar, relacionar o dar puntos de vista.'
+      : language === 'pt'
+      ? 'Para Etapa 2, pense em questões mais profundas que exijam explicar, relacionar ou dar pontos de vista.'
       : 'For Stage 2, think of deeper prompts that require explaining, relating, or giving points of view.',
 
-    yourProposal: language === 'es' ? 'Tu propuesta' : 'Your proposal',
+    yourProposal: language === 'es' ? 'Tu propuesta' : language === 'pt' ? 'Sua proposta' : 'Your proposal',
     proposalPlaceholder: language === 'es'
       ? 'Escribí una pregunta o consigna basada en el material...'
+      : language === 'pt'
+      ? 'Escreva uma pergunta ou questão baseada no material...'
       : 'Write a question or prompt based on the material...',
 
-    suggestedStage: language === 'es' ? 'Sugerencia de etapa' : 'Suggested stage',
-    stage1: language === 'es' ? 'Etapa 1 (básica)' : 'Stage 1 (basic)',
-    stage2: language === 'es' ? 'Etapa 2 (profunda)' : 'Stage 2 (deep)',
+    suggestedStage: language === 'es' ? 'Sugerencia de etapa' : language === 'pt' ? 'Sugestão de etapa' : 'Suggested stage',
+    stage1: language === 'es' ? 'Etapa 1 (básica)' : language === 'pt' ? 'Etapa 1 (básica)' : 'Stage 1 (basic)',
+    stage2: language === 'es' ? 'Etapa 2 (profunda)' : language === 'pt' ? 'Etapa 2 (profunda)' : 'Stage 2 (deep)',
 
-    submit: language === 'es' ? 'Enviar propuesta' : 'Submit proposal',
-    submitted: language === 'es' ? '✓ Enviada' : '✓ Submitted',
+    submit: language === 'es' ? 'Enviar propuesta' : language === 'pt' ? 'Enviar proposta' : 'Submit proposal',
+    submitted: language === 'es' ? '✓ Enviada' : language === 'pt' ? '✓ Enviada' : '✓ Submitted',
 
-    yourProposals: language === 'es' ? 'Tus propuestas enviadas' : 'Your submitted proposals',
+    yourProposals: language === 'es' ? 'Tus propuestas enviadas' : language === 'pt' ? 'Suas propostas enviadas' : 'Your submitted proposals',
     noProposalsYet: language === 'es'
       ? 'Todavía no enviaste propuestas'
+      : language === 'pt'
+      ? 'Você ainda não enviou propostas'
       : 'You haven\'t submitted proposals yet',
 
-    proposalsCount: language === 'es' ? 'enviadas' : 'submitted',
-    maxReached: language === 'es' ? '¡Llegaste al máximo!' : 'You reached the maximum!',
+    proposalsCount: language === 'es' ? 'enviadas' : language === 'pt' ? 'enviadas' : 'submitted',
+    maxReached: language === 'es' ? '¡Llegaste al máximo!' : language === 'pt' ? 'Você atingiu o máximo!' : 'You reached the maximum!',
 
     closed: language === 'es'
       ? 'Se cerró la recepción de propuestas'
+      : language === 'pt'
+      ? 'O recebimento de propostas foi encerrado'
       : 'Proposal reception is closed',
     waitingCuration: language === 'es'
       ? 'Esperá mientras el profesor organiza el juego...'
+      : language === 'pt'
+      ? 'Aguarde enquanto o professor organiza o jogo...'
       : 'Wait while the teacher organizes the game...',
 
-    // ✅ NUEVO: Mensajes para fase waiting
     waitingToStart: language === 'es'
       ? 'Esperando que el profesor inicie la etapa de propuestas...'
+      : language === 'pt'
+      ? 'Aguardando o professor iniciar a etapa de propostas...'
       : 'Waiting for teacher to start the proposal stage...',
-    connected: language === 'es' ? '¡Conectado!' : 'Connected!',
+    connected: language === 'es' ? '¡Conectado!' : language === 'pt' ? 'Conectado!' : 'Connected!',
     waitingHint: language === 'es'
       ? 'Cuando el profesor inicie, vas a poder proponer consignas para el juego.'
+      : language === 'pt'
+      ? 'Quando o professor iniciar, você poderá propor questões para o jogo.'
       : 'When the teacher starts, you will be able to propose questions for the game.',
+
+    // ✅ NUEVAS CLAVES
+    defaultPlayerName: language === 'es' ? 'Jugador' : language === 'pt' ? 'Jogador' : 'Player',
+    waitForTeacherClose: language === 'es'
+      ? 'Esperá a que el profesor cierre la recepción de propuestas.'
+      : language === 'pt'
+      ? 'Aguarde o professor encerrar o recebimento de propostas.'
+      : 'Wait for the teacher to close proposal reception.',
   };
 
   // ✅ NUEVO: Registrar conexión del equipo al montar
   useEffect(() => {
     const registerConnection = async () => {
-      // Usar un ID único pero estable para esta sesión
       const sessionId = sessionStorage.getItem('playerSessionId') || `player_${Date.now()}`;
       sessionStorage.setItem('playerSessionId', sessionId);
 
       try {
-        // Registrar el jugador en el equipo
+        // Registrar el jugador en el equipo (usa nombre traducido)
         const playerRef = ref(database, `games/${gameId}/teams/${teamId}/players/${sessionId}`);
         await set(playerRef, {
           connectedAt: Date.now(),
-          name: 'Jugador',
+          name: t.defaultPlayerName,
           active: true,
         });
 
@@ -126,7 +152,8 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
     };
 
     registerConnection();
-  }, [gameId, teamId]);
+  }, [gameId, teamId, t.defaultPlayerName]);
+
   // ✅ NUEVO: Detectar cambio a Stage 1 y redirigir
   useEffect(() => {
     const statusRef = ref(database, `games/${gameId}/status`);
@@ -135,7 +162,6 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
       if (snapshot.exists()) {
         const status = snapshot.val();
 
-        // Si el juego pasó a Stage 1, redirigir al TeamView
         if (status.status === 'stage1' || status.currentStage === 1) {
           console.log("🎮 Stage 1 detected, redirecting to game...");
           window.location.href = `/team/${gameId}/${teamId}`;
@@ -145,6 +171,7 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
 
     return () => off(statusRef);
   }, [gameId, teamId]);
+
   // Cargar configuración del juego
   useEffect(() => {
     const configRef = ref(database, `games/${gameId}/config/stage0Config`);
@@ -153,7 +180,6 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
         const config = snapshot.val();
         setMaxProposals(config.maxProposalsPerTeam || 10);
 
-        // Cargar materiales si existen
         if (config.materials) {
           setMaterials(Object.values(config.materials));
         }
@@ -168,11 +194,9 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
     const unsubscribe = onValue(stage0Ref, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
-        // ✅ CORREGIDO: Manejar todas las fases correctamente
         const currentPhase = data.phase || 'waiting';
         setPhase(currentPhase);
 
-        // Calcular tiempo restante si hay timer y estamos en collecting
         if (currentPhase === 'collecting' && data.timerStartedAt && data.timerMinutes) {
           const elapsed = Math.floor((Date.now() - data.timerStartedAt) / 1000);
           const remaining = (data.timerMinutes * 60) - elapsed;
@@ -581,9 +605,7 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
             {t.maxReached}
           </div>
           <p style={{ margin: '8px 0 0 0', fontSize: 14, color: '#22c55e' }}>
-            {language === 'es'
-              ? 'Esperá a que el profesor cierre la recepción de propuestas.'
-              : 'Wait for the teacher to close proposal reception.'}
+            {t.waitForTeacherClose}  {/* ✅ CORREGIDO: usa traducción */}
           </p>
         </div>
       )}

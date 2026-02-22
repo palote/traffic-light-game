@@ -1,12 +1,19 @@
 // src/pages/GameResultsPage.tsx
 // 📊 Página de resultados del juego para el docente
-// ✅ ACTUALIZADO: Vista por alumno + Exportar Excel
+// ✅ ACTUALIZADO: Agregado tab "Cierre Pedagógico" con Top Ayudantes
+// ✅ CORREGIDO: Textos hardcodeados en export Excel, fallback de nombre y resultados de preguntas
+// ✅ AGREGADO: Exportar autoevaluaciones a Google Sheets
+// ✅ CORREGIDO: Botones de estrategia ahora funcionan
 
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ref, get } from "firebase/database";
 import { database } from "../firebase.config";
 import { useI18n } from "../i18n";
+import {
+  exportSelfEvaluationsToSheet,
+  type SelfEvaluationExportData
+} from "../services/sheetsService";
 
 interface Team {
   id: string;
@@ -47,13 +54,26 @@ interface Round {
   responseValidated?: "correct" | "incorrect" | null;
 }
 
+interface HelpBlock {
+  concept: string;
+  fromWho?: string[];
+  toWho?: string[];
+  description: string;
+}
+
 interface SelfEvaluation {
   id: string;
   studentName: string;
   teamName: string;
   teamId: string;
-  receivedHelp: Array<{ concept: string; fromWho: string[]; description: string }>;
-  gaveHelp: Array<{ concept: string; toWho: string[]; description: string }>;
+  receivedHelp: HelpBlock[];
+  gaveHelp: HelpBlock[];
+  difficultyRating?: number;
+  confidenceBefore?: number;
+  confidenceAfter?: number;
+  validated?: boolean;
+  teacherComment?: string;
+  validatedAt?: number;
   submittedAt: number;
 }
 
@@ -87,20 +107,15 @@ interface StudentPerformance {
   selfEvaluation?: SelfEvaluation;
 }
 
-interface GameData {
-  config?: {
-    className?: string;
-    gameName?: string;
-    subject?: string;
-  };
-  teams?: Record<string, Team>;
-  questions?: Record<string, Question>;
-  stage2?: {
-    rounds?: Round[];
-    currentRound?: number;
-    completed?: boolean;
-  };
-  selfEvaluationActive?: boolean;
+interface TopHelper {
+  studentName: string;
+  teamId: string;
+  teamName: string;
+  teamEmoji?: string;
+  helpCount: number;
+  conceptsHelped: string[];
+  helpedStudents: string[];
+  isSelected?: boolean;
 }
 
 interface GameData {
@@ -108,6 +123,11 @@ interface GameData {
     className?: string;
     gameName?: string;
     subject?: string;
+    groupReflection?: {
+      enabled: boolean;
+      strategy: 'top3' | 'onePerTeam' | 'manual';
+      duration?: number;
+    };
   };
   teams?: Record<string, Team>;
   questions?: Record<string, Question>;
@@ -117,6 +137,7 @@ interface GameData {
     completed?: boolean;
   };
   selfEvaluationActive?: boolean;
+  selfEvaluations?: Record<string, SelfEvaluation>;
 }
 
 export function GameResultsPage() {
@@ -128,16 +149,26 @@ export function GameResultsPage() {
   const [loading, setLoading] = useState(true);
   const [game, setGame] = useState<GameData | null>(null);
   const [selfEvaluations, setSelfEvaluations] = useState<SelfEvaluation[]>([]);
-  const [activeTab, setActiveTab] = useState<"podium" | "alumnos" | "autoevaluaciones">("podium");
+  const [activeTab, setActiveTab] = useState<"podium" | "alumnos" | "autoevaluaciones" | "cierre">("podium");
   const [teamFilter, setTeamFilter] = useState<string>("all");
 
-  // Detectar tab inicial desde URL
+  const [selectedHelpers, setSelectedHelpers] = useState<Set<string>>(new Set());
+  const [presentationMode, setPresentationMode] = useState(false);
+  const [currentPresenterIndex, setCurrentPresenterIndex] = useState(0);
+  const [exportingToSheets, setExportingToSheets] = useState(false);
+  // Estado para la estrategia seleccionada (fix botones)
+  const [selectedStrategy, setSelectedStrategy] = useState<'top3' | 'onePerTeam' | 'manual'>(
+    game?.config?.groupReflection?.strategy || 'top3'
+  );
+
   useEffect(() => {
     const tab = searchParams.get("tab");
     if (tab === "autoevaluaciones") {
       setActiveTab("autoevaluaciones");
     } else if (tab === "alumnos") {
       setActiveTab("alumnos");
+    } else if (tab === "cierre") {
+      setActiveTab("cierre");
     }
   }, [searchParams]);
 
@@ -145,10 +176,12 @@ export function GameResultsPage() {
     es: {
       title: "Resultados del Juego",
       backToDashboard: "← Volver al Dashboard",
+      gameNameFallback: "Juego",
       tabs: {
         podium: "🏆 Podio",
         alumnos: "👤 Por Alumno",
         autoevaluaciones: "📝 Autoevaluaciones",
+        cierre: "🎤 Cierre Pedagógico",
       },
       podium: {
         champion: "CAMPEÓN",
@@ -166,6 +199,9 @@ export function GameResultsPage() {
         times: "veces",
         withHelp: "con ayuda",
         correct: "correctas",
+        correctAnswer: "Correcta",
+        incorrectAnswer: "Incorrecta",
+        unvalidated: "Sin validar",
         ratings: "Calificaciones",
         accepted: "aceptadas",
         rejected: "rechazadas",
@@ -191,6 +227,42 @@ export function GameResultsPage() {
         description: "Descripción",
         submittedAt: "Enviado",
         activateSelfEval: "La autoevaluación no está activa.",
+        validated: "Validada",
+        pending: "Pendiente",
+        metacognition: "Metacognición",
+        difficulty: "Dificultad percibida",
+        confidenceBefore: "Confianza antes",
+        confidenceAfter: "Confianza después",
+        teacherComment: "Comentario del docente",
+        exportSheets: "📊 Exportar a Google Sheets",
+        exporting: "Exportando...",
+      },
+      cierre: {
+        title: "Cierre Pedagógico",
+        subtitle: "Alumnos destacados que explicarán a la clase",
+        noData: "No hay datos de autoevaluaciones validadas para calcular los destacados.",
+        topHelpers: "Top Ayudantes",
+        helpedTimes: "ayudó",
+        times: "veces",
+        concepts: "Conceptos que domina",
+        helpedTo: "Ayudó a",
+        strategy: "Estrategia de selección",
+        strategyTop3: "Top 3 más mencionados",
+        strategyOnePerTeam: "Uno por equipo",
+        strategyManual: "Selección manual",
+        selected: "Seleccionados para explicar",
+        select: "Seleccionar",
+        deselect: "Quitar",
+        startPresentation: "🎬 Iniciar Reflexión Grupal",
+        endPresentation: "Finalizar",
+        nextPresenter: "Siguiente →",
+        prevPresenter: "← Anterior",
+        presenterOf: "de",
+        nowPresenting: "Ahora explica",
+        willExplain: "Explicará sobre",
+        tip: "💡 Tip: Los alumnos seleccionados explicarán los conceptos que dominan al resto de la clase. \"El que enseña aprende dos veces.\"",
+        noHelpers: "No hay alumnos con menciones de ayuda validadas.",
+        validateFirst: "Primero validá las autoevaluaciones en la pestaña correspondiente.",
       },
       loading: "Cargando...",
       gameNotFound: "Juego no encontrado",
@@ -198,10 +270,12 @@ export function GameResultsPage() {
     en: {
       title: "Game Results",
       backToDashboard: "← Back to Dashboard",
+      gameNameFallback: "Game",
       tabs: {
         podium: "🏆 Podium",
         alumnos: "👤 By Student",
         autoevaluaciones: "📝 Self-Evaluations",
+        cierre: "🎤 Pedagogical Closing",
       },
       podium: {
         champion: "CHAMPION",
@@ -219,6 +293,9 @@ export function GameResultsPage() {
         times: "times",
         withHelp: "with help",
         correct: "correct",
+        correctAnswer: "Correct",
+        incorrectAnswer: "Incorrect",
+        unvalidated: "Unvalidated",
         ratings: "Ratings",
         accepted: "accepted",
         rejected: "rejected",
@@ -244,6 +321,42 @@ export function GameResultsPage() {
         description: "Description",
         submittedAt: "Submitted",
         activateSelfEval: "Self-evaluation is not active.",
+        validated: "Validated",
+        pending: "Pending",
+        metacognition: "Metacognition",
+        difficulty: "Perceived difficulty",
+        confidenceBefore: "Confidence before",
+        confidenceAfter: "Confidence after",
+        teacherComment: "Teacher comment",
+        exportSheets: "📊 Export to Google Sheets",
+        exporting: "Exporting...",
+      },
+      cierre: {
+        title: "Pedagogical Closing",
+        subtitle: "Outstanding students who will explain to the class",
+        noData: "No validated self-evaluation data to calculate top helpers.",
+        topHelpers: "Top Helpers",
+        helpedTimes: "helped",
+        times: "times",
+        concepts: "Concepts mastered",
+        helpedTo: "Helped",
+        strategy: "Selection strategy",
+        strategyTop3: "Top 3 most mentioned",
+        strategyOnePerTeam: "One per team",
+        strategyManual: "Manual selection",
+        selected: "Selected to explain",
+        select: "Select",
+        deselect: "Remove",
+        startPresentation: "🎬 Start Group Reflection",
+        endPresentation: "End",
+        nextPresenter: "Next →",
+        prevPresenter: "← Previous",
+        presenterOf: "of",
+        nowPresenting: "Now explaining",
+        willExplain: "Will explain about",
+        tip: "💡 Tip: Selected students will explain the concepts they master to the rest of the class. \"Who teaches, learns twice.\"",
+        noHelpers: "No students with validated help mentions.",
+        validateFirst: "First validate the self-evaluations in the corresponding tab.",
       },
       loading: "Loading...",
       gameNotFound: "Game not found",
@@ -251,10 +364,12 @@ export function GameResultsPage() {
     pt: {
       title: "Resultados do Jogo",
       backToDashboard: "← Voltar ao Dashboard",
+      gameNameFallback: "Jogo",
       tabs: {
         podium: "🏆 Pódio",
         alumnos: "👤 Por Aluno",
         autoevaluaciones: "📝 Autoavaliações",
+        cierre: "🎤 Fechamento Pedagógico",
       },
       podium: {
         champion: "CAMPEÃO",
@@ -272,6 +387,9 @@ export function GameResultsPage() {
         times: "vezes",
         withHelp: "com ajuda",
         correct: "corretas",
+        correctAnswer: "Correta",
+        incorrectAnswer: "Incorreta",
+        unvalidated: "Não validado",
         ratings: "Avaliações",
         accepted: "aceitas",
         rejected: "rejeitadas",
@@ -297,6 +415,42 @@ export function GameResultsPage() {
         description: "Descrição",
         submittedAt: "Enviado",
         activateSelfEval: "A autoavaliação não está ativa.",
+        validated: "Validada",
+        pending: "Pendente",
+        metacognition: "Metacognição",
+        difficulty: "Dificuldade percebida",
+        confidenceBefore: "Confiança antes",
+        confidenceAfter: "Confiança depois",
+        teacherComment: "Comentário do professor",
+        exportSheets: "📊 Exportar para Google Sheets",
+        exporting: "Exportando...",
+      },
+      cierre: {
+        title: "Fechamento Pedagógico",
+        subtitle: "Alunos destacados que explicarão para a turma",
+        noData: "Não há dados de autoavaliações validadas para calcular os destaques.",
+        topHelpers: "Top Ajudantes",
+        helpedTimes: "ajudou",
+        times: "vezes",
+        concepts: "Conceitos que domina",
+        helpedTo: "Ajudou a",
+        strategy: "Estratégia de seleção",
+        strategyTop3: "Top 3 mais mencionados",
+        strategyOnePerTeam: "Um por equipe",
+        strategyManual: "Seleção manual",
+        selected: "Selecionados para explicar",
+        select: "Selecionar",
+        deselect: "Remover",
+        startPresentation: "🎬 Iniciar Reflexão em Grupo",
+        endPresentation: "Finalizar",
+        nextPresenter: "Próximo →",
+        prevPresenter: "← Anterior",
+        presenterOf: "de",
+        nowPresenting: "Agora explica",
+        willExplain: "Explicará sobre",
+        tip: "💡 Dica: Os alunos selecionados explicarão os conceitos que dominam para o resto da turma. \"Quem ensina aprende duas vezes.\"",
+        noHelpers: "Não há alunos com menções de ajuda validadas.",
+        validateFirst: "Primeiro valide as autoavaliações na aba correspondente.",
       },
       loading: "Carregando...",
       gameNotFound: "Jogo não encontrado",
@@ -305,7 +459,6 @@ export function GameResultsPage() {
 
   const t = texts[language] || texts.es;
 
-  // Cargar datos
   useEffect(() => {
     async function loadData() {
       if (!gameId) {
@@ -314,23 +467,27 @@ export function GameResultsPage() {
       }
 
       try {
-        const [gameSnap, selfEvalSnap] = await Promise.all([
-          get(ref(database, `games/${gameId}`)),
-          get(ref(database, `selfEvaluations/${gameId}`)),
-        ]);
+        const gameSnap = await get(ref(database, `games/${gameId}`));
 
         if (gameSnap.exists()) {
-          setGame(gameSnap.val());
-        }
+          const gameData = gameSnap.val();
+          setGame(gameData);
 
-        if (selfEvalSnap.exists()) {
-          const data = selfEvalSnap.val();
-          const evals: SelfEvaluation[] = Object.entries(data).map(([id, val]: [string, any]) => ({
-            id,
-            ...val,
-          }));
-          evals.sort((a, b) => b.submittedAt - a.submittedAt);
-          setSelfEvaluations(evals);
+          // Inicializar la estrategia seleccionada desde la configuración del juego
+          if (gameData.config?.groupReflection?.strategy) {
+            setSelectedStrategy(gameData.config.groupReflection.strategy);
+          }
+
+          if (gameData.selfEvaluations) {
+            const evals: SelfEvaluation[] = Object.entries(gameData.selfEvaluations).map(
+              ([id, val]: [string, any]) => ({
+                id,
+                ...val,
+              })
+            );
+            evals.sort((a, b) => (b.submittedAt || 0) - (a.submittedAt || 0));
+            setSelfEvaluations(evals);
+          }
         }
       } catch (error) {
         console.error("Error loading game results:", error);
@@ -342,7 +499,6 @@ export function GameResultsPage() {
     loadData();
   }, [gameId]);
 
-  // Calcular equipos ordenados
   const sortedTeams = useMemo(() => {
     if (!game?.teams) return [];
     return Object.entries(game.teams)
@@ -350,7 +506,109 @@ export function GameResultsPage() {
       .sort((a, b) => (b.totalScore ?? 0) - (a.totalScore ?? 0));
   }, [game]);
 
-  // Calcular desempeño por alumno
+  const topHelpers = useMemo((): TopHelper[] => {
+    if (!selfEvaluations.length || !game?.teams) return [];
+
+    const validatedEvals = selfEvaluations.filter(e => e.validated);
+
+    if (!validatedEvals.length) return [];
+
+    const helperMap: Record<string, TopHelper> = {};
+
+    for (const evaluation of validatedEvals) {
+      if (evaluation.gaveHelp && evaluation.gaveHelp.length > 0) {
+        const key = `${evaluation.teamId}-${evaluation.studentName}`;
+
+        if (!helperMap[key]) {
+          const team = game.teams[evaluation.teamId];
+          helperMap[key] = {
+            studentName: evaluation.studentName,
+            teamId: evaluation.teamId,
+            teamName: evaluation.teamName || team?.name || evaluation.teamId,
+            teamEmoji: team?.emoji,
+            helpCount: 0,
+            conceptsHelped: [],
+            helpedStudents: [],
+          };
+        }
+
+        for (const help of evaluation.gaveHelp) {
+          const studentsHelped = help.toWho || [];
+          helperMap[key].helpCount += studentsHelped.length || 1;
+
+          if (help.concept && !helperMap[key].conceptsHelped.includes(help.concept)) {
+            helperMap[key].conceptsHelped.push(help.concept);
+          }
+
+          for (const student of studentsHelped) {
+            if (!helperMap[key].helpedStudents.includes(student)) {
+              helperMap[key].helpedStudents.push(student);
+            }
+          }
+        }
+      }
+    }
+
+    for (const evaluation of validatedEvals) {
+      if (evaluation.receivedHelp && evaluation.receivedHelp.length > 0) {
+        for (const help of evaluation.receivedHelp) {
+          const fromStudents = help.fromWho || [];
+          for (const helperName of fromStudents) {
+            const helperKey = Object.keys(helperMap).find(
+              k => helperMap[k].studentName.toLowerCase() === helperName.toLowerCase()
+            );
+
+            if (helperKey && helperMap[helperKey]) {
+              if (!helperMap[helperKey].helpedStudents.includes(evaluation.studentName)) {
+                helperMap[helperKey].helpedStudents.push(evaluation.studentName);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const helpers = Object.values(helperMap)
+      .filter(h => h.helpCount > 0)
+      .sort((a, b) => b.helpCount - a.helpCount);
+
+    return helpers;
+  }, [selfEvaluations, game]);
+
+  const getHelpersByStrategy = (strategy: 'top3' | 'onePerTeam' | 'manual'): TopHelper[] => {
+    if (strategy === 'top3') {
+      return topHelpers.slice(0, 3);
+    }
+
+    if (strategy === 'onePerTeam') {
+      const seenTeams = new Set<string>();
+      const result: TopHelper[] = [];
+
+      for (const helper of topHelpers) {
+        if (!seenTeams.has(helper.teamId)) {
+          seenTeams.add(helper.teamId);
+          result.push(helper);
+        }
+      }
+      return result;
+    }
+
+    return topHelpers.filter(h => selectedHelpers.has(`${h.teamId}-${h.studentName}`));
+  };
+
+  const toggleHelperSelection = (helper: TopHelper) => {
+    const key = `${helper.teamId}-${helper.studentName}`;
+    setSelectedHelpers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
+
   const studentPerformances = useMemo((): StudentPerformance[] => {
     if (!game?.stage2?.rounds || !game?.teams) return [];
 
@@ -361,7 +619,6 @@ export function GameResultsPage() {
     const questions = game.questions || {};
     const performances: Record<string, StudentPerformance> = {};
 
-    // Inicializar todos los jugadores de todos los equipos
     for (const [teamId, team] of Object.entries(game.teams)) {
       const players = team.players;
       if (!players) continue;
@@ -395,11 +652,9 @@ export function GameResultsPage() {
       }
     }
 
-    // Analizar cada ronda
     rounds.forEach((round: Round, roundIndex: number) => {
       if (!round) return;
 
-      // Equipo que respondió
       if (round.respondingTeam) {
         const rt = round.respondingTeam;
         const key = `${rt.teamId}-${rt.playerId}`;
@@ -429,7 +684,6 @@ export function GameResultsPage() {
         }
       }
 
-      // Equipos que calificaron
       if (round.ratingTeams) {
         for (const [teamId, ratingData] of Object.entries(round.ratingTeams)) {
           const key = `${teamId}-${ratingData.playerId}`;
@@ -461,9 +715,7 @@ export function GameResultsPage() {
       }
     });
 
-    // Vincular autoevaluaciones
     for (const selfEval of selfEvaluations) {
-      // Buscar por nombre del estudiante y equipo
       for (const perf of Object.values(performances)) {
         if (
           perf.studentName.toLowerCase() === selfEval.studentName.toLowerCase() &&
@@ -476,7 +728,6 @@ export function GameResultsPage() {
     }
 
     return Object.values(performances).sort((a, b) => {
-      // Ordenar por equipo, luego por nombre
       if (a.teamName !== b.teamName) {
         return a.teamName.localeCompare(b.teamName);
       }
@@ -484,28 +735,28 @@ export function GameResultsPage() {
     });
   }, [game, selfEvaluations]);
 
-  // Filtrar por equipo
   const filteredStudents = useMemo(() => {
     if (teamFilter === "all") return studentPerformances;
     return studentPerformances.filter((s) => s.teamId === teamFilter);
   }, [studentPerformances, teamFilter]);
 
-  // Exportar a Excel
   const handleExportExcel = () => {
+    // ✅ AHORA USA TRADUCCIONES
     const headers = [
-      "Alumno",
-      "Equipo",
-      "Respondió (veces)",
-      "Con ayuda",
-      "Correctas",
-      "Incorrectas",
-      "Calificó (veces)",
-      "Verdes",
-      "Amarillos",
-      "Rojos",
-      "Aceptadas",
-      "Rechazadas",
-      "Tiene autoevaluación",
+      t.alumnos.student,
+      t.alumnos.team,
+      `${t.alumnos.responded} (${t.alumnos.times})`,
+      t.alumnos.withHelp,
+      t.alumnos.correct,
+      t.alumnos.incorrectAnswer,
+      `${t.alumnos.rated} (${t.alumnos.times})`,
+      "🟩",
+      "🟨",
+      "🟥",
+      t.alumnos.accepted,
+      t.alumnos.rejected,
+      t.selfEval.title,
+      `${t.selfEval.title} ${t.selfEval.validated}`,
     ];
 
     const rows = filteredStudents.map((s) => [
@@ -521,7 +772,8 @@ export function GameResultsPage() {
       s.redRatings,
       s.ratingsAccepted,
       s.ratingsRejected,
-      s.selfEvaluation ? "Sí" : "No",
+      s.selfEvaluation ? t.alumnos.yes : t.alumnos.no,
+      s.selfEvaluation?.validated ? t.alumnos.yes : t.alumnos.no,
     ]);
 
     const csvContent = [headers.join(","), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(","))].join("\n");
@@ -539,6 +791,44 @@ export function GameResultsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportToSheets = async () => {
+    if (selfEvaluations.length === 0) return;
+
+    setExportingToSheets(true);
+
+    try {
+      // Preparar datos para exportar
+      const exportData: SelfEvaluationExportData[] = selfEvaluations.map(e => ({
+        studentName: e.studentName,
+        teamName: e.teamName,
+        receivedHelpFrom: e.receivedHelp?.map(h => h.fromWho?.join(', ')).filter(Boolean).join('; ') || '',
+        receivedHelpConcepts: e.receivedHelp?.map(h => h.concept).filter(Boolean).join('; ') || '',
+        gaveHelpTo: e.gaveHelp?.map(h => h.toWho?.join(', ')).filter(Boolean).join('; ') || '',
+        gaveHelpConcepts: e.gaveHelp?.map(h => h.concept).filter(Boolean).join('; ') || '',
+        difficultyRating: e.difficultyRating,
+        confidenceBefore: e.confidenceBefore,
+        confidenceAfter: e.confidenceAfter,
+        validated: e.validated || false,
+        submittedAt: e.submittedAt,
+      }));
+
+      const { spreadsheetUrl } = await exportSelfEvaluationsToSheet(
+        gameName,
+        exportData,
+        language as 'es' | 'en' | 'pt'
+      );
+
+      // Abrir el spreadsheet en nueva pestaña
+      window.open(spreadsheetUrl, '_blank');
+
+    } catch (error: any) {
+      console.error('Error exporting to Sheets:', error);
+      alert(error.message || 'Error al exportar');
+    } finally {
+      setExportingToSheets(false);
+    }
+  };
+
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleString(language === "es" ? "es-AR" : language === "pt" ? "pt-BR" : "en-US", {
       day: "2-digit",
@@ -547,6 +837,16 @@ export function GameResultsPage() {
       minute: "2-digit",
     });
   };
+
+  const renderRating = (value: number | undefined) => {
+    if (!value) return "—";
+    return "⭐".repeat(value) + "☆".repeat(5 - value);
+  };
+
+  // Usamos el estado selectedStrategy en lugar de leer directamente de game
+  const currentStrategy = selectedStrategy;
+  const displayedHelpers = getHelpersByStrategy(currentStrategy);
+  const currentPresenter = displayedHelpers[currentPresenterIndex];
 
   if (loading) {
     return (
@@ -570,12 +870,192 @@ export function GameResultsPage() {
     );
   }
 
-  const gameName = game.config?.className || game.config?.gameName || "Juego";
+  // ✅ FALLBACK TRADUCIDO
+  const gameName = game.config?.className || game.config?.gameName || t.gameNameFallback;
+
+  if (presentationMode && currentPresenter) {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 40,
+        color: "white",
+        fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
+      }}>
+        <div style={{
+          position: "absolute",
+          top: 24,
+          left: 24,
+          right: 24,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}>
+          <div style={{ fontSize: 14, opacity: 0.7 }}>
+            {currentPresenterIndex + 1} {t.cierre.presenterOf} {displayedHelpers.length}
+          </div>
+          <button
+            onClick={() => setPresentationMode(false)}
+            style={{
+              padding: "8px 16px",
+              fontSize: 14,
+              fontWeight: 600,
+              backgroundColor: "rgba(255,255,255,0.1)",
+              color: "white",
+              border: "1px solid rgba(255,255,255,0.3)",
+              borderRadius: 8,
+              cursor: "pointer",
+            }}
+          >
+            ✕ {t.cierre.endPresentation}
+          </button>
+        </div>
+
+        <div style={{ textAlign: "center", maxWidth: 600 }}>
+          <div style={{ fontSize: 80, marginBottom: 24 }}>
+            {currentPresenter.teamEmoji || "🎤"}
+          </div>
+
+          <div style={{
+            fontSize: 16,
+            opacity: 0.7,
+            marginBottom: 8,
+            textTransform: "uppercase",
+            letterSpacing: 2,
+          }}>
+            {t.cierre.nowPresenting}
+          </div>
+
+          <h1 style={{
+            fontSize: 48,
+            fontWeight: 800,
+            margin: "0 0 16px 0",
+            background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+          }}>
+            {currentPresenter.studentName}
+          </h1>
+
+          <div style={{
+            fontSize: 20,
+            opacity: 0.8,
+            marginBottom: 32,
+          }}>
+            {currentPresenter.teamName}
+          </div>
+
+          <div style={{
+            backgroundColor: "rgba(255,255,255,0.1)",
+            borderRadius: 16,
+            padding: 24,
+            marginBottom: 24,
+          }}>
+            <div style={{
+              fontSize: 14,
+              opacity: 0.7,
+              marginBottom: 12,
+              textTransform: "uppercase",
+              letterSpacing: 1,
+            }}>
+              {t.cierre.willExplain}
+            </div>
+            <div style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12,
+              justifyContent: "center",
+            }}>
+              {currentPresenter.conceptsHelped.length > 0 ? (
+                currentPresenter.conceptsHelped.map((concept, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      padding: "8px 20px",
+                      backgroundColor: "rgba(251, 191, 36, 0.2)",
+                      border: "2px solid #fbbf24",
+                      borderRadius: 20,
+                      fontSize: 18,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {concept}
+                  </span>
+                ))
+              ) : (
+                <span style={{ opacity: 0.5 }}>Sin conceptos específicos</span>
+              )}
+            </div>
+          </div>
+
+          <div style={{
+            fontSize: 16,
+            opacity: 0.7,
+          }}>
+            💪 {t.cierre.helpedTimes} {currentPresenter.helpCount} {t.cierre.times} ·
+            👥 {t.cierre.helpedTo}: {currentPresenter.helpedStudents.slice(0, 3).join(", ")}
+            {currentPresenter.helpedStudents.length > 3 && ` +${currentPresenter.helpedStudents.length - 3}`}
+          </div>
+        </div>
+
+        <div style={{
+          position: "absolute",
+          bottom: 40,
+          display: "flex",
+          gap: 16,
+        }}>
+          <button
+            onClick={() => setCurrentPresenterIndex(Math.max(0, currentPresenterIndex - 1))}
+            disabled={currentPresenterIndex === 0}
+            style={{
+              padding: "12px 24px",
+              fontSize: 16,
+              fontWeight: 600,
+              backgroundColor: currentPresenterIndex === 0 ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.2)",
+              color: "white",
+              border: "none",
+              borderRadius: 10,
+              cursor: currentPresenterIndex === 0 ? "not-allowed" : "pointer",
+              opacity: currentPresenterIndex === 0 ? 0.5 : 1,
+            }}
+          >
+            {t.cierre.prevPresenter}
+          </button>
+
+          <button
+            onClick={() => setCurrentPresenterIndex(Math.min(displayedHelpers.length - 1, currentPresenterIndex + 1))}
+            disabled={currentPresenterIndex === displayedHelpers.length - 1}
+            style={{
+              padding: "12px 24px",
+              fontSize: 16,
+              fontWeight: 600,
+              backgroundColor: currentPresenterIndex === displayedHelpers.length - 1
+                ? "rgba(255,255,255,0.1)"
+                : "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+              background: currentPresenterIndex === displayedHelpers.length - 1
+                ? "rgba(255,255,255,0.1)"
+                : "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+              color: currentPresenterIndex === displayedHelpers.length - 1 ? "white" : "#1e293b",
+              border: "none",
+              borderRadius: 10,
+              cursor: currentPresenterIndex === displayedHelpers.length - 1 ? "not-allowed" : "pointer",
+              opacity: currentPresenterIndex === displayedHelpers.length - 1 ? 0.5 : 1,
+            }}
+          >
+            {t.cierre.nextPresenter}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={containerStyle}>
       <div style={contentStyle}>
-        {/* Header */}
         <div style={{ marginBottom: 24 }}>
           <button
             onClick={() => navigate("/")}
@@ -598,7 +1078,6 @@ export function GameResultsPage() {
           </p>
         </div>
 
-        {/* Tabs */}
         <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
           <TabButton active={activeTab === "podium"} onClick={() => setActiveTab("podium")}>
             {t.tabs.podium}
@@ -609,116 +1088,61 @@ export function GameResultsPage() {
           <TabButton active={activeTab === "autoevaluaciones"} onClick={() => setActiveTab("autoevaluaciones")}>
             {t.tabs.autoevaluaciones} ({selfEvaluations.length})
           </TabButton>
+          <TabButton active={activeTab === "cierre"} onClick={() => setActiveTab("cierre")}>
+            {t.tabs.cierre}
+          </TabButton>
         </div>
 
-        {/* Content */}
         <div style={cardStyle}>
-          {/* PODIUM TAB */}
           {activeTab === "podium" && (
             <div>
-              {/* Top 3 */}
               <div style={{ display: "flex", gap: 16, justifyContent: "center", marginBottom: 32, flexWrap: "wrap" }}>
-                {/* 2do lugar */}
                 {sortedTeams[1] && (
                   <div style={{ textAlign: "center" }}>
                     <div style={{ fontSize: 48 }}>🥈</div>
-                    <div
-                      style={{
-                        backgroundColor: "#94a3b8",
-                        color: "white",
-                        borderRadius: 12,
-                        padding: 20,
-                        minWidth: 120,
-                      }}
-                    >
+                    <div style={{ backgroundColor: "#94a3b8", color: "white", borderRadius: 12, padding: 20, minWidth: 120 }}>
                       <div style={{ fontSize: 24 }}>{sortedTeams[1].emoji || "🐯"}</div>
                       <div style={{ fontWeight: 700, marginTop: 4 }}>{sortedTeams[1].name}</div>
-                      <div style={{ fontSize: 24, fontWeight: 800, marginTop: 8 }}>
-                        {sortedTeams[1].totalScore ?? 0}
-                      </div>
+                      <div style={{ fontSize: 24, fontWeight: 800, marginTop: 8 }}>{sortedTeams[1].totalScore ?? 0}</div>
                       <div style={{ fontSize: 12, opacity: 0.9 }}>{t.podium.points}</div>
                     </div>
                   </div>
                 )}
 
-                {/* 1er lugar */}
                 {sortedTeams[0] && (
                   <div style={{ textAlign: "center" }}>
                     <div style={{ fontSize: 64 }}>👑</div>
-                    <div
-                      style={{
-                        background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
-                        color: "white",
-                        borderRadius: 12,
-                        padding: 24,
-                        minWidth: 140,
-                      }}
-                    >
+                    <div style={{ background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)", color: "white", borderRadius: 12, padding: 24, minWidth: 140 }}>
                       <div style={{ fontSize: 32 }}>{sortedTeams[0].emoji || "🦁"}</div>
                       <div style={{ fontWeight: 700, fontSize: 18, marginTop: 4 }}>{sortedTeams[0].name}</div>
-                      <div style={{ fontSize: 32, fontWeight: 800, marginTop: 8 }}>
-                        {sortedTeams[0].totalScore ?? 0}
-                      </div>
+                      <div style={{ fontSize: 32, fontWeight: 800, marginTop: 8 }}>{sortedTeams[0].totalScore ?? 0}</div>
                       <div style={{ fontSize: 12, opacity: 0.9 }}>{t.podium.points}</div>
-                      <div
-                        style={{
-                          marginTop: 8,
-                          fontSize: 11,
-                          backgroundColor: "rgba(255,255,255,0.2)",
-                          padding: "4px 8px",
-                          borderRadius: 4,
-                        }}
-                      >
+                      <div style={{ marginTop: 8, fontSize: 11, backgroundColor: "rgba(255,255,255,0.2)", padding: "4px 8px", borderRadius: 4 }}>
                         🏆 {t.podium.champion}
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* 3er lugar */}
                 {sortedTeams[2] && (
                   <div style={{ textAlign: "center" }}>
                     <div style={{ fontSize: 48 }}>🥉</div>
-                    <div
-                      style={{
-                        backgroundColor: "#cd7c32",
-                        color: "white",
-                        borderRadius: 12,
-                        padding: 20,
-                        minWidth: 120,
-                      }}
-                    >
+                    <div style={{ backgroundColor: "#cd7c32", color: "white", borderRadius: 12, padding: 20, minWidth: 120 }}>
                       <div style={{ fontSize: 24 }}>{sortedTeams[2].emoji || "🐻"}</div>
                       <div style={{ fontWeight: 700, marginTop: 4 }}>{sortedTeams[2].name}</div>
-                      <div style={{ fontSize: 24, fontWeight: 800, marginTop: 8 }}>
-                        {sortedTeams[2].totalScore ?? 0}
-                      </div>
+                      <div style={{ fontSize: 24, fontWeight: 800, marginTop: 8 }}>{sortedTeams[2].totalScore ?? 0}</div>
                       <div style={{ fontSize: 12, opacity: 0.9 }}>{t.podium.points}</div>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Resto de equipos */}
               {sortedTeams.length > 3 && (
                 <div>
                   <h3 style={{ fontSize: 14, color: "#64748b", marginBottom: 12 }}>{t.podium.otherTeams}</h3>
                   {sortedTeams.slice(3).map((team, index) => (
-                    <div
-                      key={team.id}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "12px 16px",
-                        backgroundColor: "#f8fafc",
-                        borderRadius: 8,
-                        marginBottom: 8,
-                      }}
-                    >
-                      <span style={{ color: "#64748b" }}>
-                        {index + 4}. {team.emoji} {team.name}
-                      </span>
+                    <div key={team.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", backgroundColor: "#f8fafc", borderRadius: 8, marginBottom: 8 }}>
+                      <span style={{ color: "#64748b" }}>{index + 4}. {team.emoji} {team.name}</span>
                       <span style={{ fontWeight: 700 }}>{team.totalScore ?? 0} pts</span>
                     </div>
                   ))}
@@ -727,55 +1151,18 @@ export function GameResultsPage() {
             </div>
           )}
 
-          {/* ALUMNOS TAB */}
           {activeTab === "alumnos" && (
             <div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 20,
-                  flexWrap: "wrap",
-                  gap: 12,
-                }}
-              >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
                 <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{t.alumnos.title}</h3>
-
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  {/* Filtro por equipo */}
-                  <select
-                    value={teamFilter}
-                    onChange={(e) => setTeamFilter(e.target.value)}
-                    style={{
-                      padding: "8px 12px",
-                      borderRadius: 8,
-                      border: "1px solid #e2e8f0",
-                      fontSize: 14,
-                    }}
-                  >
+                  <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14 }}>
                     <option value="all">{t.alumnos.filterAll}</option>
                     {sortedTeams.map((team) => (
-                      <option key={team.id} value={team.id}>
-                        {team.emoji} {team.name}
-                      </option>
+                      <option key={team.id} value={team.id}>{team.emoji} {team.name}</option>
                     ))}
                   </select>
-
-                  {/* Exportar */}
-                  <button
-                    onClick={handleExportExcel}
-                    style={{
-                      padding: "8px 16px",
-                      backgroundColor: "#22c55e",
-                      color: "white",
-                      border: "none",
-                      borderRadius: 8,
-                      fontSize: 14,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
+                  <button onClick={handleExportExcel} style={{ padding: "8px 16px", backgroundColor: "#22c55e", color: "white", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                     {t.alumnos.exportExcel}
                   </button>
                 </div>
@@ -793,10 +1180,51 @@ export function GameResultsPage() {
             </div>
           )}
 
-          {/* AUTOEVALUACIONES TAB */}
           {activeTab === "autoevaluaciones" && (
             <div>
-              <h3 style={{ margin: "0 0 16px 0", fontSize: 18, fontWeight: 700 }}>{t.selfEval.title}</h3>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 16,
+                flexWrap: 'wrap',
+                gap: 12,
+              }}>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
+                  {t.selfEval.title}
+                </h3>
+
+                {selfEvaluations.length > 0 && (
+                  <button
+                    onClick={handleExportToSheets}
+                    disabled={exportingToSheets}
+                    style={{
+                      padding: '10px 20px',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      borderRadius: 8,
+                      border: 'none',
+                      backgroundColor: exportingToSheets ? '#94a3b8' : '#34a853',
+                      color: 'white',
+                      cursor: exportingToSheets ? 'wait' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    {exportingToSheets ? (
+                      <>⏳ {t.selfEval.exporting}</>
+                    ) : (
+                      <>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M19 11H5m14 0-4-4m4 4-4 4" />
+                        </svg>
+                        {t.selfEval.exportSheets}
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
 
               {selfEvaluations.length === 0 ? (
                 <div style={{ textAlign: "center", padding: 40 }}>
@@ -809,121 +1237,235 @@ export function GameResultsPage() {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   {selfEvaluations.map((evaluation) => (
-                    <div
-                      key={evaluation.id}
-                      style={{
-                        backgroundColor: "#f8fafc",
-                        borderRadius: 12,
-                        padding: 20,
-                        border: "1px solid #e2e8f0",
-                      }}
-                    >
-                      {/* Header */}
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          marginBottom: 16,
-                          flexWrap: "wrap",
-                          gap: 8,
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 16, color: "#1e293b" }}>
-                            {evaluation.studentName}
-                          </div>
-                          <div style={{ fontSize: 13, color: "#64748b" }}>
-                            {t.selfEval.team}: {evaluation.teamName}
-                          </div>
-                        </div>
-                        <div style={{ fontSize: 12, color: "#94a3b8" }}>{formatDate(evaluation.submittedAt)}</div>
-                      </div>
-
-                      {/* Ayuda recibida */}
-                      {evaluation.receivedHelp && evaluation.receivedHelp.length > 0 && (
-                        <div style={{ marginBottom: 16 }}>
-                          <div
-                            style={{
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: "#22c55e",
-                              marginBottom: 8,
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                            }}
-                          >
-                            🤝 {t.selfEval.receivedHelp}
-                          </div>
-                          {evaluation.receivedHelp.map((help, idx) => (
-                            <div
-                              key={idx}
-                              style={{
-                                backgroundColor: "white",
-                                borderRadius: 8,
-                                padding: 12,
-                                marginBottom: 8,
-                                borderLeft: "3px solid #22c55e",
-                              }}
-                            >
-                              {help.concept && <div style={{ fontWeight: 600, marginBottom: 4 }}>{help.concept}</div>}
-                              {help.fromWho.length > 0 && (
-                                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 4 }}>
-                                  {t.selfEval.fromWho}: {help.fromWho.join(", ")}
-                                </div>
-                              )}
-                              {help.description && (
-                                <div style={{ fontSize: 13, color: "#374151" }}>{help.description}</div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Ayuda dada */}
-                      {evaluation.gaveHelp && evaluation.gaveHelp.length > 0 && (
-                        <div>
-                          <div
-                            style={{
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: "#3b82f6",
-                              marginBottom: 8,
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                            }}
-                          >
-                            💡 {t.selfEval.gaveHelp}
-                          </div>
-                          {evaluation.gaveHelp.map((help, idx) => (
-                            <div
-                              key={idx}
-                              style={{
-                                backgroundColor: "white",
-                                borderRadius: 8,
-                                padding: 12,
-                                marginBottom: 8,
-                                borderLeft: "3px solid #3b82f6",
-                              }}
-                            >
-                              {help.concept && <div style={{ fontWeight: 600, marginBottom: 4 }}>{help.concept}</div>}
-                              {help.toWho.length > 0 && (
-                                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 4 }}>
-                                  {t.selfEval.toWho}: {help.toWho.join(", ")}
-                                </div>
-                              )}
-                              {help.description && (
-                                <div style={{ fontSize: 13, color: "#374151" }}>{help.description}</div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <SelfEvalCard key={evaluation.id} evaluation={evaluation} t={t} formatDate={formatDate} renderRating={renderRating} />
                   ))}
                 </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "cierre" && (
+            <div>
+              <div style={{ marginBottom: 24 }}>
+                <h3 style={{ margin: "0 0 8px 0", fontSize: 20, fontWeight: 700, color: "#1e293b" }}>
+                  🎤 {t.cierre.title}
+                </h3>
+                <p style={{ margin: 0, fontSize: 14, color: "#64748b" }}>
+                  {t.cierre.subtitle}
+                </p>
+              </div>
+
+              <div style={{
+                padding: 16,
+                backgroundColor: "#fef3c7",
+                borderRadius: 12,
+                border: "2px solid #fbbf24",
+                marginBottom: 24,
+              }}>
+                <p style={{ margin: 0, fontSize: 14, color: "#92400e" }}>
+                  {t.cierre.tip}
+                </p>
+              </div>
+
+              {topHelpers.length === 0 ? (
+                <div style={{ textAlign: "center", padding: 40 }}>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>🎤</div>
+                  <div style={{ color: "#64748b", marginBottom: 8 }}>{t.cierre.noHelpers}</div>
+                  <p style={{ color: "#f59e0b", fontSize: 13 }}>{t.cierre.validateFirst}</p>
+                </div>
+              ) : (
+                <>
+                  <div style={{
+                    display: "flex",
+                    gap: 12,
+                    marginBottom: 24,
+                    flexWrap: "wrap",
+                  }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: "#475569", alignSelf: "center" }}>
+                      {t.cierre.strategy}:
+                    </span>
+                    {(['top3', 'onePerTeam', 'manual'] as const).map((strat) => (
+                      <button
+                        key={strat}
+                        onClick={() => setSelectedStrategy(strat)}
+                        style={{
+                          padding: "8px 16px",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          borderRadius: 8,
+                          border: currentStrategy === strat ? "2px solid #3b82f6" : "2px solid #e2e8f0",
+                          backgroundColor: currentStrategy === strat ? "#eff6ff" : "white",
+                          color: currentStrategy === strat ? "#3b82f6" : "#64748b",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {strat === 'top3' && t.cierre.strategyTop3}
+                        {strat === 'onePerTeam' && t.cierre.strategyOnePerTeam}
+                        {strat === 'manual' && t.cierre.strategyManual}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div style={{ marginBottom: 24 }}>
+                    <h4 style={{ margin: "0 0 16px 0", fontSize: 16, fontWeight: 700, color: "#1e293b" }}>
+                      📊 {t.cierre.topHelpers}
+                    </h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {topHelpers.map((helper, index) => {
+                        const isSelected = currentStrategy === 'manual'
+                          ? selectedHelpers.has(`${helper.teamId}-${helper.studentName}`)
+                          : currentStrategy === 'top3'
+                            ? index < 3
+                            : currentStrategy === 'onePerTeam'
+                              ? displayedHelpers.some(h => h.studentName === helper.studentName && h.teamId === helper.teamId)
+                              : false;
+
+                        return (
+                          <div
+                            key={`${helper.teamId}-${helper.studentName}`}
+                            style={{
+                              padding: 16,
+                              backgroundColor: isSelected ? "#f0fdf4" : "#f8fafc",
+                              borderRadius: 12,
+                              border: isSelected ? "2px solid #22c55e" : "1px solid #e2e8f0",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              flexWrap: "wrap",
+                              gap: 12,
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                              <div style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: "50%",
+                                backgroundColor: index === 0 ? "#fbbf24" : index === 1 ? "#94a3b8" : index === 2 ? "#cd7c32" : "#e2e8f0",
+                                color: index < 3 ? "white" : "#64748b",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontWeight: 700,
+                                fontSize: 14,
+                              }}>
+                                {index + 1}
+                              </div>
+
+                              <div>
+                                <div style={{ fontWeight: 700, color: "#1e293b", display: "flex", alignItems: "center", gap: 8 }}>
+                                  {helper.teamEmoji} {helper.studentName}
+                                  {isSelected && <span style={{ color: "#22c55e" }}>✓</span>}
+                                </div>
+                                <div style={{ fontSize: 12, color: "#64748b" }}>
+                                  {helper.teamName} ·
+                                  💪 {t.cierre.helpedTimes} {helper.helpCount} {t.cierre.times}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                              {helper.conceptsHelped.length > 0 && (
+                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                  {helper.conceptsHelped.slice(0, 2).map((concept, i) => (
+                                    <span
+                                      key={i}
+                                      style={{
+                                        padding: "4px 10px",
+                                        backgroundColor: "#dbeafe",
+                                        color: "#1d4ed8",
+                                        borderRadius: 12,
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      {concept}
+                                    </span>
+                                  ))}
+                                  {helper.conceptsHelped.length > 2 && (
+                                    <span style={{ fontSize: 11, color: "#64748b" }}>
+                                      +{helper.conceptsHelped.length - 2}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
+                              {currentStrategy === 'manual' && (
+                                <button
+                                  onClick={() => toggleHelperSelection(helper)}
+                                  style={{
+                                    padding: "6px 12px",
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    borderRadius: 6,
+                                    border: "none",
+                                    backgroundColor: isSelected ? "#fee2e2" : "#dcfce7",
+                                    color: isSelected ? "#dc2626" : "#166534",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  {isSelected ? t.cierre.deselect : t.cierre.select}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {displayedHelpers.length > 0 && (
+                    <div style={{
+                      padding: 20,
+                      backgroundColor: "#f0fdf4",
+                      borderRadius: 16,
+                      border: "2px solid #22c55e",
+                    }}>
+                      <h4 style={{ margin: "0 0 12px 0", fontSize: 16, fontWeight: 700, color: "#166534" }}>
+                        ✅ {t.cierre.selected} ({displayedHelpers.length})
+                      </h4>
+                      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+                        {displayedHelpers.map((helper) => (
+                          <div
+                            key={`${helper.teamId}-${helper.studentName}`}
+                            style={{
+                              padding: "8px 16px",
+                              backgroundColor: "white",
+                              borderRadius: 10,
+                              border: "1px solid #86efac",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                            }}
+                          >
+                            <span>{helper.teamEmoji}</span>
+                            <span style={{ fontWeight: 600, color: "#166534" }}>{helper.studentName}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setCurrentPresenterIndex(0);
+                          setPresentationMode(true);
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "14px 24px",
+                          fontSize: 16,
+                          fontWeight: 700,
+                          borderRadius: 12,
+                          border: "none",
+                          background: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+                          color: "white",
+                          cursor: "pointer",
+                          boxShadow: "0 4px 15px rgba(34, 197, 94, 0.3)",
+                        }}
+                      >
+                        {t.cierre.startPresentation}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -933,45 +1475,18 @@ export function GameResultsPage() {
   );
 }
 
-// Componente de tarjeta de estudiante
 function StudentCard({ student, t }: { student: StudentPerformance; t: any }) {
   const [expanded, setExpanded] = useState(false);
-
   const hasActivity = student.respondedCount > 0 || student.ratedCount > 0;
 
   return (
-    <div
-      style={{
-        backgroundColor: "#f8fafc",
-        borderRadius: 12,
-        border: "1px solid #e2e8f0",
-        overflow: "hidden",
-      }}
-    >
-      {/* Header */}
+    <div style={{ backgroundColor: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0", overflow: "hidden" }}>
       <div
-        style={{
-          padding: 16,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          cursor: hasActivity ? "pointer" : "default",
-        }}
+        style={{ padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: hasActivity ? "pointer" : "default" }}
         onClick={() => hasActivity && setExpanded(!expanded)}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: "50%",
-              backgroundColor: "#e2e8f0",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 18,
-            }}
-          >
+          <div style={{ width: 40, height: 40, borderRadius: "50%", backgroundColor: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
             {student.teamEmoji || "👤"}
           </div>
           <div>
@@ -981,20 +1496,16 @@ function StudentCard({ student, t }: { student: StudentPerformance; t: any }) {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {/* Respondió */}
           {student.respondedCount > 0 && (
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 11, color: "#64748b" }}>🎤 {t.alumnos.responded}</div>
               <div style={{ fontWeight: 700, color: "#f59e0b" }}>
                 {student.respondedCount}
-                {student.respondedWithHelp > 0 && (
-                  <span style={{ fontSize: 11, color: "#94a3b8" }}> ({student.respondedWithHelp}🆘)</span>
-                )}
+                {student.respondedWithHelp > 0 && <span style={{ fontSize: 11, color: "#94a3b8" }}> ({student.respondedWithHelp}🆘)</span>}
               </div>
             </div>
           )}
 
-          {/* Calificó */}
           {student.ratedCount > 0 && (
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 11, color: "#64748b" }}>✍️ {t.alumnos.rated}</div>
@@ -1006,116 +1517,52 @@ function StudentCard({ student, t }: { student: StudentPerformance; t: any }) {
             </div>
           )}
 
-          {/* Autoevaluación */}
           {student.selfEvaluation && (
-            <div
-              style={{
-                padding: "4px 8px",
-                backgroundColor: "#dbeafe",
-                color: "#1d4ed8",
-                borderRadius: 4,
-                fontSize: 11,
-                fontWeight: 600,
-              }}
-            >
-              📝
+            <div style={{ padding: "4px 8px", backgroundColor: student.selfEvaluation.validated ? "#dcfce7" : "#dbeafe", color: student.selfEvaluation.validated ? "#166534" : "#1d4ed8", borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
+              📝 {student.selfEvaluation.validated ? "✓" : ""}
             </div>
           )}
 
-          {/* Expand icon */}
           {hasActivity && <span style={{ color: "#94a3b8" }}>{expanded ? "▲" : "▼"}</span>}
         </div>
       </div>
 
-      {/* Detalles expandidos */}
       {expanded && (
         <div style={{ padding: "0 16px 16px", borderTop: "1px solid #e2e8f0" }}>
-          {/* Preguntas respondidas */}
           {student.respondedQuestions.length > 0 && (
             <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#f59e0b", marginBottom: 8 }}>
-                🎤 {t.alumnos.responded}
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#f59e0b", marginBottom: 8 }}>🎤 {t.alumnos.responded}</div>
               {student.respondedQuestions.map((q, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    backgroundColor: "white",
-                    borderRadius: 8,
-                    padding: 12,
-                    marginBottom: 8,
-                    borderLeft: `3px solid ${q.responseValidated === "correct" ? "#22c55e" : q.responseValidated === "incorrect" ? "#ef4444" : "#94a3b8"}`,
-                  }}
-                >
-                  <div style={{ fontSize: 13, color: "#374151", marginBottom: 8 }}>
-                    <strong>{t.alumnos.question}:</strong> {q.questionText}
-                  </div>
+                <div key={idx} style={{ backgroundColor: "white", borderRadius: 8, padding: 12, marginBottom: 8, borderLeft: `3px solid ${q.responseValidated === "correct" ? "#22c55e" : q.responseValidated === "incorrect" ? "#ef4444" : "#94a3b8"}` }}>
+                  <div style={{ fontSize: 13, color: "#374151", marginBottom: 8 }}><strong>{t.alumnos.question}:</strong> {q.questionText}</div>
                   <div style={{ display: "flex", gap: 16, fontSize: 12 }}>
-                    <span>
-                      <strong>{t.alumnos.help}:</strong> {q.helpRequested ? `✅ ${t.alumnos.yes}` : `❌ ${t.alumnos.no}`}
-                    </span>
-                    <span>
-                      <strong>{t.alumnos.result}:</strong>{" "}
-                      {q.responseValidated === "correct" ? "✅ Correcta" : q.responseValidated === "incorrect" ? "❌ Incorrecta" : "⏳ Sin validar"}
-                    </span>
+                    <span><strong>{t.alumnos.help}:</strong> {q.helpRequested ? `✅ ${t.alumnos.yes}` : `❌ ${t.alumnos.no}`}</span>
+                    <span><strong>{t.alumnos.result}:</strong> {
+                      q.responseValidated === "correct"
+                        ? t.alumnos.correctAnswer
+                        : q.responseValidated === "incorrect"
+                          ? t.alumnos.incorrectAnswer
+                          : t.alumnos.unvalidated
+                    }</span>
                   </div>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Calificaciones dadas */}
           {student.ratingDetails.length > 0 && (
             <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#3b82f6", marginBottom: 8 }}>
-                ✍️ {t.alumnos.rated}
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#3b82f6", marginBottom: 8 }}>✍️ {t.alumnos.rated}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {student.ratingDetails.map((r, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: 8,
-                      backgroundColor: r.rating === "green" ? "#dcfce7" : r.rating === "yellow" ? "#fef3c7" : "#fee2e2",
-                      color: r.rating === "green" ? "#166534" : r.rating === "yellow" ? "#a16207" : "#991b1b",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 4,
-                    }}
-                  >
+                  <div key={idx} style={{ padding: "6px 12px", borderRadius: 8, backgroundColor: r.rating === "green" ? "#dcfce7" : r.rating === "yellow" ? "#fef3c7" : "#fee2e2", color: r.rating === "green" ? "#166534" : r.rating === "yellow" ? "#a16207" : "#991b1b", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
                     {r.rating === "green" ? "🟩" : r.rating === "yellow" ? "🟨" : "🟥"}
                     {r.validated === true && <span>✅</span>}
                     {r.validated === false && <span>❌</span>}
                   </div>
                 ))}
               </div>
-              <div style={{ fontSize: 11, color: "#64748b", marginTop: 8 }}>
-                ✅ {student.ratingsAccepted} {t.alumnos.accepted} • ❌ {student.ratingsRejected} {t.alumnos.rejected}
-              </div>
-            </div>
-          )}
-
-          {/* Autoevaluación vinculada */}
-          {student.selfEvaluation && (
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#8b5cf6", marginBottom: 8 }}>📝 Autoevaluación</div>
-              <div style={{ backgroundColor: "white", borderRadius: 8, padding: 12, fontSize: 13 }}>
-                {student.selfEvaluation.receivedHelp?.length > 0 && (
-                  <div style={{ marginBottom: 8 }}>
-                    <strong>Aprendió de:</strong>{" "}
-                    {student.selfEvaluation.receivedHelp.map((h) => h.fromWho.join(", ")).join("; ")}
-                  </div>
-                )}
-                {student.selfEvaluation.gaveHelp?.length > 0 && (
-                  <div>
-                    <strong>Ayudó a:</strong>{" "}
-                    {student.selfEvaluation.gaveHelp.map((h) => h.toWho.join(", ")).join("; ")}
-                  </div>
-                )}
-              </div>
+              <div style={{ fontSize: 11, color: "#64748b", marginTop: 8 }}>✅ {student.ratingsAccepted} {t.alumnos.accepted} • ❌ {student.ratingsRejected} {t.alumnos.rejected}</div>
             </div>
           )}
         </div>
@@ -1124,44 +1571,77 @@ function StudentCard({ student, t }: { student: StudentPerformance; t: any }) {
   );
 }
 
-// Componentes auxiliares
+function SelfEvalCard({ evaluation, t, formatDate, renderRating }: { evaluation: SelfEvaluation; t: any; formatDate: (ts: number) => string; renderRating: (val: number | undefined) => string }) {
+  return (
+    <div style={{ backgroundColor: "#f8fafc", borderRadius: 12, padding: 20, border: `2px solid ${evaluation.validated ? "#22c55e" : "#e2e8f0"}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontWeight: 700, fontSize: 16, color: "#1e293b" }}>{evaluation.studentName}</span>
+            <span style={{ padding: "2px 8px", borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: evaluation.validated ? "#dcfce7" : "#fef3c7", color: evaluation.validated ? "#166534" : "#92400e" }}>
+              {evaluation.validated ? t.selfEval.validated : t.selfEval.pending}
+            </span>
+          </div>
+          <div style={{ fontSize: 13, color: "#64748b" }}>{t.selfEval.team}: {evaluation.teamName}</div>
+        </div>
+        <div style={{ fontSize: 12, color: "#94a3b8" }}>{formatDate(evaluation.submittedAt)}</div>
+      </div>
+
+      {evaluation.receivedHelp && evaluation.receivedHelp.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#22c55e", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>🤝 {t.selfEval.receivedHelp}</div>
+          {evaluation.receivedHelp.map((help, idx) => (
+            <div key={idx} style={{ backgroundColor: "white", borderRadius: 8, padding: 12, marginBottom: 8, borderLeft: "3px solid #22c55e" }}>
+              {help.concept && <div style={{ fontWeight: 600, marginBottom: 4 }}>{help.concept}</div>}
+              {help.fromWho && help.fromWho.length > 0 && <div style={{ fontSize: 13, color: "#64748b", marginBottom: 4 }}>{t.selfEval.fromWho}: {help.fromWho.join(", ")}</div>}
+              {help.description && <div style={{ fontSize: 13, color: "#374151" }}>{help.description}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {evaluation.gaveHelp && evaluation.gaveHelp.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#3b82f6", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>💡 {t.selfEval.gaveHelp}</div>
+          {evaluation.gaveHelp.map((help, idx) => (
+            <div key={idx} style={{ backgroundColor: "white", borderRadius: 8, padding: 12, marginBottom: 8, borderLeft: "3px solid #3b82f6" }}>
+              {help.concept && <div style={{ fontWeight: 600, marginBottom: 4 }}>{help.concept}</div>}
+              {help.toWho && help.toWho.length > 0 && <div style={{ fontSize: 13, color: "#64748b", marginBottom: 4 }}>{t.selfEval.toWho}: {help.toWho.join(", ")}</div>}
+              {help.description && <div style={{ fontSize: 13, color: "#374151" }}>{help.description}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(evaluation.difficultyRating || evaluation.confidenceBefore || evaluation.confidenceAfter) && (
+        <div style={{ backgroundColor: "#faf5ff", borderRadius: 8, padding: 12, marginBottom: 16, borderLeft: "3px solid #8b5cf6" }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#8b5cf6", marginBottom: 8 }}>🧠 {t.selfEval.metacognition}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {evaluation.difficultyRating && <div style={{ fontSize: 13, display: "flex", justifyContent: "space-between" }}><span style={{ color: "#64748b" }}>{t.selfEval.difficulty}:</span><span>{renderRating(evaluation.difficultyRating)}</span></div>}
+            {evaluation.confidenceBefore && <div style={{ fontSize: 13, display: "flex", justifyContent: "space-between" }}><span style={{ color: "#64748b" }}>{t.selfEval.confidenceBefore}:</span><span>{renderRating(evaluation.confidenceBefore)}</span></div>}
+            {evaluation.confidenceAfter && <div style={{ fontSize: 13, display: "flex", justifyContent: "space-between" }}><span style={{ color: "#64748b" }}>{t.selfEval.confidenceAfter}:</span><span>{renderRating(evaluation.confidenceAfter)}</span></div>}
+          </div>
+        </div>
+      )}
+
+      {evaluation.teacherComment && (
+        <div style={{ backgroundColor: "#fffbeb", borderRadius: 8, padding: 12, borderLeft: "3px solid #f59e0b" }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#b45309", marginBottom: 4 }}>💬 {t.selfEval.teacherComment}</div>
+          <div style={{ fontSize: 13, color: "#374151" }}>{evaluation.teacherComment}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TabButton({ children, active, onClick }: { children: React.ReactNode; active: boolean; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: "10px 16px",
-        fontSize: 14,
-        fontWeight: 600,
-        backgroundColor: active ? "#3b82f6" : "white",
-        color: active ? "white" : "#64748b",
-        border: active ? "none" : "1px solid #e2e8f0",
-        borderRadius: 8,
-        cursor: "pointer",
-        transition: "all 0.2s",
-      }}
-    >
+    <button onClick={onClick} style={{ padding: "10px 16px", fontSize: 14, fontWeight: 600, backgroundColor: active ? "#3b82f6" : "white", color: active ? "white" : "#64748b", border: active ? "none" : "1px solid #e2e8f0", borderRadius: 8, cursor: "pointer", transition: "all 0.2s" }}>
       {children}
     </button>
   );
 }
 
-// Estilos
-const containerStyle: React.CSSProperties = {
-  minHeight: "100vh",
-  backgroundColor: "#f1f5f9",
-  fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
-};
-
-const contentStyle: React.CSSProperties = {
-  maxWidth: 900,
-  margin: "0 auto",
-  padding: 24,
-};
-
-const cardStyle: React.CSSProperties = {
-  backgroundColor: "white",
-  borderRadius: 16,
-  padding: 24,
-  boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-};
+const containerStyle: React.CSSProperties = { minHeight: "100vh", backgroundColor: "#f1f5f9", fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif" };
+const contentStyle: React.CSSProperties = { maxWidth: 900, margin: "0 auto", padding: 24 };
+const cardStyle: React.CSSProperties = { backgroundColor: "white", borderRadius: 16, padding: 24, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" };

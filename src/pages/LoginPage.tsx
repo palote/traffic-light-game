@@ -11,7 +11,7 @@ export function LoginPage() {
   const { user, loginWithGoogle, loading } = useAuth();
   const { t, language } = useI18n();
 
-  // Traducciones locales
+  // Traducciones locales, ahora incluye footer
   const pageTexts = {
     title: language === 'es' 
       ? 'El Juego del Semáforo' 
@@ -49,6 +49,18 @@ export function LoginPage() {
             'Real-time scoring',
             'Question library included',
           ],
+    },
+    footer: {
+      privacy: language === 'es' 
+        ? 'Política de Privacidad' 
+        : language === 'pt' 
+        ? 'Política de Privacidade' 
+        : 'Privacy Policy',
+      copyright: language === 'es' 
+        ? 'El Juego del Semáforo' 
+        : language === 'pt' 
+        ? 'O Jogo do Semáforo' 
+        : 'The Traffic Light Game',
     },
   };
 
@@ -224,6 +236,27 @@ export function LoginPage() {
               <li key={index}>{item}</li>
             ))}
           </ul>
+        </div>
+
+        {/* Footer discreto con link a privacidad - AHORA DENTRO DE REACT */}
+        <div style={{
+          marginTop: 24,
+          textAlign: 'center',
+          fontSize: 11,
+          color: '#9ca3af',
+          borderTop: '1px solid #e2e8f0',
+          paddingTop: 16,
+        }}>
+          <a
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: '#9ca3af', textDecoration: 'none' }}
+          >
+            {pageTexts.footer.privacy}
+          </a>
+          {' · '}
+          <span>© 2026 {pageTexts.footer.copyright}</span>
         </div>
       </div>
     </div>

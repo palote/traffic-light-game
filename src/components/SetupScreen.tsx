@@ -14,6 +14,7 @@ import type {
   Player,
   Question,
   GameMode,
+  PedagogicalDevices,
 } from "../types/game";
 
 import {
@@ -26,16 +27,25 @@ import {
 import { CSVPreview } from "./CSVPreview";
 import { SaveGameModal } from "./library/SaveGameModal";
 import { PromptGeneratorModal } from "./PromptGeneratorModal";
-import { RoomCodeDisplay } from "./RoomCodeDisplay"; // ✅ NUEVO
+import { RoomCodeDisplay } from "./RoomCodeDisplay";
 import { useGameMode } from "../contexts/GameModeContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useI18n } from "../i18n";
+
+import { StudentConfigValidator, useStudentValidation } from './StudentConfigValidator';
+import { ClassSelectorModal } from './ClassSelectorModal';
+import { ImportFromClassroomModal } from "../components/ImportFromClassroomModal";
+// 🆕 Import del nuevo modal para Google Sheets
+import { ImportFromSheetsModal } from "./ImportFromSheetsModal";
 
 import { parseCSV } from "../utils/csvParser";
 import type { ParseResult, ParsedQuestion } from "../utils/csvParser";
 
 import { saveTeacherGame } from "../services/teacherLibraryService";
 import type { NewTeacherGame } from "../types/teacherLibrary";
+
+// 🆕 Import del nuevo modal
+import { GameStartAnnouncementModal } from "./GameStartAnnouncementModal";
 
 // 🦁 Nombres de equipos con animales (Traffic Light - niños)
 const TEAM_ANIMALS = [
@@ -77,17 +87,14 @@ interface SetupScreenProps {
  * =========================================================
  */
 
-// típicos cuando se ve "Ã¡", "Â¿", "â€"", etc.
 function hasMojibakeMarkers(text: string): boolean {
   return /Ã|Â|â€/.test(text);
 }
 
-// caso típico: carácter de reemplazo "�" (U+FFFD)
 function hasVisibleBadReplacement(text: string): boolean {
   return /\uFFFD/.test(text);
 }
 
-// score más alto = peor
 function scoreText(text: string): number {
   const repl = (text.match(/\uFFFD/g) || []).length;
   const mojibake = (text.match(/Ã|Â|â€/g) || []).length;
@@ -95,37 +102,26 @@ function scoreText(text: string): number {
   return repl * 10 + visible * 8 + mojibake * 3;
 }
 
-// Reparación clásica: latin1-string → bytes → decode UTF-8
-// Sirve para transformar "DecÃ­" → "Decí"
 function repairLatin1ToUtf8(text: string): string {
   const bytes = new Uint8Array([...text].map((ch) => ch.charCodeAt(0) & 0xff));
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 }
 
-/**
- * Intenta "mejorar" el string si parece mojibake.
- * Importante: si el texto YA viene con '�' fuerte,
- * puede estar corrupto y no hay arreglo perfecto: por eso solo aplicamos si mejora el score.
- */
 function maybeFixEncodingString(
   input: string
 ): { text: string; changed: boolean; reason: string } {
   const original = input ?? "";
   const origScore = scoreText(original);
 
-  // Si no hay señales, no tocamos nada
   if (!hasMojibakeMarkers(original) && !hasVisibleBadReplacement(original)) {
     return { text: original, changed: false, reason: "no_markers" };
   }
 
-  // Si ya tiene muchos '�', sin bytes no hay magia: no intentamos "repair" a ciegas.
-  // (Evita empeorar textos que ya están dañados.)
   const replCount = (original.match(/\uFFFD/g) || []).length;
   if (replCount >= 3 && !hasMojibakeMarkers(original)) {
     return { text: original, changed: false, reason: "has_replacement_no_bytes" };
   }
 
-  // Intento: repair latin1→utf8
   let candidate = original;
   try {
     candidate = repairLatin1ToUtf8(original);
@@ -141,11 +137,6 @@ function maybeFixEncodingString(
   return { text: original, changed: false, reason: "no_improvement" };
 }
 
-/**
- * ✅ Decode robusto para archivos locales (tenemos bytes).
- * Probamos UTF-8 y fallbacks comunes (windows-1252 / iso-8859-1)
- * y elegimos el que minimiza scoreText().
- */
 async function decodeFileBestEffort(
   file: File
 ): Promise<{
@@ -174,7 +165,6 @@ async function decodeFileBestEffort(
     };
   });
 
-  // elegir el mejor score; si empatan, priorizar utf-8
   const sorted = [...candidates].sort((a, b) => a.score - b.score);
   const bestScore = sorted[0]?.score ?? 0;
   const bestEncodings = sorted.filter((c) => c.score === bestScore).map((c) => c.encoding);
@@ -196,13 +186,12 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
   const navigate = useNavigate();
   const { mode: gameMode, theme } = useGameMode();
   const { user } = useAuth();
-  const { t: appT } = useI18n(); // Traducciones globales de la app
+  const { t: appT, language: appLanguage } = useI18n();
 
-  // Estado del formulario
   const [level] = useState<GameLevel>("primary");
   const [ratingMode] = useState<"devices" | "physical-cards">("devices");
   const [language, setLanguage] = useState<Language>(
-    gameMode === "coopetition" ? "en" : "es"
+    appLanguage as Language
   );
   const [className, setClassName] = useState("");
   const [subject, setSubject] = useState("");
@@ -211,7 +200,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
   const [csvError, setCsvError] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
 
-  // Texto de estudiantes
   const [studentsText, setStudentsText] = useState("");
 
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -219,52 +207,94 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
 
-  // Timers
   const [stage1RatingTimer] = useState(30);
   const [stage2HintTimer] = useState(60);
   const [stage2AnswerTimer] = useState(45);
   const [stage2HelpTimer] = useState(30);
 
-  // Equipos y jugadores
   const [teams, setTeams] = useState<Team[]>([]);
 
-  // UI State
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
   const [isCreating, setIsCreating] = useState(false);
+  // 🆕 Estado para roomCode
   const [roomCode, setRoomCode] = useState("");
   const [createdGameId, setCreatedGameId] = useState<string>("");
 
-  // Estado para CSV de biblioteca
   const [libraryCSVLoaded, setLibraryCSVLoaded] = useState(false);
   const [libraryCSVTitle, setLibraryCSVTitle] = useState<string | null>(null);
 
-  // Estado para guardar juego
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [csvContentForSave, setCsvContentForSave] = useState<string>("");
   const [gameSaved, setGameSaved] = useState(false);
 
-  // Estado para generador de prompts
   const [showPromptGenerator, setShowPromptGenerator] = useState(false);
 
-  // ✅ NUEVO: Material complementario (TXT)
   const [sourceTextPath, setSourceTextPath] = useState<string | null>(null);
-  // ✅ NUEVO: Modal de material complementario para el profesor
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [materialContent, setMaterialContent] = useState<string | null>(null);
   const [loadingMaterial, setLoadingMaterial] = useState(false);
 
-  // 🔴 debug render
+  const [pedagogicalDevices, setPedagogicalDevices] = useState<PedagogicalDevices>({
+    preReflection: { enabled: false },
+    selfEvaluation: { 
+      enabled: false, 
+      includeMetacognition: false, 
+      requiresValidation: false 
+    },
+    groupReflection: { 
+      enabled: false, 
+      strategy: 'top3', 
+      timeMinutes: 15 
+    },
+  });
+
+  const [showCapacitySection, setShowCapacitySection] = useState(false);
+  const [selectedCapacitySetup, setSelectedCapacitySetup] = useState<string | null>(null);
+
+  const [showClassSelector, setShowClassSelector] = useState(false);
+
+  const [showClassroomModal, setShowClassroomModal] = useState(false);
+
+  // 🆕 Estado para el modal de Google Sheets
+  const [showImportSheets, setShowImportSheets] = useState(false);
+
+  // 🆕 Estado para el modal de anuncio
+  const [showGameStartAnnouncement, setShowGameStartAnnouncement] = useState(false);
+
+  const handleDeviceChange = (
+    module: keyof PedagogicalDevices, 
+    field: string, 
+    value: any
+  ) => {
+    setPedagogicalDevices(prev => ({
+      ...prev,
+      [module]: {
+        ...(prev[module] as any),
+        [field]: value
+      }
+    }));
+  };
+
+  const handleImportFromClassroom = (studentNames: string[]) => {
+    const currentNames = studentsText.trim();
+    const newNames = studentNames.join("\n");
+    
+    if (currentNames) {
+      setStudentsText(currentNames + "\n" + newNames);
+    } else {
+      setStudentsText(newNames);
+    }
+  };
+
   console.log("🟣 SetupScreen render", {
     pathname: location.pathname,
     state: location.state,
   });
 
-  // Actualizar idioma cuando cambia el modo
   useEffect(() => {
-    setLanguage(gameMode === "coopetition" ? "en" : "es");
-  }, [gameMode]);
+    setLanguage(appLanguage as Language);
+  }, [appLanguage]);
 
-  // Detectar si viene de la biblioteca
   useEffect(() => {
     const state = location.state as any;
     console.log("🔵 useEffect triggered - state:", state);
@@ -292,26 +322,22 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         sourceTextPath: txtPath,
       });
 
-      // ✅ Pre-llenar className con csvTitle si está vacío
       if (csvTitle && !className) {
         setClassName(csvTitle);
       }
 
-      // ✅ Pre-llenar subject si está vacío
       if (csvSubject && !subject) {
         setSubject(csvSubject);
       }
 
-      // ✅ Procesar CSV, pero NO avanzar automáticamente al Paso 2
       if (csvContent && csvFilename) {
         setLibraryCSVTitle(csvTitle || csvFilename);
         processLibraryCSV(csvContent, csvFilename);
-        // ⚠️ REMOVIDO: setCurrentStep(2);
       }
 
       window.history.replaceState({}, document.title);
     }
-  }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.state]);
   
   const processLibraryCSV = async (content: string, filename: string) => {
     console.log("🟢 processLibraryCSV start", {
@@ -322,7 +348,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
     setIsParsing(true);
     setCsvError(null);
 
-    // ✅ Guardar para SaveGameModal (guardamos el contenido "mejorado" si mejora)
     const probe = {
       hasMojibake: hasMojibakeMarkers(content),
       hasBadReplacement: hasVisibleBadReplacement(content),
@@ -334,7 +359,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
       ...probe,
     });
 
-    // ✅ Best effort: corregir solo si mejora (con string; no tenemos bytes)
     const fixed = maybeFixEncodingString(content);
 
     if (fixed.changed) {
@@ -353,7 +377,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
 
     const finalContent = fixed.text;
 
-    // ⚠️ Si sigue habiendo '�' acá, es señal de corrupción previa (ya no es "solo decode")
     if (hasVisibleBadReplacement(finalContent)) {
       console.warn(
         "⚠️ [SetupScreen] El contenido sigue teniendo caracteres de reemplazo tras el best-effort. Posible corrupción previa en el CSV guardado."
@@ -373,7 +396,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
       setShowPreview(true);
       setLibraryCSVLoaded(true);
 
-      // ✅ File para compatibilidad con tu flujo
       const blob = new Blob([finalContent], { type: "text/csv;charset=utf-8" });
       const file = new File([blob], filename, { type: "text/csv" });
       setCsvFile(file);
@@ -429,7 +451,13 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
     };
   }, [studentsText]);
 
-  // Textos según idioma del juego (language) usando traducciones globales
+  const { canProceed: studentsConfigValid } = useStudentValidation(
+    numberOfTeams,
+    studentsPerTeam,
+    parsedNamesInfo.uniqueCount
+  );
+
+  // Textos según idioma del juego (language) usando traducciones globales + nuevas claves
   const t =
     language === "es"
       ? {
@@ -441,7 +469,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         lang: appT.setup.language,
         spanish: appT.setup.spanish,
         english: appT.setup.english,
-        portuguese: "Portugués", // ✅ Añadido
+        portuguese: appT.setup.portuguese,
         className: appT.setup.className,
         subject: appT.setup.subject,
         numTeams: appT.setup.numTeams,
@@ -474,6 +502,48 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         stage0MaterialLinkPlaceholder: appT.setup.stage0MaterialLinkPlaceholder,
         stage0MaterialTextPlaceholder: appT.setup.stage0MaterialTextPlaceholder,
         stage0GeneratePrompt: appT.setup.stage0GeneratePrompt,
+        pedagogicalDevicesSection: "🛠️ Dispositivos Pedagógicos Opcionales",
+        pedagogicalDevicesDesc: "Configura módulos adicionales según la complejidad del tema y tiempo disponible",
+        preReflection: "💭 Reflexión Inicial (5 min antes de comenzar)",
+        preReflectionHelp: "Los estudiantes reflexionan sobre su interés en el tema antes de empezar",
+        selfEvaluation: "📝 Autoevaluación Individual",
+        selfEvalMetacognition: "Incluir preguntas metacognitivas",
+        selfEvalValidation: "Requiere validación del profesor",
+        groupReflection: "🎤 Reflexión Grupal (Cierre Pedagógico)",
+        groupReflectionStrategy: "Estrategia:",
+        groupReflectionStrategyTop3: "Top 3 más mencionados",
+        groupReflectionStrategyOnePerTeam: "Uno por equipo",
+        groupReflectionStrategyManual: "Selección manual del profesor",
+        groupReflectionTime: "Tiempo (minutos):",
+        recommendationsTitle: "💡 Recomendaciones",
+        recommendationPrimary: "Primaria: Juego básico sin módulos adicionales es suficiente",
+        recommendationSecondary: "Secundaria: Activa autoevaluación para temas complejos",
+        generateWithAI: "Generar con IA",
+        analyzingCSV: "Analizando CSV...",
+        questionsLoaded: "preguntas cargadas",
+        andXMore: "y {count} más",
+        loadSaveClass: "Cargar / Guardar curso",
+        importFromClassroom: "📚 Importar desde Google Classroom",
+        // 🆕 Nueva clave para Google Sheets
+        importFromSheets: "📊 Importar desde Google Sheets",
+        duplicatesFound: "Duplicados detectados:",
+        moveStudentsHint: "Podés mover estudiantes entre equipos seleccionando el equipo destino",
+        teamsConfigured: "Equipos configurados",
+        saveGamePrompt: "¿Querés guardar este juego para usarlo después?",
+        gameSaved: "¡Juego guardado en tu biblioteca!",
+        startGameError: "Error al iniciar el juego",
+        materialTitle: "Material complementario",
+        loadingMaterial: "Cargando material...",
+        materialAvailableHint: "Este material estará disponible para los estudiantes durante el juego",
+        close: "Cerrar",
+        pedagogicalObjectiveTitle: "🎯 Objetivo pedagógico (opcional)",
+        pedagogicalObjectiveQuestion: "¿Hacia qué capacidad querés orientar este juego?",
+        capacityReminder: "Recordá: en el Generador de Prompts con IA podés crear consignas con operaciones cognitivas orientadas a esta capacidad.",
+        goToAIGenerator: "Ir al Generador de IA",
+        selfEvaluationTooltip: '💡 Tip importante: Antes de empezar el juego, avisá a tus alumnos que lleven registro mental de quién los ayudó y a quién ayudaron. Esto mejora significativamente la calidad de las respuestas en la autoevaluación.',
+        selfEvaluationGuideLink: '📖 Ver guía completa',
+        // 🆕 Nueva clave para el botón de anunciar
+        announceInClassroom: "📢 Anunciar en Google Classroom",
       }
       : language === "pt"
         ? {
@@ -485,7 +555,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
           lang: "Idioma",
           spanish: "Espanhol",
           english: "Inglês",
-          portuguese: "Português", // ✅ Añadido
+          portuguese: "Português",
           className: "Nome da turma",
           subject: "Matéria",
           numTeams: "Número de equipes",
@@ -522,6 +592,48 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
             "Cole aqui o texto que as equipes devem ler...",
           stage0GeneratePrompt:
             "Precisa de gerar material? Use este prompt com ChatGPT",
+          pedagogicalDevicesSection: "🛠️ Dispositivos Pedagógicos Opcionais",
+          pedagogicalDevicesDesc: "Configure módulos adicionais conforme a complexidade do tema e tempo disponível",
+          preReflection: "💭 Reflexão Inicial (5 min antes de começar)",
+          preReflectionHelp: "Os estudantes refletem sobre seu interesse no tema antes de começar",
+          selfEvaluation: "📝 Autoavaliação Individual",
+          selfEvalMetacognition: "Incluir perguntas metacognitivas",
+          selfEvalValidation: "Requer validação do professor",
+          groupReflection: "🎤 Reflexão em Grupo (Fechamento Pedagógico)",
+          groupReflectionStrategy: "Estratégia:",
+          groupReflectionStrategyTop3: "Top 3 mais mencionados",
+          groupReflectionStrategyOnePerTeam: "Um por equipe",
+          groupReflectionStrategyManual: "Seleção manual do professor",
+          groupReflectionTime: "Tempo (minutos):",
+          recommendationsTitle: "💡 Recomendações",
+          recommendationPrimary: "Ensino fundamental: Jogo básico sem módulos adicionais é suficiente",
+          recommendationSecondary: "Ensino médio: Ative a autoavaliação para temas complexos",
+          generateWithAI: "Gerar com IA",
+          analyzingCSV: "Analisando CSV...",
+          questionsLoaded: "perguntas carregadas",
+          andXMore: "e mais {count}",
+          loadSaveClass: "Carregar / Salvar turma",
+          importFromClassroom: "📚 Importar do Google Classroom",
+          // 🆕 Nova chave para Google Sheets
+          importFromSheets: "📊 Importar do Google Sheets",
+          duplicatesFound: "Duplicados detectados:",
+          moveStudentsHint: "Você pode mover estudantes entre equipes selecionando a equipe de destino",
+          teamsConfigured: "Equipes configuradas",
+          saveGamePrompt: "Quer salvar este jogo para usar depois?",
+          gameSaved: "Jogo salvo na sua biblioteca!",
+          startGameError: "Erro ao iniciar o jogo",
+          materialTitle: "Material complementar",
+          loadingMaterial: "Carregando material...",
+          materialAvailableHint: "Este material estará disponível para os estudantes durante o jogo",
+          close: "Fechar",
+          pedagogicalObjectiveTitle: "🎯 Objetivo pedagógico (opcional)",
+          pedagogicalObjectiveQuestion: "Para qual capacidade você quer orientar este jogo?",
+          capacityReminder: "Lembre-se: no Gerador de Prompts com IA você pode criar consignas com operações cognitivas orientadas a esta capacidade.",
+          goToAIGenerator: "Ir ao Gerador de IA",
+          selfEvaluationTooltip: '💡 Dica importante: Antes de começar o jogo, avise seus alunos para manterem um registro mental de quem os ajudou e quem eles ajudaram. Isso melhora significativamente a qualidade das respostas na autoavaliação.',
+          selfEvaluationGuideLink: '📖 Ver guia completo',
+          // 🆕 Nova chave
+          announceInClassroom: "📢 Anunciar no Google Classroom",
         }
         : {
           title: "Setup New Game",
@@ -532,7 +644,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
           lang: "Language",
           spanish: "Español",
           english: "English",
-          portuguese: "Português", // ✅ Añadido
+          portuguese: "Português",
           className: "Class name",
           subject: "Subject",
           numTeams: "Number of teams",
@@ -569,12 +681,55 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
             "Paste here the text that teams should read...",
           stage0GeneratePrompt:
             "Need to generate material? Use this prompt with ChatGPT",
+          pedagogicalDevicesSection: "🛠️ Optional Pedagogical Devices",
+          pedagogicalDevicesDesc: "Configure additional modules based on topic complexity and available time",
+          preReflection: "💭 Initial Reflection (5 min before starting)",
+          preReflectionHelp: "Students reflect on their interest in the topic before starting",
+          selfEvaluation: "📝 Individual Self-Evaluation",
+          selfEvalMetacognition: "Include metacognitive questions",
+          selfEvalValidation: "Requires teacher validation",
+          groupReflection: "🎤 Group Reflection (Pedagogical Closure)",
+          groupReflectionStrategy: "Strategy:",
+          groupReflectionStrategyTop3: "Top 3 most mentioned",
+          groupReflectionStrategyOnePerTeam: "One per team",
+          groupReflectionStrategyManual: "Teacher's manual selection",
+          groupReflectionTime: "Time (minutes):",
+          recommendationsTitle: "💡 Recommendations",
+          recommendationPrimary: "Primary: Basic game without additional modules is sufficient",
+          recommendationSecondary: "Secondary: Enable self-evaluation for complex topics",
+          generateWithAI: "Generate with AI",
+          analyzingCSV: "Analyzing CSV...",
+          questionsLoaded: "questions loaded",
+          andXMore: "and {count} more",
+          loadSaveClass: "Load / Save class",
+          importFromClassroom: "📚 Import from Google Classroom",
+          // 🆕 New key for Google Sheets
+          importFromSheets: "📊 Import from Google Sheets",
+          duplicatesFound: "Duplicates found:",
+          moveStudentsHint: "You can move students between teams by selecting the destination team",
+          teamsConfigured: "Teams configured",
+          saveGamePrompt: "Do you want to save this game for later use?",
+          gameSaved: "Game saved to your library!",
+          startGameError: "Error starting game",
+          materialTitle: "Supplementary material",
+          loadingMaterial: "Loading material...",
+          materialAvailableHint: "This material will be available to students during the game",
+          close: "Close",
+          pedagogicalObjectiveTitle: "🎯 Pedagogical objective (optional)",
+          pedagogicalObjectiveQuestion: "What capacity do you want to focus this game on?",
+          capacityReminder: "Remember: in the AI Prompt Generator you can create questions with cognitive operations oriented to this capacity.",
+          goToAIGenerator: "Go to AI Generator",
+          selfEvaluationTooltip: '💡 Important tip: Before starting the game, tell your students to keep a mental record of who helped them and who they helped. This significantly improves the quality of responses in the self-evaluation.',
+          selfEvaluationGuideLink: '📖 See full guide',
+          // 🆕 New key
+          announceInClassroom: "📢 Announce on Google Classroom",
         };
 
-  /**
-   * ✅ SUBIDA LOCAL: ahora leemos BYTES y decodificamos con fallback.
-   * Esto arregla el caso "LibreOffice se ve bien pero en la app aparece Nombre cortado".
-   */
+  // ✅ LOGS DE VERIFICACIÓN
+  console.log('🌐 Idioma actual:', language);
+  console.log('📦 Clave pedagogicalDevicesSection:', t.pedagogicalDevicesSection);
+  console.log('📦 Clave preReflection:', t.preReflection);
+
   const handleCSVUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -595,10 +750,8 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         candidates: decoded.candidates,
       });
 
-      // 1) string decodificado por bytes (robusto)
       let text = decoded.text;
 
-      // 2) si aun así hay mojibake, intentamos reparación de string (solo si mejora)
       const fixed = maybeFixEncodingString(text);
       if (fixed.changed) {
         console.log("🟠 [SetupScreen] upload encoding fix applied:", {
@@ -615,7 +768,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         });
       }
 
-      // ⚠️ Si sigue habiendo '�', te lo avisamos: probablemente el archivo esté realmente dañado
       if (hasVisibleBadReplacement(text)) {
         console.warn(
           "⚠️ [SetupScreen] Upload: el contenido sigue teniendo caracteres de reemplazo tras el decode+best-effort. Recomendación: guardar el CSV como UTF-8 (LibreOffice) o convertir en lote."
@@ -649,7 +801,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
     const shuffled = [...uniqueNames].sort(() => Math.random() - 0.5);
     const newTeams: Team[] = [];
 
-    // ✅ Elegir nombres según el modo de juego
     const teamNames =
       gameMode === "coopetition" ? TEAM_PROFESSIONAL : TEAM_ANIMALS;
 
@@ -669,7 +820,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         }
       }
 
-      // ✅ MODIFICADO: soporte para portugués
       const teamName = `${teamNames[i].emoji} ${
         language === "en" 
           ? teamNames[i].nameEn 
@@ -688,6 +838,11 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
     }
 
     setTeams(newTeams);
+  };
+
+  const handleApplySuggestedConfig = (teams: number, perTeam: number) => {
+    setNumberOfTeams(teams);
+    setStudentsPerTeam(perTeam);
   };
 
   const moveStudentToTeam = (
@@ -720,11 +875,11 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
   };
 
   const handleCreateGame = async () => {
-    // 🔍 DEBUG - agregar temporalmente
     console.log("🔍 handleCreateGame llamado");
     console.log("🔍 className:", className, "| length:", className.length);
     console.log("🔍 subject:", subject, "| length:", subject.length);
     console.log("🔍 currentStep:", currentStep);
+    console.log("🔍 pedagogicalDevices:", pedagogicalDevices);
 
     if (!className || !subject) {
       console.log("❌ Validación falló - className o subject vacío");
@@ -762,13 +917,20 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         createdAt: Date.now(),
       };
 
-      // Solo agregar si tiene valor
       if (csvFile?.name) {
         config.csvFileName = csvFile.name;
       }
-      // ✅ NUEVO: guardar sourceTextPath si existe
       if (sourceTextPath) {
         config.sourceTextPath = sourceTextPath;
+      }
+      
+      const hasAnyDeviceEnabled = 
+        pedagogicalDevices.preReflection?.enabled ||
+        pedagogicalDevices.selfEvaluation?.enabled ||
+        pedagogicalDevices.groupReflection?.enabled;
+      
+      if (hasAnyDeviceEnabled) {
+        config.pedagogicalDevices = pedagogicalDevices;
       }
 
       const gameId = await createGame(config);
@@ -787,13 +949,12 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
     }
   };
 
-  // ✅ NUEVO: Cargar material complementario
   const handleOpenMaterial = async () => {
     if (!sourceTextPath) return;
 
     setShowMaterialModal(true);
 
-    if (materialContent) return; // Ya lo cargamos antes
+    if (materialContent) return;
 
     setLoadingMaterial(true);
     try {
@@ -869,8 +1030,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
 
           <div className="form-group">
             <label>{t.lang}</label>
-            {/* Reemplazamos los radio buttons por botones */}
-            {/* Idioma del juego */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button
                 type="button"
@@ -886,7 +1045,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                   cursor: "pointer",
                 }}
               >
-                🇪🇸 {appT.setup?.spanish || "Español"}
+                🇪🇸 {t.spanish}
               </button>
               <button
                 type="button"
@@ -902,9 +1061,8 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                   cursor: "pointer",
                 }}
               >
-                🇺🇸 {appT.setup?.english || "English"}
+                🇺🇸 {t.english}
               </button>
-              {/* ✅ NUEVO: Portugués */}
               <button
                 type="button"
                 onClick={() => setLanguage("pt")}
@@ -919,7 +1077,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                   cursor: "pointer",
                 }}
               >
-                🇧🇷 {appT.setup?.portuguese || "Português"}
+                🇧🇷 {t.portuguese}
               </button>
             </div>
 
@@ -977,6 +1135,388 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                   onChange={(e) => setStudentsPerTeam(Number(e.target.value))}
                 />
               </div>
+            </div>
+
+            {/* 🆕 NUEVA SECCIÓN: Dispositivos Pedagógicos Opcionales */}
+            <div 
+              className="pedagogical-devices-section"
+              style={{
+                marginTop: 32,
+                padding: 20,
+                backgroundColor: "#f8fafc",
+                borderRadius: 12,
+                border: "1px solid #e2e8f0",
+              }}
+            >
+              <h3 style={{ 
+                margin: "0 0 8px 0", 
+                fontSize: 16, 
+                fontWeight: 700,
+                color: "#334155",
+              }}>
+                {t.pedagogicalDevicesSection}
+              </h3>
+              <p style={{ 
+                margin: "0 0 20px 0", 
+                fontSize: 13, 
+                color: "#64748b",
+              }}>
+                {t.pedagogicalDevicesDesc}
+              </p>
+
+              {/* Módulo 1: Reflexión Inicial */}
+              <div className="device-option" style={{ marginBottom: 16 }}>
+                <label 
+                  style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: 10,
+                    cursor: "pointer",
+                    fontSize: 14,
+                    fontWeight: 500,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={pedagogicalDevices.preReflection?.enabled || false}
+                    onChange={(e) => handleDeviceChange('preReflection', 'enabled', e.target.checked)}
+                    style={{ width: 18, height: 18 }}
+                  />
+                  <span>{t.preReflection}</span>
+                </label>
+                <p style={{ 
+                  margin: "6px 0 0 28px", 
+                  fontSize: 12, 
+                  color: "#94a3b8",
+                }}>
+                  {t.preReflectionHelp}
+                </p>
+              </div>
+
+              {/* Módulo 2: Autoevaluación Individual */}
+              <div className="device-option" style={{ marginBottom: 16 }}>
+                <label 
+                  style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: 10,
+                    cursor: "pointer",
+                    fontSize: 14,
+                    fontWeight: 500,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={pedagogicalDevices.selfEvaluation?.enabled || false}
+                    onChange={(e) => handleDeviceChange('selfEvaluation', 'enabled', e.target.checked)}
+                    style={{ width: 18, height: 18 }}
+                  />
+                  <span>{t.selfEvaluation}</span>
+                </label>
+                
+                {pedagogicalDevices.selfEvaluation?.enabled && (
+                  <div 
+                    className="sub-options" 
+                    style={{ 
+                      marginLeft: 28, 
+                      marginTop: 12,
+                      padding: 12,
+                      backgroundColor: "#fff",
+                      borderRadius: 8,
+                      border: "1px solid #e2e8f0",
+                    }}
+                  >
+                    <label 
+                      style={{ 
+                        display: "flex", 
+                        alignItems: "center", 
+                        gap: 8,
+                        cursor: "pointer",
+                        fontSize: 13,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={pedagogicalDevices.selfEvaluation?.includeMetacognition || false}
+                        onChange={(e) => handleDeviceChange('selfEvaluation', 'includeMetacognition', e.target.checked)}
+                        style={{ width: 16, height: 16 }}
+                      />
+                      <span>{t.selfEvalMetacognition}</span>
+                    </label>
+                    
+                    <label 
+                      style={{ 
+                        display: "flex", 
+                        alignItems: "center", 
+                        gap: 8,
+                        cursor: "pointer",
+                        fontSize: 13,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={pedagogicalDevices.selfEvaluation?.requiresValidation || false}
+                        onChange={(e) => handleDeviceChange('selfEvaluation', 'requiresValidation', e.target.checked)}
+                        style={{ width: 16, height: 16 }}
+                      />
+                      <span>{t.selfEvalValidation}</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* 🆕 TOOLTIP PARA AUTOEVALUACIÓN (aparece cuando está activada) */}
+              {pedagogicalDevices.selfEvaluation?.enabled && (
+                <div style={{
+                  backgroundColor: '#fef3c7',
+                  border: '1px solid #fbbf24',
+                  color: '#92400e',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  marginTop: '12px',
+                  fontSize: '0.95rem',
+                  marginLeft: '28px', // alineado con sub-opciones
+                }}>
+                  <p style={{ margin: '0 0 8px 0' }}>{t.selfEvaluationTooltip}</p>
+                  <a 
+                    href="/teacher-guide#seccion-13" 
+                    style={{ 
+                      color: '#92400e', 
+                      fontWeight: 'bold',
+                      textDecoration: 'underline'
+                    }}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t.selfEvaluationGuideLink}
+                  </a>
+                </div>
+              )}
+
+              {/* Módulo 3: Reflexión Grupal */}
+              <div className="device-option" style={{ marginBottom: 16 }}>
+                <label 
+                  style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: 10,
+                    cursor: "pointer",
+                    fontSize: 14,
+                    fontWeight: 500,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={pedagogicalDevices.groupReflection?.enabled || false}
+                    onChange={(e) => handleDeviceChange('groupReflection', 'enabled', e.target.checked)}
+                    style={{ width: 18, height: 18 }}
+                  />
+                  <span>{t.groupReflection}</span>
+                </label>
+                
+                {pedagogicalDevices.groupReflection?.enabled && (
+                  <div 
+                    className="sub-options" 
+                    style={{ 
+                      marginLeft: 28, 
+                      marginTop: 12,
+                      padding: 12,
+                      backgroundColor: "#fff",
+                      borderRadius: 8,
+                      border: "1px solid #e2e8f0",
+                    }}
+                  >
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>
+                        {t.groupReflectionStrategy}
+                      </label>
+                      <select
+                        value={pedagogicalDevices.groupReflection?.strategy || 'top3'}
+                        onChange={(e) => handleDeviceChange('groupReflection', 'strategy', e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          borderRadius: 6,
+                          border: "1px solid #cbd5e1",
+                        }}
+                      >
+                        <option value="top3">{t.groupReflectionStrategyTop3}</option>
+                        <option value="onePerTeam">{t.groupReflectionStrategyOnePerTeam}</option>
+                        <option value="manual">{t.groupReflectionStrategyManual}</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>
+                        {t.groupReflectionTime}
+                      </label>
+                      <input
+                        type="number"
+                        min="5"
+                        max="30"
+                        value={pedagogicalDevices.groupReflection?.timeMinutes || 15}
+                        onChange={(e) => handleDeviceChange('groupReflection', 'timeMinutes', parseInt(e.target.value))}
+                        style={{
+                          width: 80,
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          borderRadius: 6,
+                          border: "1px solid #cbd5e1",
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div 
+                className="recommendations-box"
+                style={{
+                  marginTop: 16,
+                  padding: 12,
+                  backgroundColor: "#fef3c7",
+                  borderRadius: 8,
+                  border: "1px solid #fbbf24",
+                }}
+              >
+                <h4 style={{ margin: "0 0 6px 0", fontSize: 13, fontWeight: 600, color: "#92400e" }}>
+                  {t.recommendationsTitle}
+                </h4>
+                <p style={{ margin: 0, fontSize: 12, color: "#a16207" }}>
+                  {level === 'primary' ? t.recommendationPrimary : t.recommendationSecondary}
+                </p>
+              </div>
+            </div>
+
+            {/* 🆕 NUEVA SECCIÓN: Objetivo Pedagógico (Capacidades) */}
+            <div 
+              className="pedagogical-objective-section"
+              style={{
+                marginTop: 24,
+                padding: 20,
+                backgroundColor: "#faf5ff",
+                borderRadius: 12,
+                border: "2px solid #c4b5fd",
+              }}
+            >
+              <div 
+                style={{ 
+                  display: "flex", 
+                  justifyContent: "space-between", 
+                  alignItems: "center",
+                  cursor: "pointer",
+                }}
+                onClick={() => setShowCapacitySection(!showCapacitySection)}
+              >
+                <h3 style={{ 
+                  margin: 0, 
+                  fontSize: 16, 
+                  fontWeight: 700,
+                  color: "#7c3aed",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}>
+                  {t.pedagogicalObjectiveTitle}
+                </h3>
+                <span style={{ fontSize: 14, color: "#7c3aed" }}>
+                  {showCapacitySection ? "▲" : "▼"}
+                </span>
+              </div>
+
+              {showCapacitySection && (
+                <div style={{ marginTop: 16 }}>
+                  <p style={{ 
+                    margin: "0 0 16px 0", 
+                    fontSize: 13, 
+                    color: "#64748b",
+                  }}>
+                    {t.pedagogicalObjectiveQuestion}
+                  </p>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+                    {[
+                      { id: "critical-thinking", icon: "🧠", labelEs: "Pensamiento crítico", labelEn: "Critical thinking", labelPt: "Pensamento crítico" },
+                      { id: "problem-solving", icon: "🔍", labelEs: "Resolución de problemas", labelEn: "Problem solving", labelPt: "Resolução de problemas" },
+                      { id: "communication", icon: "💬", labelEs: "Comunicación", labelEn: "Communication", labelPt: "Comunicação" },
+                      { id: "collaboration", icon: "🤝", labelEs: "Trabajo colaborativo", labelEn: "Collaborative work", labelPt: "Trabalho colaborativo" },
+                    ].map((cap) => (
+                      <button
+                        key={cap.id}
+                        type="button"
+                        onClick={() => setSelectedCapacitySetup(
+                          selectedCapacitySetup === cap.id ? null : cap.id
+                        )}
+                        style={{
+                          padding: "12px 14px",
+                          borderRadius: 10,
+                          border: selectedCapacitySetup === cap.id 
+                            ? "3px solid #8b5cf6" 
+                            : "2px solid #e2e8f0",
+                          backgroundColor: selectedCapacitySetup === cap.id 
+                            ? "#ede9fe" 
+                            : "white",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          fontSize: 13,
+                          fontWeight: selectedCapacitySetup === cap.id ? 600 : 400,
+                          color: selectedCapacitySetup === cap.id ? "#7c3aed" : "#475569",
+                        }}
+                      >
+                        <span>{cap.icon}</span>
+                        <span>
+                          {language === "es" 
+                            ? cap.labelEs 
+                            : language === "pt" 
+                            ? cap.labelPt 
+                            : cap.labelEn}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {selectedCapacitySetup && (
+                    <div style={{
+                      marginTop: 16,
+                      padding: 14,
+                      backgroundColor: "#f0fdf4",
+                      borderRadius: 10,
+                      border: "2px solid #86efac",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                    }}>
+                      <p style={{ margin: 0, fontSize: 13, color: "#166534" }}>
+                        💡 {t.capacityReminder}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowPromptGenerator(true)}
+                        style={{
+                          padding: "10px 16px",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          borderRadius: 8,
+                          border: "none",
+                          background: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+                          color: "white",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 6,
+                        }}
+                      >
+                        🤖 {t.goToAIGenerator}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <button
@@ -1055,12 +1595,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                 e.currentTarget.style.color = "#16a34a";
               }}
             >
-              🤖
-              {language === "es"
-                ? "Generar con IA"
-                : language === "pt"
-                  ? "Gerar com IA"
-                  : "Generate with AI"}
+              🤖 {t.generateWithAI}
             </button>
           </div>
 
@@ -1085,11 +1620,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
 
           {isParsing && (
             <div style={{ marginTop: 10 }}>
-              {language === "es"
-                ? "Analizando CSV..."
-                : language === "pt"
-                  ? "Analisando CSV..."
-                  : "Analyzing CSV..."}
+              {t.analyzingCSV}
             </div>
           )}
 
@@ -1111,7 +1642,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                 ✅ {t.loadedFromLibrary} <strong>{libraryCSVTitle}</strong>
               </div>
 
-              {/* ✅ NUEVO: Botón para ver material complementario */}
               {sourceTextPath && (
                 <button
                   onClick={handleOpenMaterial}
@@ -1130,12 +1660,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                     gap: 8,
                   }}
                 >
-                  📄{" "}
-                  {language === "es"
-                    ? "Ver material complementario"
-                    : language === "pt"
-                      ? "Ver material complementar"
-                      : "View supplementary material"}
+                  📄 {t.materialTitle}
                 </button>
               )}
             </div>
@@ -1144,12 +1669,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
           {questions.length > 0 && (
             <div className="questions-preview">
               <h3>
-                ✅ {questions.length}{" "}
-                {language === "es"
-                  ? "preguntas cargadas"
-                  : language === "pt"
-                    ? "perguntas carregadas"
-                    : "questions loaded"}
+                ✅ {questions.length} {t.questionsLoaded}
               </h3>
               <ul>
                 {questions.slice(0, 3).map((q) => (
@@ -1157,12 +1677,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                 ))}
                 {questions.length > 3 && (
                   <li>
-                    ...
-                    {language === "es"
-                      ? `y ${questions.length - 3} más`
-                      : language === "pt"
-                        ? `e mais ${questions.length - 3}`
-                        : `and ${questions.length - 3} more`}
+                    {t.andXMore.replace('{count}', (questions.length - 3).toString())}
                   </li>
                 )}
               </ul>
@@ -1190,8 +1705,102 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         <div className="step-content">
           <h2>{t.step3}</h2>
 
+          <div style={{ marginBottom: 16 }}>
+            <button
+              onClick={() => setShowClassSelector(true)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "10px 16px",
+                fontSize: 14,
+                fontWeight: 600,
+                borderRadius: 8,
+                border: `2px solid ${theme.primary}`,
+                backgroundColor: "white",
+                color: theme.primary,
+                cursor: "pointer",
+              }}
+            >
+              📂 {t.loadSaveClass}
+            </button>
+          </div>
+
           <div className="form-group">
             <label>{t.enterNames}</label>
+
+            {/* Botón Google Classroom */}
+            <button
+              type="button"
+              onClick={() => setShowClassroomModal(true)}
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                marginBottom: 12,
+                backgroundColor: "#fff",
+                border: "2px solid #4285f4",
+                borderRadius: 8,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+                fontSize: 14,
+                fontWeight: 600,
+                color: "#4285f4",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "#4285f4";
+                e.currentTarget.style.color = "#fff";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "#fff";
+                e.currentTarget.style.color = "#4285f4";
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+              </svg>
+              {t.importFromClassroom}
+            </button>
+
+            {/* 🆕 Botón Google Sheets */}
+            <button
+              type="button"
+              onClick={() => setShowImportSheets(true)}
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                marginBottom: 12,
+                backgroundColor: "#fff",
+                border: "2px solid #34a853",
+                borderRadius: 8,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+                fontSize: 14,
+                fontWeight: 600,
+                color: "#34a853",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "#34a853";
+                e.currentTarget.style.color = "#fff";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "#fff";
+                e.currentTarget.style.color = "#34a853";
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/>
+              </svg>
+              {t.importFromSheets}
+            </button>
+
             <textarea
               rows={10}
               value={studentsText}
@@ -1212,37 +1821,32 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
             </small>
             {parsedNamesInfo.duplicateCount > 0 && (
               <div style={{ marginTop: 8, fontSize: 13, color: "#c0392b" }}>
-                <strong>
-                  {language === "es"
-                    ? "Duplicados detectados:"
-                    : language === "pt"
-                      ? "Duplicados detectados:"
-                      : "Duplicates found:"}
-                </strong>{" "}
+                <strong>{t.duplicatesFound}</strong>{" "}
                 {parsedNamesInfo.duplicates.slice(0, 8).join(", ")}
                 {parsedNamesInfo.duplicates.length > 8 ? "…" : ""}
               </div>
             )}
+
+            <StudentConfigValidator
+              numberOfTeams={numberOfTeams}
+              studentsPerTeam={studentsPerTeam}
+              uniqueStudentsCount={parsedNamesInfo.uniqueCount}
+              language={language}
+              onSuggestConfig={handleApplySuggestedConfig}
+            />
           </div>
 
           <button
             className="btn-secondary"
             onClick={assignStudentsRandomly}
-            disabled={parsedNamesInfo.uniqueCount === 0}
+            disabled={!studentsConfigValid}
           >
             {t.assignRandom}
           </button>
 
           {teams.length > 0 && (
             <div className="teams-preview">
-              <h3>
-                ✅{" "}
-                {language === "es"
-                  ? "Equipos configurados"
-                  : language === "pt"
-                    ? "Equipes configuradas"
-                    : "Teams configured"}
-              </h3>
+              <h3>✅ {t.teamsConfigured}</h3>
               <p
                 style={{
                   fontSize: "14px",
@@ -1250,11 +1854,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                   marginBottom: "15px",
                 }}
               >
-                {language === "es"
-                  ? "Podés mover estudiantes entre equipos seleccionando el equipo destino"
-                  : language === "pt"
-                    ? "Você pode mover estudantes entre equipes selecionando a equipe de destino"
-                    : "You can move students between teams by selecting the destination team"}
+                {t.moveStudentsHint}
               </p>
               <div className="teams-grid">
                 {teams.map((team) => (
@@ -1308,7 +1908,50 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
       {currentStep === 4 && (
         <div className="step-content step-ready">
           <h2>🎉 {t.step4}</h2>
-          <RoomCodeDisplay gameId={createdGameId} />
+          {/* 🆕 Se agrega el callback onCodeCreated para capturar el código real */}
+          <RoomCodeDisplay 
+            gameId={createdGameId} 
+            onCodeCreated={(code) => setRoomCode(code)} 
+          />
+
+          {/* Botón para anunciar en Classroom */}
+          <div style={{ 
+            marginTop: 20, 
+            marginBottom: 20,
+            display: "flex",
+            justifyContent: "center",
+          }}>
+            <button
+              onClick={() => setShowGameStartAnnouncement(true)}
+              style={{
+                padding: "14px 24px",
+                fontSize: 15,
+                fontWeight: 600,
+                borderRadius: 10,
+                border: "2px solid #4285f4",
+                backgroundColor: "white",
+                color: "#4285f4",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "#4285f4";
+                e.currentTarget.style.color = "white";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "white";
+                e.currentTarget.style.color = "#4285f4";
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+              </svg>
+              {t.announceInClassroom}
+            </button>
+          </div>
 
           {user && csvContentForSave && !gameSaved && (
             <div
@@ -1329,11 +1972,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                   color: "#0369a1",
                 }}
               >
-                {language === "es"
-                  ? "¿Querés guardar este juego para usarlo después?"
-                  : language === "pt"
-                    ? "Quer salvar este jogo para usar depois?"
-                    : "Do you want to save this game for later use?"}
+                {t.saveGamePrompt}
               </p>
               <button
                 onClick={() => setShowSaveModal(true)}
@@ -1372,11 +2011,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                   color: "#16a34a",
                 }}
               >
-                {language === "es"
-                  ? "¡Juego guardado en tu biblioteca!"
-                  : language === "pt"
-                    ? "Jogo salvo na sua biblioteca!"
-                    : "Game saved to your library!"}
+                {t.gameSaved}
               </p>
             </div>
           )}
@@ -1389,13 +2024,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                 navigate(`/classroom/${createdGameId}`);
               } catch (error) {
                 console.error("Error starting game:", error);
-                alert(
-                  language === "es"
-                    ? "Error al iniciar el juego"
-                    : language === "pt"
-                      ? "Erro ao iniciar o jogo"
-                      : "Error starting game"
-                );
+                alert(t.startGameError);
               }
             }}
             style={{ background: theme.primaryGradient }}
@@ -1423,17 +2052,14 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
             setShowPreview(false);
             setParseResult(null);
           }}
-          // ✅ NUEVO: Callback para abrir generador de prompts
           onOpenPromptGenerator={() => {
             setShowPreview(false);
             setParseResult(null);
             setShowPromptGenerator(true);
           }}
-          // ✅ NUEVO: Callback para ir a Etapa 0 (Los equipos proponen)
           onGoToStage0={() => {
             setShowPreview(false);
             setParseResult(null);
-            // Navegar al selector de modalidad para que elija "Los equipos proponen"
             navigate('/setup');
           }}
         />
@@ -1464,7 +2090,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
         />
       )}
 
-      {/* ✅ NUEVO: Modal de material complementario */}
       {showMaterialModal && (
         <div
           style={{
@@ -1495,7 +2120,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <div
               style={{
                 padding: "16px 20px",
@@ -1515,12 +2139,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                   color: "#0369a1",
                 }}
               >
-                📄{" "}
-                {language === "es"
-                  ? "Material complementario"
-                  : language === "pt"
-                    ? "Material complementar"
-                    : "Supplementary material"}
+                📄 {t.materialTitle}
               </h3>
               <button
                 onClick={() => setShowMaterialModal(false)}
@@ -1536,7 +2155,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
               </button>
             </div>
 
-            {/* Content */}
             <div
               style={{
                 flex: 1,
@@ -1552,12 +2170,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                     color: "#64748b",
                   }}
                 >
-                  ⏳{" "}
-                  {language === "es"
-                    ? "Cargando material..."
-                    : language === "pt"
-                      ? "Carregando material..."
-                      : "Loading material..."}
+                  ⏳ {t.loadingMaterial}
                 </div>
               ) : (
                 <pre
@@ -1576,7 +2189,6 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
               )}
             </div>
 
-            {/* Footer */}
             <div
               style={{
                 padding: "12px 20px",
@@ -1587,12 +2199,7 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
               }}
             >
               <span style={{ fontSize: 13, color: "#64748b" }}>
-                💡{" "}
-                {language === "es"
-                  ? "Este material estará disponible para los estudiantes durante el juego"
-                  : language === "pt"
-                    ? "Este material estará disponível para os estudantes durante o jogo"
-                    : "This material will be available to students during the game"}
+                💡 {t.materialAvailableHint}
               </span>
               <button
                 onClick={() => setShowMaterialModal(false)}
@@ -1607,20 +2214,58 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
                   cursor: "pointer",
                 }}
               >
-                {language === "es"
-                  ? "Cerrar"
-                  : language === "pt"
-                    ? "Fechar"
-                    : "Close"}
+                {t.close}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      <ClassSelectorModal
+        isOpen={showClassSelector}
+        onClose={() => setShowClassSelector(false)}
+        onSelectClass={(students, teams, perTeam) => {
+          setStudentsText(students.join('\n'));
+          setNumberOfTeams(teams);
+          setStudentsPerTeam(perTeam);
+        }}
+        currentStudents={parsedNamesInfo.unique}
+        currentTeams={numberOfTeams}
+        currentStudentsPerTeam={studentsPerTeam}
+        language={language}
+      />
+
+      <ImportFromClassroomModal
+        isOpen={showClassroomModal}
+        onClose={() => setShowClassroomModal(false)}
+        onImport={handleImportFromClassroom}
+        language={language}
+      />
+
+      {/* 🆕 Modal de Google Sheets */}
+      <ImportFromSheetsModal
+        isOpen={showImportSheets}
+        onClose={() => setShowImportSheets(false)}
+        onImport={(students) => {
+          setStudentsText(students.join('\n'));
+          setShowImportSheets(false);
+        }}
+        language={language}
+      />
+
       <PromptGeneratorModal
         isOpen={showPromptGenerator}
         onClose={() => setShowPromptGenerator(false)}
+      />
+
+      {/* 🆕 Modal de anuncio de inicio de juego (con roomCode real) */}
+      <GameStartAnnouncementModal
+        isOpen={showGameStartAnnouncement}
+        onClose={() => setShowGameStartAnnouncement(false)}
+        gameId={createdGameId}
+        roomCode={roomCode}  // ← ahora se pasa el código real capturado
+        gameName={className || "Traffic Light Game"}
+        language={language}
       />
     </div>
   );

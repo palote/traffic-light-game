@@ -1,5 +1,6 @@
 // src/components/Stage0/ProposalTeacherView.tsx
 // Vista del profesor durante la etapa donde los equipos envían propuestas
+// ✅ CORREGIDO: Internacionalización completa con portugués y textos faltantes
 
 import { useState, useEffect } from "react";
 import { ref, onValue, off, update } from "firebase/database";
@@ -40,25 +41,33 @@ export function ProposalTeacherView({ gameId, config, onCloseProposals }: Propos
 
   // Traducciones
   const t = {
-    title: language === 'es' ? 'Etapa de propuestas' : 'Proposal stage',
-    timeRemaining: language === 'es' ? 'Tiempo restante' : 'Time remaining',
-    noTimeLimit: language === 'es' ? 'Sin límite de tiempo' : 'No time limit',
+    title: language === 'es' ? 'Etapa de propuestas' : language === 'pt' ? 'Etapa de propostas' : 'Proposal stage',
+    timeRemaining: language === 'es' ? 'Tiempo restante' : language === 'pt' ? 'Tempo restante' : 'Time remaining',
+    noTimeLimit: language === 'es' ? 'Sin límite de tiempo' : language === 'pt' ? 'Sem limite de tempo' : 'No time limit',
     
-    proposalsByTeam: language === 'es' ? 'Propuestas por equipo' : 'Proposals by team',
-    totalProposals: language === 'es' ? 'propuestas recibidas' : 'proposals received',
+    proposalsByTeam: language === 'es' ? 'Propuestas por equipo' : language === 'pt' ? 'Propostas por equipe' : 'Proposals by team',
+    totalProposals: language === 'es' ? 'propuestas recibidas' : language === 'pt' ? 'propostas recebidas' : 'proposals received',
     
-    lastProposals: language === 'es' ? 'Últimas propuestas' : 'Latest proposals',
+    lastProposals: language === 'es' ? 'Últimas propuestas' : language === 'pt' ? 'Últimas propostas' : 'Latest proposals',
     noProposalsYet: language === 'es' 
       ? 'Esperando propuestas de los equipos...'
+      : language === 'pt'
+      ? 'Aguardando propostas das equipes...'
       : 'Waiting for team proposals...',
     
-    closeProposals: language === 'es' ? '⏹️ Cerrar propuestas y curar' : '⏹️ Close proposals and curate',
+    closeProposals: language === 'es' ? '⏹️ Cerrar propuestas y curar' : language === 'pt' ? '⏹️ Encerrar propostas e curar' : '⏹️ Close proposals and curate',
     closeConfirm: language === 'es' 
       ? '¿Cerrar la recepción de propuestas? Los equipos ya no podrán enviar más.'
+      : language === 'pt'
+      ? 'Encerrar o recebimento de propostas? As equipes não poderão enviar mais.'
       : 'Close proposal reception? Teams will no longer be able to submit.',
     
-    stage1: language === 'es' ? 'Etapa 1' : 'Stage 1',
-    stage2: language === 'es' ? 'Etapa 2' : 'Stage 2',
+    stage1: language === 'es' ? 'Etapa 1' : language === 'pt' ? 'Etapa 1' : 'Stage 1',
+    stage2: language === 'es' ? 'Etapa 2' : language === 'pt' ? 'Etapa 2' : 'Stage 2',
+
+    // ✅ NUEVAS CLAVES
+    allTeams: language === 'es' ? 'Todos los equipos' : language === 'pt' ? 'Todas as equipes' : 'All teams',
+    moreProposals: language === 'es' ? 'propuestas más...' : language === 'pt' ? 'propostas a mais...' : 'more proposals...',
   };
 
   // Escuchar equipos
@@ -91,11 +100,9 @@ export function ProposalTeacherView({ gameId, config, onCloseProposals }: Propos
           ...data,
         }));
         
-        // Ordenar por fecha (más recientes primero para mostrar)
         proposalsList.sort((a, b) => b.createdAt - a.createdAt);
         setProposals(proposalsList);
         
-        // Contar propuestas por equipo
         const counts: Record<string, number> = {};
         proposalsList.forEach(p => {
           counts[p.teamId] = (counts[p.teamId] || 0) + 1;
@@ -115,7 +122,6 @@ export function ProposalTeacherView({ gameId, config, onCloseProposals }: Propos
       setTimeRemaining(prev => {
         if (prev === null || prev <= 0) {
           clearInterval(interval);
-          // Auto-cerrar cuando se acaba el tiempo
           handleCloseProposals();
           return 0;
         }
@@ -129,7 +135,6 @@ export function ProposalTeacherView({ gameId, config, onCloseProposals }: Propos
   // Iniciar timer al montar
   useEffect(() => {
     if (config.timerMinutes) {
-      // Guardar tiempo de inicio en Firebase
       update(ref(database, `games/${gameId}/stage0`), {
         timerStartedAt: Date.now(),
         phase: 'collecting',
@@ -141,7 +146,6 @@ export function ProposalTeacherView({ gameId, config, onCloseProposals }: Propos
   const handleCloseProposals = () => {
     if (!confirm(t.closeConfirm)) return;
     
-    // Actualizar fase en Firebase
     update(ref(database, `games/${gameId}/stage0`), {
       phase: 'curating',
       closedAt: Date.now(),
@@ -150,14 +154,12 @@ export function ProposalTeacherView({ gameId, config, onCloseProposals }: Propos
     onCloseProposals();
   };
 
-  // Formatear tiempo
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Calcular porcentaje de barra de progreso
   const getProgressPercent = (teamId: string): number => {
     const count = proposalCounts[teamId] || 0;
     return Math.min((count / config.maxProposalsPerTeam) * 100, 100);
@@ -277,7 +279,6 @@ export function ProposalTeacherView({ gameId, config, onCloseProposals }: Propos
                     </span>
                   </div>
                   
-                  {/* Barra de progreso */}
                   <div style={{
                     height: 12,
                     backgroundColor: '#f1f5f9',
@@ -319,7 +320,7 @@ export function ProposalTeacherView({ gameId, config, onCloseProposals }: Propos
               fontSize: 14,
             }}>
               <div style={{ fontSize: 48, marginBottom: 12 }}>📭</div>
-              {t.noProposalsYet}
+              {t.noProposalsYet}  {/* ✅ CORREGIDO */}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -376,7 +377,7 @@ export function ProposalTeacherView({ gameId, config, onCloseProposals }: Propos
                   backgroundColor: '#f1f5f9',
                   borderRadius: 8,
                 }}>
-                  +{proposals.length - 10} {language === 'es' ? 'propuestas más...' : 'more proposals...'}
+                  +{proposals.length - 10} {t.moreProposals}  {/* ✅ CORREGIDO */}
                 </div>
               )}
             </div>

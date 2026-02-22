@@ -66,3 +66,30 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* ============================================
+   ACCESIBILIDAD: Foco visible mejorado
+   ============================================ */
+
+/* Foco visible para todos los elementos interactivos */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #4285f4;
+  outline-offset: 2px;
+}
+
+/* Foco especial para botones del semáforo */
+.color-btn:focus-visible {
+  outline: 3px solid #1a1a1a;
+  outline-offset: 3px;
+  transform: scale(1.05);
+}
+
+/* Ocultar outline cuando se usa mouse (solo mostrar con teclado) */
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible) {
+  outline: none;
+}

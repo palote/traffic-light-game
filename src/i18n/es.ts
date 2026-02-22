@@ -230,6 +230,10 @@ export const es = {
     stage0Enabled: "Etapa 0 habilitada. Los equipos verán el material de preparación.",
     startGame: "Comenzar Juego",
     createGame: "Crear Juego",
+
+    // ========== NUEVAS CLAVES PARA EL TOOLTIP ==========
+    selfEvaluationTooltip: '💡 Tip importante: Antes de empezar el juego, avisá a tus alumnos que lleven registro mental de quién los ayudó y a quién ayudaron. Esto mejora significativamente la calidad de las respuestas en la autoevaluación.',
+    selfEvaluationGuideLink: '📖 Ver guía completa',
   },
 
   // ============================================
@@ -770,6 +774,7 @@ export const es = {
   protectedRoute: {
     verifyingSession: "Verificando sesión...",
   },
+
   // ============================================
   // REFERRAL PAGE
   // ============================================
@@ -792,10 +797,8 @@ export const es = {
   },
 
   // ============================================
-  // WEBINAR PAGE - ACTUALIZADO
+  // WEBINAR PAGE
   // ============================================
-  // Reemplazar la sección "webinar" en src/i18n/es.ts
-
   webinar: {
     title: "Registro para Webinar",
     noWebinar: "No hay webinars programados",
@@ -835,6 +838,31 @@ export const es = {
     errorMessage: "Hubo un error. Por favor intentá de nuevo.",
     backToDashboard: "Volver al inicio",
   },
+
+  // ========== NUEVAS CLAVES PARA LA SECCIÓN 13 DE TEACHER GUIDE ==========
+  s13_title: '13. Preparación para la Autoevaluación',
+  s13_warning: '⚠️ Si vas a activar la autoevaluación, es fundamental preparar a los alumnos ANTES de comenzar el juego.',
+  s13_before_title: 'Qué hacer ANTES del juego',
+  s13_before_list1: 'Explicar a los alumnos que al final deberán reflexionar sobre el proceso',
+  s13_before_list2: 'Pedirles que lleven una "bitácora mental" o anotaciones breves:',
+  s13_before_sub1: '¿Quién me ayudó a entender algo?',
+  s13_before_sub2: '¿A quién ayudé yo?',
+  s13_before_sub3: '¿Qué concepto me costó más?',
+  s13_before_sub4: '¿Cómo me sentí trabajando en equipo?',
+  s13_during_title: 'Qué hacer DURANTE el juego',
+  s13_during_list1: 'Podés tener una pizarra visible con las preguntas de reflexión',
+  s13_during_list2: 'Recordar brevemente entre stages que observen las interacciones',
+  s13_when_use_title: 'Cuándo SÍ usar autoevaluación',
+  s13_use_1: '✅ Temas que requieren comprensión profunda',
+  s13_use_2: '✅ Cuando hay tiempo suficiente (agregar 10-15 min al final)',
+  s13_use_3: '✅ Grupos que ya conocen la dinámica del juego',
+  s13_use_4: '✅ Cuando querés identificar "expertos" para el cierre pedagógico',
+  s13_when_not_use_title: 'Cuándo NO usar autoevaluación',
+  s13_not_use_1: '❌ Primera vez que el grupo juega',
+  s13_not_use_2: '❌ Temas introductorios o de repaso rápido',
+  s13_not_use_3: '❌ Cuando hay poco tiempo disponible',
+  s13_not_use_4: '❌ Grupos muy grandes donde el cierre sería difícil de gestionar',
+  s13_tip: '💡 La autoevaluación identifica a los alumnos más mencionados como "ayudantes". Estos alumnos pueden explicar conceptos clave al resto del grupo en el cierre pedagógico, reforzando su propio aprendizaje y el de sus compañeros.',
 } as const;
 
 export type TranslationKeys = typeof es;

@@ -120,7 +120,7 @@ const styles = {
   questionLabel: {
     fontSize: 12,
     fontWeight: 700,
-    color: "#64748b",
+    color: "#334155",
     textTransform: "uppercase" as const,
     letterSpacing: "0.5px",
     marginBottom: 8,
@@ -588,7 +588,7 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
           </div>
 
           {/* Instrucciones */}
-          <p style={{ margin: 0, fontSize: 13, color: "#64748b", lineHeight: 1.5 }}>{selfEvalT.instructions}</p>
+          <p style={{ margin: 0, fontSize: 13, color: "#334155", lineHeight: 1.5 }}>{selfEvalT.instructions}</p>
         </div>
 
         {/* Puntaje final del equipo */}
@@ -644,7 +644,7 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
           <div style={styles.waitingCard}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
             <div style={{ fontSize: 18, fontWeight: 600 }}>Esperando al docente...</div>
-            <div style={{ fontSize: 14, color: "#64748b", marginTop: 8 }}>Stage 2 todavía no fue iniciado</div>
+            <div style={{ fontSize: 14, color: "#334155", marginTop: 8 }}>Stage 2 todavía no fue iniciado</div>
           </div>
         </div>
       </div>
@@ -853,7 +853,7 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
                     <p style={{ ...styles.questionText, fontSize: 16 }}>{currentQuestion?.text ?? "—"}</p>
                   </div>
 
-                  <div style={{ marginBottom: 8, fontSize: 14, color: "#64748b", textAlign: "center" }}>
+                  <div style={{ marginBottom: 8, fontSize: 14, color: "#334155", textAlign: "center" }}>
                     ¿Cómo fue la respuesta?
                   </div>
 
@@ -924,7 +924,7 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
                 // ✅ NUEVO: Mostrar mensaje cuando no calificó
                 <div
                   style={{
-                    backgroundColor: "#64748b",
+                    backgroundcolor: "#334155",
                     color: "white",
                     borderRadius: 16,
                     padding: 32,
@@ -1036,7 +1036,7 @@ export function TeamDeviceView({ gameId, teamId }: TeamDeviceViewProps) {
                   ? "El profesor valida la respuesta"
                   : "El profesor valida las calificaciones"}
               </div>
-              <div style={{ fontSize: 14, color: "#64748b", marginTop: 8 }}>Esperá los resultados...</div>
+              <div style={{ fontSize: 14, color: "#334155", marginTop: 8 }}>Esperá los resultados...</div>
             </div>
 
             {phase === "validation_ratings" && isRaterTeam && (

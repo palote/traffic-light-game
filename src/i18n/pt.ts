@@ -809,6 +809,31 @@ export const pt = {
 
     errorMessage: "Houve um erro. Por favor tente novamente.",
     backToDashboard: "Voltar ao início",
+
+    // ========== SEÇÃO 13: Preparação para a Autoavaliação ==========
+    s13_title: '13. Preparação para a Autoavaliação',
+    s13_warning: '⚠️ Se você for ativar a autoavaliação, é fundamental preparar os alunos ANTES de começar o jogo.',
+    s13_before_title: 'O que fazer ANTES do jogo',
+    s13_before_list1: 'Explique aos alunos que no final eles deverão refletir sobre o processo',
+    s13_before_list2: 'Peça que mantenham um "registro mental" ou anotações breves:',
+    s13_before_sub1: 'Quem me ajudou a entender algo?',
+    s13_before_sub2: 'A quem eu ajudei?',
+    s13_before_sub3: 'Qual conceito foi mais difícil para mim?',
+    s13_before_sub4: 'Como me senti trabalhando em equipe?',
+    s13_during_title: 'O que fazer DURANTE o jogo',
+    s13_during_list1: 'Você pode ter um quadro visível com as perguntas de reflexão',
+    s13_during_list2: 'Lembre brevemente entre as etapas de observar as interações',
+    s13_when_use_title: 'Quando USAR autoavaliação',
+    s13_use_1: '✅ Tópicos que exigem compreensão profunda',
+    s13_use_2: '✅ Quando houver tempo suficiente (adicione 10-15 min no final)',
+    s13_use_3: '✅ Grupos que já conhecem a dinâmica do jogo',
+    s13_use_4: '✅ Quando você quer identificar "especialistas" para o fechamento pedagógico',
+    s13_when_not_use_title: 'Quando NÃO usar autoavaliação',
+    s13_not_use_1: '❌ Primeira vez que o grupo joga',
+    s13_not_use_2: '❌ Tópicos introdutórios ou de revisão rápida',
+    s13_not_use_3: '❌ Quando há pouco tempo disponível',
+    s13_not_use_4: '❌ Grupos muito grandes onde o fechamento seria difícil de gerenciar',
+    s13_tip: '💡 A autoavaliação identifica os alunos mais mencionados como "ajudantes". Esses alunos podem explicar conceitos-chave para o restante do grupo no fechamento pedagógico, reforçando seu próprio aprendizado e o de seus colegas.',
   },
 } as const;
 

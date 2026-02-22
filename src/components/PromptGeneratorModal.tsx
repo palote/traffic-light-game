@@ -1,7 +1,9 @@
 // src/components/PromptGeneratorModal.tsx
 // Modal para generar prompts de consignas educativas con IA
+// ✅ ACTUALIZADO: Agregada sección de Capacidades y Operaciones Cognitivas
+// 🔧 CORREGIDO: Todos los textos ahora usan traducciones (capacityTexts o t.promptGenerator)
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react'; // ✅ Cambio 1: useEffect agregado
 import { useI18n } from '../i18n';
 import { useGameMode } from '../contexts/GameModeContext';
 import type { 
@@ -16,8 +18,8 @@ import {
   SECONDARY_SUBJECTS_ES,
   PRIMARY_SUBJECTS_EN,
   SECONDARY_SUBJECTS_EN,
-  PRIMARY_SUBJECTS_PT, // ✅ AGREGADO
-  SECONDARY_SUBJECTS_PT, // ✅ AGREGADO
+  PRIMARY_SUBJECTS_PT,
+  SECONDARY_SUBJECTS_PT,
   HISTORICAL_EVENTS,
   BOOKS,
   MEDIA_CONTENT,
@@ -30,6 +32,222 @@ import {
   savePreset,
   deletePreset,
 } from '../services/promptGeneratorService';
+
+// ============================================
+// TIPOS PARA CAPACIDADES Y OPERACIONES
+// ============================================
+
+type CapacityType = 'critical-thinking' | 'problem-solving' | 'communication' | 'collaboration' | null;
+
+interface CognitiveOperation {
+  id: string;
+  labelEs: string;
+  labelEn: string;
+  labelPt: string;
+  promptInstructionEs: string;
+  promptInstructionEn: string;
+  promptInstructionPt: string;
+}
+
+interface CapacityDefinition {
+  id: CapacityType;
+  icon: string;
+  labelEs: string;
+  labelEn: string;
+  labelPt: string;
+  operations: CognitiveOperation[];
+}
+
+// ============================================
+// DEFINICIÓN DE CAPACIDADES Y OPERACIONES
+// ============================================
+
+const CAPACITIES: CapacityDefinition[] = [
+  {
+    id: 'critical-thinking',
+    icon: '🧠',
+    labelEs: 'Pensamiento crítico',
+    labelEn: 'Critical thinking',
+    labelPt: 'Pensamento crítico',
+    operations: [
+      {
+        id: 'evaluate-evidence',
+        labelEs: 'Evaluar evidencia',
+        labelEn: 'Evaluate evidence',
+        labelPt: 'Avaliar evidências',
+        promptInstructionEs: 'presentar dos o más fuentes/datos y pedir que el alumno determine cuál es más confiable o válida, justificando su respuesta',
+        promptInstructionEn: 'present two or more sources/data and ask the student to determine which is more reliable or valid, justifying their answer',
+        promptInstructionPt: 'apresentar duas ou mais fontes/dados e pedir que o aluno determine qual é mais confiável ou válida, justificando sua resposta',
+      },
+      {
+        id: 'detect-errors',
+        labelEs: 'Detectar errores',
+        labelEn: 'Detect errors',
+        labelPt: 'Detectar erros',
+        promptInstructionEs: 'presentar una afirmación o procedimiento con un error conceptual y pedir que el alumno lo identifique y corrija',
+        promptInstructionEn: 'present a statement or procedure with a conceptual error and ask the student to identify and correct it',
+        promptInstructionPt: 'apresentar uma afirmação ou procedimento com um erro conceitual e pedir que o aluno o identifique e corrija',
+      },
+      {
+        id: 'compare-arguments',
+        labelEs: 'Comparar argumentos',
+        labelEn: 'Compare arguments',
+        labelPt: 'Comparar argumentos',
+        promptInstructionEs: 'presentar dos posiciones o argumentos diferentes sobre un tema y pedir que el alumno analice fortalezas y debilidades de cada uno',
+        promptInstructionEn: 'present two different positions or arguments on a topic and ask the student to analyze strengths and weaknesses of each',
+        promptInstructionPt: 'apresentar duas posições ou argumentos diferentes sobre um tema e pedir que o aluno analise pontos fortes e fracos de cada um',
+      },
+      {
+        id: 'question-assumptions',
+        labelEs: 'Cuestionar supuestos',
+        labelEn: 'Question assumptions',
+        labelPt: 'Questionar suposições',
+        promptInstructionEs: 'presentar una afirmación común o creencia y pedir que el alumno identifique qué supuestos asume y si son válidos',
+        promptInstructionEn: 'present a common statement or belief and ask the student to identify what assumptions it makes and whether they are valid',
+        promptInstructionPt: 'apresentar uma afirmação comum ou crença e pedir que o aluno identifique quais suposições ela assume e se são válidas',
+      },
+    ],
+  },
+  {
+    id: 'problem-solving',
+    icon: '🔍',
+    labelEs: 'Resolución de problemas',
+    labelEn: 'Problem solving',
+    labelPt: 'Resolução de problemas',
+    operations: [
+      {
+        id: 'identify-problem',
+        labelEs: 'Identificar el problema',
+        labelEn: 'Identify the problem',
+        labelPt: 'Identificar o problema',
+        promptInstructionEs: 'presentar una situación compleja y pedir que el alumno identifique cuál es el problema central a resolver',
+        promptInstructionEn: 'present a complex situation and ask the student to identify what is the central problem to solve',
+        promptInstructionPt: 'apresentar uma situação complexa e pedir que o aluno identifique qual é o problema central a resolver',
+      },
+      {
+        id: 'propose-solutions',
+        labelEs: 'Proponer soluciones',
+        labelEn: 'Propose solutions',
+        labelPt: 'Propor soluções',
+        promptInstructionEs: 'presentar un problema y pedir que el alumno proponga al menos dos soluciones posibles, explicando cada una',
+        promptInstructionEn: 'present a problem and ask the student to propose at least two possible solutions, explaining each one',
+        promptInstructionPt: 'apresentar um problema e pedir que o aluno proponha pelo menos duas soluções possíveis, explicando cada uma',
+      },
+      {
+        id: 'evaluate-alternatives',
+        labelEs: 'Evaluar alternativas',
+        labelEn: 'Evaluate alternatives',
+        labelPt: 'Avaliar alternativas',
+        promptInstructionEs: 'presentar varias soluciones posibles a un problema y pedir que el alumno evalúe ventajas y desventajas de cada una',
+        promptInstructionEn: 'present several possible solutions to a problem and ask the student to evaluate advantages and disadvantages of each',
+        promptInstructionPt: 'apresentar várias soluções possíveis para um problema e pedir que o aluno avalie vantagens e desvantagens de cada uma',
+      },
+      {
+        id: 'design-plan',
+        labelEs: 'Diseñar un plan',
+        labelEn: 'Design a plan',
+        labelPt: 'Elaborar um plano',
+        promptInstructionEs: 'presentar un objetivo y pedir que el alumno diseñe un plan paso a paso para lograrlo',
+        promptInstructionEn: 'present a goal and ask the student to design a step-by-step plan to achieve it',
+        promptInstructionPt: 'apresentar um objetivo e pedir que o aluno elabore um plano passo a passo para alcançá-lo',
+      },
+    ],
+  },
+  {
+    id: 'communication',
+    icon: '💬',
+    labelEs: 'Comunicación',
+    labelEn: 'Communication',
+    labelPt: 'Comunicação',
+    operations: [
+      {
+        id: 'explain-to-others',
+        labelEs: 'Explicar a otros',
+        labelEn: 'Explain to others',
+        labelPt: 'Explicar para outros',
+        promptInstructionEs: 'pedir que el alumno explique un concepto como si se lo explicara a alguien que no sabe nada del tema',
+        promptInstructionEn: 'ask the student to explain a concept as if explaining it to someone who knows nothing about the topic',
+        promptInstructionPt: 'pedir que o aluno explique um conceito como se estivesse explicando para alguém que não sabe nada sobre o tema',
+      },
+      {
+        id: 'argue-position',
+        labelEs: 'Argumentar posición',
+        labelEn: 'Argue a position',
+        labelPt: 'Argumentar posição',
+        promptInstructionEs: 'pedir que el alumno tome una posición sobre un tema y la defienda con al menos tres argumentos',
+        promptInstructionEn: 'ask the student to take a position on a topic and defend it with at least three arguments',
+        promptInstructionPt: 'pedir que o aluno tome uma posição sobre um tema e a defenda com pelo menos três argumentos',
+      },
+      {
+        id: 'synthesize-info',
+        labelEs: 'Sintetizar información',
+        labelEn: 'Synthesize information',
+        labelPt: 'Sintetizar informação',
+        promptInstructionEs: 'presentar información extensa o múltiples datos y pedir que el alumno los resuma en las ideas principales',
+        promptInstructionEn: 'present extensive information or multiple data and ask the student to summarize them into main ideas',
+        promptInstructionPt: 'apresentar informação extensa ou múltiplos dados e pedir que o aluno os resuma nas ideias principais',
+      },
+      {
+        id: 'adapt-audience',
+        labelEs: 'Adaptar al público',
+        labelEn: 'Adapt to audience',
+        labelPt: 'Adaptar ao público',
+        promptInstructionEs: 'pedir que el alumno explique el mismo concepto de dos formas diferentes: para un experto y para un niño',
+        promptInstructionEn: 'ask the student to explain the same concept in two different ways: for an expert and for a child',
+        promptInstructionPt: 'pedir que o aluno explique o mesmo conceito de duas formas diferentes: para um especialista e para uma criança',
+      },
+    ],
+  },
+  {
+    id: 'collaboration',
+    icon: '🤝',
+    labelEs: 'Trabajo colaborativo',
+    labelEn: 'Collaborative work',
+    labelPt: 'Trabalho colaborativo',
+    operations: [
+      {
+        id: 'integrate-perspectives',
+        labelEs: 'Integrar perspectivas',
+        labelEn: 'Integrate perspectives',
+        labelPt: 'Integrar perspectivas',
+        promptInstructionEs: 'presentar diferentes perspectivas sobre un tema y pedir que el alumno encuentre puntos en común o una síntesis',
+        promptInstructionEn: 'present different perspectives on a topic and ask the student to find common ground or a synthesis',
+        promptInstructionPt: 'apresentar diferentes perspectivas sobre um tema e pedir que o aluno encontre pontos em comum ou uma síntese',
+      },
+      {
+        id: 'negotiate-consensus',
+        labelEs: 'Negociar consenso',
+        labelEn: 'Negotiate consensus',
+        labelPt: 'Negociar consenso',
+        promptInstructionEs: 'presentar un dilema donde hay posiciones opuestas y pedir que el alumno proponga una solución que considere ambas partes',
+        promptInstructionEn: 'present a dilemma with opposing positions and ask the student to propose a solution that considers both sides',
+        promptInstructionPt: 'apresentar um dilema onde há posições opostas e pedir que o aluno proponha uma solução que considere ambas as partes',
+      },
+      {
+        id: 'distribute-roles',
+        labelEs: 'Distribuir roles',
+        labelEn: 'Distribute roles',
+        labelPt: 'Distribuir papéis',
+        promptInstructionEs: 'presentar un proyecto grupal y pedir que el alumno proponga cómo distribuir las tareas según las fortalezas de cada integrante',
+        promptInstructionEn: 'present a group project and ask the student to propose how to distribute tasks according to each member\'s strengths',
+        promptInstructionPt: 'apresentar um projeto em grupo e pedir que o aluno proponha como distribuir as tarefas segundo as forças de cada integrante',
+      },
+      {
+        id: 'give-receive-feedback',
+        labelEs: 'Dar/recibir feedback',
+        labelEn: 'Give/receive feedback',
+        labelPt: 'Dar/receber feedback',
+        promptInstructionEs: 'presentar un trabajo o respuesta de otro estudiante (ficticio) y pedir que el alumno dé feedback constructivo',
+        promptInstructionEn: 'present another student\'s (fictional) work or answer and ask the student to give constructive feedback',
+        promptInstructionPt: 'apresentar um trabalho ou resposta de outro estudante (fictício) e pedir que o aluno dê feedback construtivo',
+      },
+    ],
+  },
+];
+
+// ============================================
+// COMPONENTE PRINCIPAL
+// ============================================
 
 interface PromptGeneratorModalProps {
   isOpen: boolean;
@@ -49,6 +267,21 @@ export function PromptGeneratorModal({ isOpen, onClose }: PromptGeneratorModalPr
     language: appLang as PromptLanguage,
   });
 
+  // ✅ Cambio 2: useEffect para sincronizar idioma
+  // Sincronizar idioma cuando cambia el idioma de la app
+  useEffect(() => {
+    setConfig(prev => ({
+      ...prev,
+      language: appLang as PromptLanguage,
+      selection: '', // Reset porque las materias cambian con el idioma
+    }));
+  }, [appLang]);
+
+  // ✅ NUEVO: Estado para capacidades y operaciones
+  const [selectedCapacity, setSelectedCapacity] = useState<CapacityType>(null);
+  const [selectedOperations, setSelectedOperations] = useState<string[]>([]);
+  const [showOperations, setShowOperations] = useState(false);
+
   // UI state
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [showStageInfo, setShowStageInfo] = useState(false);
@@ -64,7 +297,7 @@ export function PromptGeneratorModal({ isOpen, onClose }: PromptGeneratorModalPr
   const [mediaFilter, setMediaFilter] = useState<'all' | 'movie' | 'series' | 'documentary'>('all');
 
   // Get subjects based on level and language
-  const subjects = useMemo(() => { // ✅ MODIFICADO
+  const subjects = useMemo(() => {
     if (config.level === 'primary') {
       if (config.language === 'pt') return [...PRIMARY_SUBJECTS_PT];
       if (config.language === 'en') return [...PRIMARY_SUBJECTS_EN];
@@ -111,6 +344,54 @@ export function PromptGeneratorModal({ isOpen, onClose }: PromptGeneratorModalPr
     return media;
   }, [config.level, mediaFilter]);
 
+  // ✅ NUEVO: Obtener capacidad seleccionada
+  const currentCapacity = useMemo(() => {
+    return CAPACITIES.find(c => c.id === selectedCapacity) || null;
+  }, [selectedCapacity]);
+
+  // ✅ NUEVO: Textos para capacidades (ampliados con contexto cultural y mensajes)
+  const capacityTexts = useMemo(() => {
+    const lang = config.language;
+    return {
+      sectionTitle: lang === 'es' ? '🎯 Tipo de pensamiento a desarrollar (opcional)' 
+        : lang === 'pt' ? '🎯 Tipo de pensamento a desenvolver (opcional)'
+        : '🎯 Type of thinking to develop (optional)',
+      sectionDesc: lang === 'es' ? 'Seleccioná una capacidad para incluir operaciones cognitivas específicas en el prompt'
+        : lang === 'pt' ? 'Selecione uma capacidade para incluir operações cognitivas específicas no prompt'
+        : 'Select a capacity to include specific cognitive operations in the prompt',
+      operationsTitle: lang === 'es' ? 'Operaciones cognitivas'
+        : lang === 'pt' ? 'Operações cognitivas'
+        : 'Cognitive operations',
+      operationsDesc: lang === 'es' ? 'Seleccioná las operaciones que querés incluir en las consignas:'
+        : lang === 'pt' ? 'Selecione as operações que você quer incluir nas consignas:'
+        : 'Select the operations you want to include in the questions:',
+      selectAll: lang === 'es' ? 'Seleccionar todas' 
+        : lang === 'pt' ? 'Selecionar todas'
+        : 'Select all',
+      clearAll: lang === 'es' ? 'Limpiar' 
+        : lang === 'pt' ? 'Limpar'
+        : 'Clear',
+      noCapacity: lang === 'es' ? 'Sin enfoque específico'
+        : lang === 'pt' ? 'Sem foco específico'
+        : 'No specific focus',
+      // ✅ NUEVAS CLAVES para contexto cultural
+      culturalContextLabel: lang === 'es' ? '🌍 Contexto geográfico/cultural (opcional)'
+        : lang === 'pt' ? '🌍 Contexto geográfico/cultural (opcional)'
+        : '🌍 Geographic/cultural context (optional)',
+      culturalContextPlaceholder: lang === 'es' ? 'Ej: México, zona rural de Oaxaca / España, Cataluña / Perú, Lima'
+        : lang === 'pt' ? 'Ex: Brasil, zona rural de Minas Gerais / Portugal, Lisboa / Angola, Luanda'
+        : 'E.g.: Mexico, rural Oaxaca / Spain, Catalonia / USA, Texas',
+      culturalContextHint: lang === 'es' ? 'Los ejemplos y referencias se adaptarán a este contexto'
+        : lang === 'pt' ? 'Os exemplos e referências serão adaptados a este contexto'
+        : 'Examples and references will be adapted to this context',
+      // ✅ NUEVA CLAVE para mensaje de operaciones seleccionadas
+      operationsSelectedMessage: (count: number) => 
+        lang === 'es' ? `✅ ${count} operaciones seleccionadas - se incluirán en el prompt`
+        : lang === 'pt' ? `✅ ${count} operações selecionadas - serão incluídas no prompt`
+        : `✅ ${count} operations selected - will be included in the prompt`,
+    };
+  }, [config.language]);
+
   // Early return AFTER all hooks
   if (!isOpen) return null;
 
@@ -119,9 +400,81 @@ export function PromptGeneratorModal({ isOpen, onClose }: PromptGeneratorModalPr
     setConfig(prev => ({ ...prev, ...updates }));
   };
 
-  // Handle generate
+  // ✅ NUEVO: Toggle operación
+  const toggleOperation = (opId: string) => {
+    setSelectedOperations(prev => 
+      prev.includes(opId) 
+        ? prev.filter(id => id !== opId)
+        : [...prev, opId]
+    );
+  };
+
+  // ✅ NUEVO: Seleccionar todas las operaciones de la capacidad actual
+  const selectAllOperations = () => {
+    if (currentCapacity) {
+      setSelectedOperations(currentCapacity.operations.map(op => op.id));
+    }
+  };
+
+  // ✅ NUEVO: Limpiar operaciones
+  const clearOperations = () => {
+    setSelectedOperations([]);
+  };
+
+  // ✅ NUEVO: Generar instrucciones de operaciones para el prompt
+  const generateOperationsInstructions = (): string => {
+    if (selectedOperations.length === 0 || !currentCapacity) return '';
+
+    const lang = config.language;
+    const selectedOps = currentCapacity.operations.filter(op => 
+      selectedOperations.includes(op.id)
+    );
+
+    if (selectedOps.length === 0) return '';
+
+    const introText = lang === 'es' 
+      ? `\n\nOPERACIONES COGNITIVAS REQUERIDAS:\nPara desarrollar ${currentCapacity.labelEs}, incluí consignas que requieran:`
+      : lang === 'pt'
+      ? `\n\nOPERAÇÕES COGNITIVAS REQUERIDAS:\nPara desenvolver ${currentCapacity.labelPt}, inclua consignas que exijam:`
+      : `\n\nREQUIRED COGNITIVE OPERATIONS:\nTo develop ${currentCapacity.labelEn}, include questions that require:`;
+
+    const percentage = Math.round(60 / selectedOps.length); // 60% entre todas las operaciones
+    
+    const operationsList = selectedOps.map(op => {
+      const instruction = lang === 'es' ? op.promptInstructionEs
+        : lang === 'pt' ? op.promptInstructionPt
+        : op.promptInstructionEn;
+      const label = lang === 'es' ? op.labelEs
+        : lang === 'pt' ? op.labelPt
+        : op.labelEn;
+      return `- ${percentage}% deben requerir ${label.toUpperCase()}: ${instruction}`;
+    }).join('\n');
+
+    const closingText = lang === 'es'
+      ? `\nEl ${100 - (percentage * selectedOps.length)}% restante pueden ser preguntas de comprensión general del tema.`
+      : lang === 'pt'
+      ? `\nOs ${100 - (percentage * selectedOps.length)}% restantes podem ser perguntas de compreensão geral do tema.`
+      : `\nThe remaining ${100 - (percentage * selectedOps.length)}% can be general comprehension questions about the topic.`;
+
+    return introText + '\n' + operationsList + closingText;
+  };
+
+  // Handle generate (modificado para incluir operaciones)
   const handleGenerate = () => {
-    const prompt = generatePrompt(config);
+    let prompt = generatePrompt(config);
+    
+    // ✅ NUEVO: Agregar instrucciones de operaciones cognitivas
+    const operationsInstructions = generateOperationsInstructions();
+    if (operationsInstructions) {
+      // Insertar antes del cierre del prompt
+      const insertPoint = prompt.lastIndexOf('---');
+      if (insertPoint > 0) {
+        prompt = prompt.slice(0, insertPoint) + operationsInstructions + '\n\n' + prompt.slice(insertPoint);
+      } else {
+        prompt += operationsInstructions;
+      }
+    }
+    
     setGeneratedPrompt(prompt);
   };
 
@@ -332,6 +685,202 @@ export function PromptGeneratorModal({ isOpen, onClose }: PromptGeneratorModalPr
     }
   };
 
+  // ✅ NUEVO: Renderizar sección de capacidades
+  const renderCapacitiesSection = () => {
+    const lang = config.language;
+
+    return (
+      <div style={{ 
+        marginBottom: 24, 
+        padding: 20, 
+        backgroundColor: '#faf5ff', 
+        borderRadius: 12,
+        border: '2px solid #c4b5fd',
+      }}>
+        <h4 style={{ margin: '0 0 8px 0', fontSize: 15, fontWeight: 700, color: '#7c3aed' }}>
+          {capacityTexts.sectionTitle}
+        </h4>
+        <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#64748b' }}>
+          {capacityTexts.sectionDesc}
+        </p>
+
+        {/* Botones de capacidades */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 12 }}>
+          {/* Opción: Sin enfoque */}
+          <button
+            onClick={() => {
+              setSelectedCapacity(null);
+              setSelectedOperations([]);
+              setShowOperations(false);
+            }}
+            style={{
+              padding: '12px 14px',
+              borderRadius: 10,
+              border: selectedCapacity === null ? '3px solid #8b5cf6' : '2px solid #e2e8f0',
+              backgroundColor: selectedCapacity === null ? '#ede9fe' : 'white',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: 13,
+              fontWeight: selectedCapacity === null ? 600 : 400,
+              color: selectedCapacity === null ? '#7c3aed' : '#64748b',
+            }}
+          >
+            <span>➖</span>
+            <span>{capacityTexts.noCapacity}</span>
+          </button>
+
+          {CAPACITIES.map((cap) => (
+            <button
+              key={cap.id}
+              onClick={() => {
+                setSelectedCapacity(cap.id);
+                setSelectedOperations([]); // Reset operaciones al cambiar capacidad
+                setShowOperations(true);
+              }}
+              style={{
+                padding: '12px 14px',
+                borderRadius: 10,
+                border: selectedCapacity === cap.id ? '3px solid #8b5cf6' : '2px solid #e2e8f0',
+                backgroundColor: selectedCapacity === cap.id ? '#ede9fe' : 'white',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 13,
+                fontWeight: selectedCapacity === cap.id ? 600 : 400,
+                color: selectedCapacity === cap.id ? '#7c3aed' : '#475569',
+              }}
+            >
+              <span>{cap.icon}</span>
+              <span>{lang === 'es' ? cap.labelEs : lang === 'pt' ? cap.labelPt : cap.labelEn}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Operaciones cognitivas (expandible) */}
+        {selectedCapacity && currentCapacity && (
+          <div style={{ 
+            marginTop: 16, 
+            padding: 16, 
+            backgroundColor: 'white', 
+            borderRadius: 10,
+            border: '1px solid #e2e8f0',
+          }}>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              marginBottom: 12,
+            }}>
+              <h5 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#334155' }}>
+                {capacityTexts.operationsTitle}
+              </h5>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={selectAllOperations}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    borderRadius: 6,
+                    border: '1px solid #8b5cf6',
+                    backgroundColor: 'white',
+                    color: '#8b5cf6',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {capacityTexts.selectAll}
+                </button>
+                <button
+                  onClick={clearOperations}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    borderRadius: 6,
+                    border: '1px solid #cbd5e1',
+                    backgroundColor: 'white',
+                    color: '#64748b',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {capacityTexts.clearAll}
+                </button>
+              </div>
+            </div>
+
+            <p style={{ margin: '0 0 12px 0', fontSize: 12, color: '#64748b' }}>
+              {capacityTexts.operationsDesc}
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {currentCapacity.operations.map((op) => {
+                const isSelected = selectedOperations.includes(op.id);
+                const label = lang === 'es' ? op.labelEs : lang === 'pt' ? op.labelPt : op.labelEn;
+                
+                return (
+                  <button
+                    key={op.id}
+                    onClick={() => toggleOperation(op.id)}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: 8,
+                      border: isSelected ? '2px solid #8b5cf6' : '2px solid #e2e8f0',
+                      backgroundColor: isSelected ? '#f5f3ff' : '#fafafa',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 4,
+                      border: isSelected ? 'none' : '2px solid #cbd5e1',
+                      backgroundColor: isSelected ? '#8b5cf6' : 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontSize: 12,
+                      flexShrink: 0,
+                    }}>
+                      {isSelected && '✓'}
+                    </span>
+                    <span style={{ 
+                      fontSize: 13, 
+                      fontWeight: isSelected ? 600 : 400,
+                      color: isSelected ? '#7c3aed' : '#475569',
+                    }}>
+                      {label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {selectedOperations.length > 0 && (
+              <div style={{
+                marginTop: 12,
+                padding: 10,
+                backgroundColor: '#f0fdf4',
+                borderRadius: 8,
+                fontSize: 12,
+                color: '#16a34a',
+              }}>
+                {capacityTexts.operationsSelectedMessage(selectedOperations.length)}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // If showing generated prompt
   if (generatedPrompt) {
     return (
@@ -514,7 +1063,7 @@ export function PromptGeneratorModal({ isOpen, onClose }: PromptGeneratorModalPr
               <div style={{ marginBottom: 20 }}>
                 <label style={labelStyle}>{t.promptGenerator.promptLanguage}</label>
                 <div style={{ display: 'flex', gap: 12 }}>
-                  {(['es', 'en', 'pt'] as const).map((lang) => ( // ✅ MODIFICADO: agregado 'pt'
+                  {(['es', 'en', 'pt'] as const).map((lang) => (
                     <button
                       key={lang}
                       onClick={() => updateConfig({ language: lang, selection: '' })}
@@ -664,6 +1213,9 @@ export function PromptGeneratorModal({ isOpen, onClose }: PromptGeneratorModalPr
           {/* Step 3: Advanced Settings */}
           {currentStep === 3 && (
             <div>
+              {/* ✅ NUEVO: Sección de Capacidades */}
+              {renderCapacitiesSection()}
+
               <div style={{ marginBottom: 20 }}>
                 <label style={labelStyle}>{t.promptGenerator.totalQuestions}</label>
                 <input type="number" value={config.totalQuestions} onChange={(e) => updateConfig({ totalQuestions: parseInt(e.target.value) || 44 })} min={10} max={100} style={inputStyle} />
@@ -690,28 +1242,20 @@ export function PromptGeneratorModal({ isOpen, onClose }: PromptGeneratorModalPr
                 </div>
               </div>
 
-              {/* ✅ NUEVO: Contexto geográfico/cultural */}
+              {/* Contexto geográfico/cultural - AHORA USANDO capacityTexts */}
               <div style={{ marginBottom: 20 }}>
                 <label style={labelStyle}>
-                  🌍 {config.language === 'es' ? 'Contexto geográfico/cultural (opcional)' : config.language === 'en' ? 'Geographic/cultural context (optional)' : 'Contexto geográfico/cultural (opcional)'}
+                  {capacityTexts.culturalContextLabel}
                 </label>
                 <input 
                   type="text" 
                   value={config.culturalContext || ''} 
                   onChange={(e) => updateConfig({ culturalContext: e.target.value })} 
-                  placeholder={config.language === 'es' 
-                    ? 'Ej: México, zona rural de Oaxaca / España, Cataluña / Perú, Lima' 
-                    : config.language === 'en'
-                    ? 'E.g.: Mexico, rural Oaxaca / Spain, Catalonia / USA, Texas'
-                    : 'Ex: Brasil, zona rural de Minas Gerais / Portugal, Lisboa / Angola, Luanda'}
+                  placeholder={capacityTexts.culturalContextPlaceholder}
                   style={inputStyle} 
                 />
                 <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748b' }}>
-                  {config.language === 'es' 
-                    ? 'Los ejemplos y referencias se adaptarán a este contexto' 
-                    : config.language === 'en'
-                    ? 'Examples and references will be adapted to this context'
-                    : 'Os exemplos e referências serão adaptados a este contexto'}
+                  {capacityTexts.culturalContextHint}
                 </p>
               </div>
 
