@@ -107,7 +107,15 @@ const getTeamViewTexts = (lang: 'es' | 'en' | 'pt') => ({
     confirmingPoints: lang === 'es' ? 'Error al confirmar puntos. Intentá de nuevo.' : lang === 'pt' ? 'Erro ao confirmar pontos. Tente novamente.' : 'Error confirming points. Try again.',
     loadingMaterial: lang === 'es' ? 'Error al cargar el material. Intentá de nuevo.' : lang === 'pt' ? 'Erro ao carregar o material. Tente novamente.' : 'Error loading material. Try again.',
   },
-  // ✅ NUEVAS CLAVES PARA ARIA-LABEL
+  teamActions: {
+    helpButton: lang === 'es' ? '❓ Pedir ayuda' : lang === 'pt' ? '❓ Pedir ajuda' : '❓ Ask for help',
+    interventionButton: lang === 'es' ? '🙋 Solicitar intervención docente' : lang === 'pt' ? '🙋 Solicitar intervenção do professor' : '🙋 Request teacher intervention',
+    helpSent: lang === 'es' ? '✅ Pedido enviado' : lang === 'pt' ? '✅ Pedido enviado' : '✅ Request sent',
+    interventionSent: lang === 'es' ? '✅ Docente notificado' : lang === 'pt' ? '✅ Professor notificado' : '✅ Teacher notified',
+    // ✅ CAMBIO 3
+    driveButton: lang === 'es' ? '📂 Material de estudio' : lang === 'pt' ? '📂 Material de estudo' : '📂 Study material',
+    drivePauseHint: lang === 'es' ? 'Usen este momento para revisar el material juntos' : lang === 'pt' ? 'Usem este momento para revisar o material juntos' : 'Use this moment to review the material together',
+  },
   aria: {
     openMaterial: lang === 'es'
       ? 'Abrir material complementario en ventana modal'
@@ -162,6 +170,7 @@ interface TeamViewProps {
   currentQuestion: string;
   totalStage1Questions: number;
   sourceTextPath?: string | null;
+  driveLink?: string | null; // ✅ CAMBIO 1
 }
 
 // ============================================
@@ -174,6 +183,7 @@ export function TeamView({
   currentQuestion,
   totalStage1Questions,
   sourceTextPath,
+  driveLink, // ✅ CAMBIO 2
 }: TeamViewProps) {
   // i18n
   const { language } = useI18n();
@@ -185,15 +195,22 @@ export function TeamView({
   const [liveRatings, setLiveRatings] = useState<{ [playerId: string]: Rating }>({});
   const [lastRoundPoints, setLastRoundPoints] = useState<{ [playerId: string]: number }>({});
   const [phase, setPhase] = useState<'response' | 'rating' | 'validation'>('response');
-  const [hasResponded, setHasResponded] = useState(false);
+  // ✅ CAMBIO 1: derivamos hasResponded directamente de la prop currentRound
+  const hasResponded = currentRound?.hasResponded === true;
   const [isConfirmingPoints, setIsConfirmingPoints] = useState(false);
   const [pointsAlreadyConfirmed, setPointsAlreadyConfirmed] = useState(false);
   const [showPedagogicalTip, setShowPedagogicalTip] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [helpSent, setHelpSent] = useState(false);
+  const [interventionSent, setInterventionSent] = useState(false);
 
   // Material complementario
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [materialContent, setMaterialContent] = useState<string | null>(null);
   const [loadingMaterial, setLoadingMaterial] = useState(false);
+
+  // ✅ FIX: ref para rastrear qué greens ya fueron auto-aceptados y evitar re-escrituras
+  const autoAcceptedRef = useRef<Set<string>>(new Set());
 
   const prevPhaseRef = useRef<string | null>(null);
   const { play } = useSound();
@@ -249,7 +266,9 @@ export function TeamView({
     checkConfirmation();
   }, [gameId, team.id, currentRound?.roundNumber]);
 
-  // Sincronización con Firebase - FUENTE DE VERDAD ÚNICA
+  // =========================
+  // ✅ FIX: Sincronización con Firebase - MERGE en lugar de REEMPLAZAR validaciones
+  // =========================
   useEffect(() => {
     const unsubscribe = subscribeToGame(gameId, (game) => {
       if (!game?.teams) return;
@@ -259,13 +278,16 @@ export function TeamView({
       const round: any = teamData.stage1Rounds?.[rn] ?? teamData.stage1Rounds?.[String(rn)];
       if (!round) return;
       const ratings = round.ratings || {};
-      const responded = round.hasResponded === true;
+      // ✅ CAMBIO 2: eliminamos las líneas que usaban responded y setHasResponded
+      // const responded = round.hasResponded === true;
+      // setHasResponded(responded);
 
       setLiveRatings(ratings);
       setLastRoundPoints(round.pointsAwarded || {});
-      setHasResponded(responded);
       setPointsAlreadyConfirmed(round.pointsConfirmed === true);
+      setIsPaused(teamData.isPaused === true);
 
+      // ✅ FIX: Construimos las validaciones desde Firebase
       const validationsFromFirebase: { [playerId: string]: boolean } = {};
       for (const [playerId, rating] of Object.entries(ratings)) {
         const r = rating as any;
@@ -273,7 +295,14 @@ export function TeamView({
           validationsFromFirebase[playerId] = r.userValidated === true;
         }
       }
-      setValidations(validationsFromFirebase);
+
+      // ✅ FIX: MERGE — Firebase es la fuente de verdad,
+      // pero no pisamos cambios locales que aún no se guardaron en Firebase.
+      // Usamos la versión de Firebase si existe, sino mantenemos la local.
+      setValidations(prev => ({
+        ...prev,               // mantiene cambios locales pendientes
+        ...validationsFromFirebase, // Firebase pisa cuando ya confirmó el dato
+      }));
     });
 
     return () => unsubscribe();
@@ -282,6 +311,8 @@ export function TeamView({
   // Reset valores puramente locales al cambiar de ronda
   useEffect(() => {
     setAllValidated(false);
+    setValidations({});                  // ✅ FIX v2: limpiar validaciones al cambiar de ronda
+    autoAcceptedRef.current = new Set(); // ✅ FIX: limpiar los greens auto-aceptados al cambiar ronda
   }, [currentRound?.roundNumber]);
 
   // =========================
@@ -334,39 +365,90 @@ export function TeamView({
   }, [phase, play]);
 
   // =========================
-  // Auto-aceptar verdes al entrar en validación
+  // ✅ FIX: Auto-aceptar verdes — sin setValidations, sin `validations` en deps
+  // Se usa un ref para asegurar que cada green se procese UNA SOLA VEZ
+  // El subscriber de Firebase actualizará `validations` cuando Firebase confirme
   // =========================
   useEffect(() => {
     if (phase !== 'validation') return;
-    setValidations((prev) => {
-      const next = { ...prev };
-      for (const [playerId, rating] of Object.entries(liveRatings)) {
-        if (rating?.color === 'green' && next[playerId] === undefined) {
-          next[playerId] = true;
-          validateRating(gameId, team.id, currentRound?.roundNumber ?? 0, playerId, true).catch(() => { });
-        }
+
+    for (const [playerId, rating] of Object.entries(liveRatings)) {
+      if (rating?.color === 'green' && !autoAcceptedRef.current.has(playerId)) {
+        // Marcamos como procesado ANTES de llamar a Firebase para evitar dobles llamadas
+        autoAcceptedRef.current.add(playerId);
+        validateRating(gameId, team.id, currentRound?.roundNumber ?? 0, playerId, true)
+          .catch(() => {
+            // Si falla, lo removemos del ref para que se reintente
+            autoAcceptedRef.current.delete(playerId);
+          });
+        // ✅ NO llamamos setValidations acá — lo hace el subscriber cuando Firebase confirma
       }
-      return next;
-    });
+    }
+    // ✅ `validations` NO está en las dependencias → se corta el ciclo infinito
   }, [phase, liveRatings, gameId, team.id, currentRound?.roundNumber]);
 
   // =========================
-  // allValidated: solo amarillo/rojo requieren validación
+  // allValidated: solo amarillo/rojo requieren validación explícita del equipo
   // =========================
   useEffect(() => {
+    // Si no hay ratings aún, no habilitar confirmar
+    if (Object.keys(liveRatings).length === 0) {
+      setAllValidated(false);
+      return;
+    }
     const needValidation = Object.entries(liveRatings).filter(
       ([, rating]) => rating.color === 'yellow' || rating.color === 'red'
     );
+    // Sin amarillos ni rojos: ok confirmar
     if (needValidation.length === 0) {
       setAllValidated(true);
       return;
     }
-    const allDone = needValidation.every(([playerId]) => validations[playerId] !== undefined);
+    // Cada amarillo/rojo debe tener una decisión explícita (true o false)
+    const allDone = needValidation.every(
+      ([playerId]) => validations[playerId] === true || validations[playerId] === false
+    );
     setAllValidated(allDone);
   }, [validations, liveRatings]);
 
   // =========================
-  // Handlers
+  // Handlers: ayuda e intervención
+  // =========================
+  const handleHelpRequest = async () => {
+    try {
+      await update(ref(database), {
+        [`games/${gameId}/teams/${team.id}/helpRequest`]: {
+          requestedAt: Date.now(),
+        },
+      });
+      setHelpSent(true);
+      setTimeout(() => setHelpSent(false), 4000);
+    } catch (e) {
+      console.error('Error sending help request:', e);
+    }
+  };
+
+  const handleInterventionRequest = async () => {
+    const weakPlayer = team.players
+      .slice()
+      .sort((a, b) => (b.consecutiveLastPlace ?? 0) - (a.consecutiveLastPlace ?? 0))[0];
+    try {
+      await update(ref(database), {
+        [`games/${gameId}/teams/${team.id}/pauseRequest`]: {
+          requestedAt: Date.now(),
+          playerName: weakPlayer?.name ?? '',
+          playerRounds: weakPlayer?.consecutiveLastPlace ?? 0,
+        },
+      });
+      setInterventionSent(true);
+      setTimeout(() => setInterventionSent(false), 4000);
+    } catch (e) {
+      console.error('Error sending intervention request:', e);
+    }
+  };
+
+  // =========================
+  // UI helpers
   // =========================
   const handleRating = async (playerId: string, playerName: string, color: RatingColor) => {
     const targetRoundNumber = currentRound?.roundNumber ?? 0;
@@ -451,14 +533,23 @@ export function TeamView({
     return points;
   };
 
-  const updateLastPlaceCounters = async () => {
+  // CAMBIO 1: updateLastPlaceCounters recibe pointsThisRound y calcula puntajes finales
+  const updateLastPlaceCounters = async (pointsThisRound: { [playerId: string]: number }) => {
     if (!team.players || team.players.length === 0) return;
-    const minScore = Math.min(...team.players.map(p => p.score ?? 0));
+
+    // Calcular score real post-ronda combinando acumulado + puntos de esta ronda
+    const finalScores = team.players.reduce((acc, p) => {
+      acc[p.id] = (p.score ?? 0) + (pointsThisRound[p.id] ?? 0);
+      return acc;
+    }, {} as { [id: string]: number });
+
+    const minScore = Math.min(...Object.values(finalScores));
     const lastPlaceIdsLocal = new Set(
-      team.players
-        .filter(p => (p.score ?? 0) === minScore)
-        .map(p => p.id)
+      Object.entries(finalScores)
+        .filter(([, score]) => score === minScore)
+        .map(([id]) => id)
     );
+
     for (const player of team.players) {
       if (lastPlaceIdsLocal.has(player.id)) {
         const newCount = (player.consecutiveLastPlace ?? 0) + 1;
@@ -498,7 +589,14 @@ export function TeamView({
       alert(texts.errors.phase1First);
       return;
     }
-    if (!allValidated) {
+    // Guardia explícita: contar amarillos/rojos que tienen decisión
+    const yellowsAndReds = Object.entries(liveRatings).filter(
+      ([, r]) => r.color === 'yellow' || r.color === 'red'
+    );
+    const decidedCount = yellowsAndReds.filter(
+      ([pid]) => validations[pid] === true || validations[pid] === false
+    ).length;
+    if (decidedCount < yellowsAndReds.length) {
       play('incorrect');
       alert(texts.errors.phase2First);
       return;
@@ -507,7 +605,6 @@ export function TeamView({
     setIsConfirmingPoints(true);
     play('click');
     try {
-      await markPointsAsConfirmed(gameId, team.id, targetRoundNumber);
       const points = calculatePoints();
       setLastRoundPoints(points);
       await awardPoints(gameId, team.id, targetRoundNumber, points);
@@ -520,8 +617,14 @@ export function TeamView({
           }
         }
       }
+      // ✅ Solo marcamos como confirmado DESPUÉS de que los puntos se guardaron
+      await markPointsAsConfirmed(gameId, team.id, targetRoundNumber);
       play('points');
-      await updateLastPlaceCounters();
+      try {
+        await updateLastPlaceCounters(points);
+      } catch (counterError) {
+        console.error('⚠️ Error actualizando last place counters:', counterError);
+      }
       await prepareNextRound(gameId, team.id);
       const allComplete = await areAllTeamsStage1Complete(gameId);
       if (allComplete) {
@@ -604,8 +707,129 @@ export function TeamView({
   // =========================
   // Render
   // =========================
+  // Cualquier jugador con 2+ rondas consecutivas en último lugar habilita el botón
+  const canRequestIntervention = team.players.some(
+    (p) => (p.consecutiveLastPlace ?? 0) >= 2
+  );
+
   return (
     <div className="team-view">
+
+      {/* ✅ Overlay de pausa */}
+      {isPaused && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.82)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            gap: 24,
+          }}
+          role="alert"
+          aria-live="assertive"
+        >
+          <div style={{ fontSize: 72 }}>🤝</div>
+          <div style={{
+            textAlign: 'center', color: 'white',
+            fontSize: 28, fontWeight: 700, lineHeight: 1.4,
+            maxWidth: 480, padding: '0 32px',
+          }}>
+            {language === 'es' ? '¡Momento de equipo!'
+              : language === 'pt' ? 'Momento de equipe!'
+              : 'Team moment!'}
+          </div>
+          <div style={{
+            textAlign: 'center', color: '#fbbf24',
+            fontSize: 18, lineHeight: 1.5,
+            maxWidth: 400, padding: '0 32px',
+          }}>
+            {language === 'es' ? 'Su docente se está acercando para ayudarlos 💛'
+              : language === 'pt' ? 'Seu professor está se aproximando para ajudá-los 💛'
+              : 'Your teacher is coming over to help your team 💛'}
+          </div>
+          {/* ✅ CAMBIO 5 */}
+          {driveLink && (
+            <a href={driveLink} target="_blank" rel="noopener noreferrer"
+              style={{ marginTop: 8, padding: '16px 32px', fontSize: 17, fontWeight: 700, backgroundColor: '#16a34a', color: 'white', borderRadius: 14, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.35)' }}>
+              <span style={{ fontSize: 24 }}>📂</span>
+              <div>
+                <div>{texts.teamActions.driveButton}</div>
+                <div style={{ fontSize: 13, fontWeight: 400, opacity: 0.9 }}>{texts.teamActions.drivePauseHint}</div>
+              </div>
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* ✅ Botones de ayuda e intervención */}
+      <div style={{
+        display: 'flex', gap: 10, padding: '10px 16px',
+        justifyContent: 'flex-end',
+      }}>
+        {/* ✅ CAMBIO 4 */}
+        {driveLink && (
+          <button
+            onClick={() => window.open(driveLink, '_blank', 'noopener,noreferrer')}
+            style={{ padding: '8px 14px', fontSize: 13, fontWeight: 600, backgroundColor: '#f0fdf4', color: '#15803d', border: '2px solid #16a34a', borderRadius: 8, cursor: 'pointer' }}
+          >
+            {texts.teamActions.driveButton}
+          </button>
+        )}
+        <button
+          onClick={handleHelpRequest}
+          disabled={helpSent}
+          style={{
+            padding: '8px 14px', fontSize: 13, fontWeight: 600,
+            backgroundColor: helpSent ? '#86efac' : '#f0fdf4',
+            color: helpSent ? '#166534' : '#15803d',
+            border: '2px solid #22c55e',
+            borderRadius: 8, cursor: helpSent ? 'default' : 'pointer',
+            transition: 'all 0.2s',
+          }}
+        >
+          {helpSent ? texts.teamActions.helpSent : texts.teamActions.helpButton}
+        </button>
+
+        <button
+          onClick={handleInterventionRequest}
+          disabled={!canRequestIntervention || interventionSent}
+          title={
+            !canRequestIntervention
+              ? (language === 'es'
+                  ? 'Disponible si un compañero lleva 2 rondas o más en dificultad'
+                  : language === 'pt'
+                    ? 'Disponível se um colega tiver 2 rodadas ou mais em dificuldade'
+                    : 'Available if a teammate has been struggling for 2+ rounds')
+              : undefined
+          }
+          style={{
+            padding: '8px 14px', fontSize: 13, fontWeight: 600,
+            backgroundColor: interventionSent
+              ? '#fde68a'
+              : canRequestIntervention
+                ? '#fffbeb'
+                : '#f8fafc',
+            color: interventionSent
+              ? '#92400e'
+              : canRequestIntervention
+                ? '#b45309'
+                : '#94a3b8',
+            border: `2px solid ${canRequestIntervention ? '#f59e0b' : '#cbd5e1'}`,
+            borderRadius: 8,
+            cursor: canRequestIntervention && !interventionSent ? 'pointer' : 'default',
+            transition: 'all 0.2s',
+          }}
+        >
+          {interventionSent
+            ? texts.teamActions.interventionSent
+            : texts.teamActions.interventionButton}
+        </button>
+      </div>
+
       <div className="header">
         <h1>🎮 {team.name}</h1>
         <p>
@@ -728,7 +952,6 @@ export function TeamView({
                     </span>
                   </div>
                 ) : isCurrentTurn ? (
-                  // ACCESIBILIDAD: Grupo de radios con navegación por flechas
                   <div
                     className="color-buttons"
                     role="radiogroup"
@@ -882,7 +1105,7 @@ export function TeamView({
           <button
             className="btn-confirm-points"
             onClick={handleConfirmPoints}
-            disabled={isConfirmingPoints || !allValidated}
+            disabled={isConfirmingPoints || validatedRelevantCount < totalNeedValidation}
             aria-label={
               pointsAlreadyConfirmed
                 ? texts.aria.nextRound
@@ -909,25 +1132,57 @@ export function TeamView({
         </div>
       )}
 
+      {/* CAMBIO 3: Ranking con proyección en tiempo real */}
       <div className="ranking-section">
         <h3>{texts.ranking} {team.name}</h3>
-        {rankedPlayers.map((player, index) => {
-          const minScore = rankedPlayers[rankedPlayers.length - 1]?.score ?? 0;
-          const isLast = (player.score ?? 0) === minScore;
-          return (
-            <div key={player.id} className={`ranking-item ${isLast ? 'last' : ''}`}>
-              <div>
-                <span>
-                  {index + 1}. {player.name}
-                </span>
-              </div>
-              <span>{player.score ?? 0} pts</span>
-            </div>
+        {(() => {
+          // Calcular puntos proyectados en tiempo real durante fase de validación
+          const projectedPoints = phase === 'validation' ? calculatePoints() : {};
+
+          const playersWithProjection = team.players.map(p => ({
+            ...p,
+            projectedGain: projectedPoints[p.id] ?? 0,
+            projectedTotal: (p.score ?? 0) + (projectedPoints[p.id] ?? 0),
+          }));
+
+          const sorted = [...playersWithProjection].sort(
+            (a, b) => b.projectedTotal - a.projectedTotal
           );
-        })}
+
+          const minProjected = sorted[sorted.length - 1]?.projectedTotal ?? 0;
+
+          return sorted.map((player, index) => {
+            const isLast = player.projectedTotal === minProjected;
+            const hasGain = player.projectedGain > 0;
+            const isZeroThisRound = phase === 'validation' && player.projectedGain === 0;
+
+            return (
+              <div key={player.id} className={`ranking-item ${isLast ? 'last' : ''}`}>
+                <div>
+                  <span>{index + 1}. {player.name}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>{player.score ?? 0} pts</span>
+                  {phase === 'validation' && (
+                    <span style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      padding: '2px 7px',
+                      borderRadius: 10,
+                      backgroundColor: hasGain ? '#dcfce7' : '#fee2e2',
+                      color: hasGain ? '#166534' : '#991b1b',
+                    }}>
+                      {hasGain ? `+${player.projectedGain}` : '+0'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          });
+        })()}
       </div>
 
-      {/* Modal de material complementario - ACCESIBILIDAD MEJORADA */}
+      {/* Modal de material complementario */}
       {showMaterialModal && (
         <div
           role="presentation"
@@ -985,7 +1240,7 @@ export function TeamView({
                   color: '#64748b',
                 }}
                 aria-label={texts.aria.closeModal}
-                autoFocus // el foco va a este botón al abrir el modal
+                autoFocus
               >
                 ✕
               </button>

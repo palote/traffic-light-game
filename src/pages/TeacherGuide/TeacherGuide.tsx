@@ -116,7 +116,7 @@ const texts = {
 
     // ========== SECCIÓN 3 ==========
     s3_title: '3. Sistema Verde/Amarillo/Rojo: Más Allá del Correcto/Incorrecto',
-    s3_lead: 'El sistema de calificaciones tipo semáforo NO solo evalúa si la respuesta es correcta o incorrecta. Diferencia <strong>niveles de comprensión</strong> siguiendo la Teoría de la Comprensión de David Perkins.',
+    s3_lead: 'El sistema de calificaciones tipo semáforo NO solo evalúa si la respuesta es correcta o incorrecta. Los tres colores 🟢🟡🔴 operan <strong>exactamente igual en Etapa 1 y Etapa 2</strong> — la diferencia entre etapas está en el diseño de las consignas, no en los colores. Lo que importa es la justificación.',
 
     // Luz verde
     s3_green_light: 'LUZ VERDE',
@@ -127,8 +127,8 @@ const texts = {
     s3_green_why_value: 'Queremos <strong>desincentivar respuestas superficiales</strong>. Si la respuesta es correcta pero no agrega valor al debate, recibe el puntaje mínimo.',
     s3_green_example_label: 'Ejemplo:',
     s3_green_example: 'Pregunta: "¿Cuál es la capital de Francia?"\nRespuesta: "París"\nCalificación: 🟢 Verde',
-    s3_green_perkins_label: 'Nivel de Perkins:',
-    s3_green_perkins_value: 'Conocimiento ritual - Sabe la respuesta pero no necesariamente comprende.',
+    s3_green_perkins_label: 'Señal:',
+    s3_green_perkins_value: 'Falta de motivación para buscar conexiones. Cualquier respuesta puede enriquecerse con Amarillo.',
 
     // Luz amarilla
     s3_yellow_light: 'LUZ AMARILLA',
@@ -139,8 +139,8 @@ const texts = {
     s3_yellow_why_value: 'Este es el nivel que <strong>más queremos fomentar</strong>. Indica pensamiento profundo, capacidad de relacionar conceptos, comprensión genuina.',
     s3_yellow_example_label: 'Ejemplo:',
     s3_yellow_example: 'Pregunta: "¿Por qué flotan los barcos?"\nRespuesta: "Por el principio de Arquímedes. El barco desplaza agua cuyo peso es mayor que el del barco. Por eso un barco de acero puede flotar mientras una moneda de acero se hunde: depende del VOLUMEN de agua desplazado, no solo del material."\nCalificación: 🟡 Amarillo',
-    s3_yellow_perkins_label: 'Nivel de Perkins:',
-    s3_yellow_perkins_value: 'Comprensión genuina - Puede explicar, relacionar, aplicar a nuevos contextos.',
+    s3_yellow_perkins_label: 'Señal:',
+    s3_yellow_perkins_value: 'El corazón del método: busca conexiones, relaciones y nuevas perspectivas entre conceptos.',
 
     // Luz roja
     s3_red_light: 'LUZ ROJA',
@@ -151,8 +151,8 @@ const texts = {
     s3_red_why_value: 'Detectar errores requiere <strong>pensamiento crítico</strong> de alto nivel. Es más difícil que dar respuestas correctas. Además, ayuda a todos a aprender del error.',
     s3_red_example_label: 'Ejemplo:',
     s3_red_example: 'Pregunta: "¿Qué causa las estaciones del año?"\nRespuesta de Equipo A: "La distancia variable de la Tierra al Sol."\nEquipo B detecta error: 🔴 "Incorrecto. Las estaciones NO son por distancia, sino por la inclinación del eje terrestre."\nResultado: Equipo B recibe 12 puntos.',
-    s3_red_perkins_label: 'Nivel de Perkins:',
-    s3_red_perkins_value: 'Pensamiento crítico avanzado - Puede evaluar, cuestionar supuestos, detectar errores conceptuales.',
+    s3_red_perkins_label: 'Señal:',
+    s3_red_perkins_value: 'Requiere atención crítica. Si el Rojo era incorrecto (no había error), quien lo marcó recibe 0 pts.',
 
     // Beneficios
     s3_benefit1_title: 'Premia la Profundidad',
@@ -185,7 +185,7 @@ const texts = {
     s4_stage1_list1: '❌ NO hay competencia entre equipos',
     s4_stage1_list2: '📊 Puntos son FEEDBACK, no calificación',
     s4_stage1_list3: '📝 Preguntas más básicas/fundamentales',
-    s4_stage1_list4: '🟡 Algunas permiten relaciones (amarillas)',
+    s4_stage1_list4: '🟢🟡🔴 Los tres colores están disponibles en todas las consignas',
     s4_stage1_list5: '🎯 Enfoque: Preparación y colaboración interna',
     s4_stage1_example_label: 'Tipo de preguntas:',
     s4_stage1_example1: 'Definición: "¿Qué es la fotosíntesis?"',
@@ -242,7 +242,7 @@ const texts = {
     s4_table_response_stage1: 'Definir, identificar, comparar',
     s4_table_response_stage2: 'Explicar, aplicar, justificar',
     s4_table_debate: 'Admite debate',
-    s4_table_debate_stage1: 'Algo (algunas amarillas)',
+    s4_table_debate_stage1: 'Sí — el equipo clasifica con Verde, Amarillo o Rojo',
     s4_table_debate_stage2: 'Mucho (mayoría amarillas)',
 
     // ========== SECCIÓN 5 ==========
@@ -713,7 +713,7 @@ const texts = {
 
     // ========== SECTION 3 ==========
     s3_title: '3. Green/Yellow/Red System: Beyond Right/Wrong',
-    s3_lead: 'The traffic light grading system does NOT only evaluate if the answer is right or wrong. It differentiates <strong>levels of understanding</strong> following David Perkins\' Theory of Understanding.',
+    s3_lead: 'The traffic light grading system does NOT only evaluate if the answer is right or wrong. All three colors 🟢🟡🔴 work <strong>exactly the same in Stage 1 and Stage 2</strong> — what differs between stages is the design of the prompts, not the colors. What matters is the justification.',
 
     s3_green_light: 'GREEN LIGHT',
     s3_green_points: '5 points',
@@ -723,8 +723,8 @@ const texts = {
     s3_green_why_value: 'We want to <strong>discourage superficial answers</strong>. If the answer is correct but does not add value to the debate, it receives the minimum score.',
     s3_green_example_label: 'Example:',
     s3_green_example: 'Question: "What is the capital of France?"\nAnswer: "Paris"\nGrade: 🟢 Green',
-    s3_green_perkins_label: 'Perkins Level:',
-    s3_green_perkins_value: 'Ritual knowledge - Knows the answer but does not necessarily understand.',
+    s3_green_perkins_label: 'Signal:',
+    s3_green_perkins_value: 'Lack of motivation to seek connections. Any answer can be enriched with Yellow.',
 
     s3_yellow_light: 'YELLOW LIGHT',
     s3_yellow_points: '10 points',
@@ -734,8 +734,8 @@ const texts = {
     s3_yellow_why_value: 'This is the level we <strong>most want to encourage</strong>. It indicates deep thinking, ability to relate concepts, genuine understanding.',
     s3_yellow_example_label: 'Example:',
     s3_yellow_example: 'Question: "Why do ships float?"\nAnswer: "Because of Archimedes\' principle. The ship displaces water whose weight is greater than the ship\'s. That\'s why a steel ship can float while a steel coin sinks: it depends on the VOLUME of water displaced, not just the material."\nGrade: 🟡 Yellow',
-    s3_yellow_perkins_label: 'Perkins Level:',
-    s3_yellow_perkins_value: 'Genuine understanding - Can explain, relate, apply to new contexts.',
+    s3_yellow_perkins_label: 'Signal:',
+    s3_yellow_perkins_value: 'The heart of the method: seeks connections, relationships, and new perspectives between concepts.',
 
     s3_red_light: 'RED LIGHT',
     s3_red_points: '12 points (for the detector)',
@@ -745,8 +745,8 @@ const texts = {
     s3_red_why_value: 'Detecting errors requires <strong>high-level critical thinking</strong>. It is harder than giving correct answers. Also, it helps everyone learn from the mistake.',
     s3_red_example_label: 'Example:',
     s3_red_example: 'Question: "What causes the seasons?"\nTeam A answer: "The varying distance of the Earth to the Sun."\nTeam B detects error: 🔴 "Incorrect. Seasons are NOT due to distance, but because of the tilt of the Earth\'s axis."\nResult: Team B gets 12 points.',
-    s3_red_perkins_label: 'Perkins Level:',
-    s3_red_perkins_value: 'Advanced critical thinking - Can evaluate, question assumptions, detect conceptual errors.',
+    s3_red_perkins_label: 'Signal:',
+    s3_red_perkins_value: 'Requires critical attention. If the Red was incorrect (no error existed), the one who flagged it gets 0 pts.',
 
     s3_benefit1_title: 'Rewards Depth',
     s3_benefit1_desc: 'A student who consistently gives yellow answers demonstrates DEEPER understanding than one who only gets greens.',
@@ -776,7 +776,7 @@ const texts = {
     s4_stage1_list1: '❌ NO competition between teams',
     s4_stage1_list2: '📊 Points are FEEDBACK, not grades',
     s4_stage1_list3: '📝 More basic/fundamental questions',
-    s4_stage1_list4: '🟡 Some allow relationships (yellows)',
+    s4_stage1_list4: '🟢🟡🔴 All three colors are available for every prompt',
     s4_stage1_list5: '🎯 Focus: Preparation and internal collaboration',
     s4_stage1_example_label: 'Question types:',
     s4_stage1_example1: 'Definition: "What is photosynthesis?"',
@@ -830,7 +830,7 @@ const texts = {
     s4_table_response_stage1: 'Define, identify, compare',
     s4_table_response_stage2: 'Explain, apply, justify',
     s4_table_debate: 'Admits debate',
-    s4_table_debate_stage1: 'Some (some yellows)',
+    s4_table_debate_stage1: 'Yes — teams classify with Green, Yellow, or Red',
     s4_table_debate_stage2: 'A lot (mostly yellows)',
 
     // ========== SECTION 5 ==========
@@ -1290,7 +1290,7 @@ const texts = {
 
     // ========== SEÇÃO 3 ==========
     s3_title: '3. Sistema Verde/Amarelo/Vermelho: Além do Certo/Errado',
-    s3_lead: 'O sistema de notas tipo semáforo NÃO avalia apenas se a resposta está certa ou errada. Ele diferencia <strong>níveis de compreensão</strong> seguindo a Teoria da Compreensão de David Perkins.',
+    s3_lead: 'O sistema de notas tipo semáforo NÃO avalia apenas se a resposta está certa ou errada. As três cores 🟢🟡🔴 funcionam <strong>exatamente da mesma forma no Stage 1 e no Stage 2</strong> — o que muda entre as etapas é o design das consignas, não as cores. O que importa é a justificativa.',
 
     s3_green_light: 'LUZ VERDE',
     s3_green_points: '5 pontos',
@@ -1300,8 +1300,8 @@ const texts = {
     s3_green_why_value: 'Queremos <strong>desincentivar respostas superficiais</strong>. Se a resposta está correta mas não agrega valor ao debate, recebe a pontuação mínima.',
     s3_green_example_label: 'Exemplo:',
     s3_green_example: 'Pergunta: "Qual é a capital da França?"\nResposta: "Paris"\nNota: 🟢 Verde',
-    s3_green_perkins_label: 'Nível de Perkins:',
-    s3_green_perkins_value: 'Conhecimento ritual - Sabe a resposta mas não necessariamente compreende.',
+    s3_green_perkins_label: 'Sinal:',
+    s3_green_perkins_value: 'Falta de motivação para buscar conexões. Qualquer resposta pode ser enriquecida com Amarelo.',
 
     s3_yellow_light: 'LUZ AMARELA',
     s3_yellow_points: '10 pontos',
@@ -1311,8 +1311,8 @@ const texts = {
     s3_yellow_why_value: 'Este é o nível que <strong>mais queremos incentivar</strong>. Indica pensamento profundo, capacidade de relacionar conceitos, compreensão genuína.',
     s3_yellow_example_label: 'Exemplo:',
     s3_yellow_example: 'Pergunta: "Por que os navios flutuam?"\nResposta: "Pelo princípio de Arquimedes. O navio desloca água cujo peso é maior que o do navio. Por isso um navio de aço pode flutuar enquanto uma moeda de aço afunda: depende do VOLUME de água deslocado, não só do material."\nNota: 🟡 Amarelo',
-    s3_yellow_perkins_label: 'Nível de Perkins:',
-    s3_yellow_perkins_value: 'Compreensão genuína - Pode explicar, relacionar, aplicar a novos contextos.',
+    s3_yellow_perkins_label: 'Sinal:',
+    s3_yellow_perkins_value: 'O coração do método: busca conexões, relações e novas perspectivas entre conceitos.',
 
     s3_red_light: 'LUZ VERMELHA',
     s3_red_points: '12 pontos (para quem detecta)',
@@ -1322,8 +1322,8 @@ const texts = {
     s3_red_why_value: 'Detectar erros requer <strong>pensamento crítico</strong> de alto nível. É mais difícil do que dar respostas corretas. Além disso, ajuda todos a aprender com o erro.',
     s3_red_example_label: 'Exemplo:',
     s3_red_example: 'Pergunta: "O que causa as estações do ano?"\nResposta do Equipe A: "A distância variável da Terra ao Sol."\nEquipe B detecta erro: 🔴 "Incorreto. As estações NÃO são por distância, mas pela inclinação do eixo terrestre."\nResultado: Equipe B ganha 12 pontos.',
-    s3_red_perkins_label: 'Nível de Perkins:',
-    s3_red_perkins_value: 'Pensamento crítico avançado - Pode avaliar, questionar suposições, detectar erros conceituais.',
+    s3_red_perkins_label: 'Sinal:',
+    s3_red_perkins_value: 'Requer atenção crítica. Se o Vermelho estava incorreto (não havia erro), quem o sinalizou recebe 0 pts.',
 
     s3_benefit1_title: 'Premia a Profundidade',
     s3_benefit1_desc: 'Um aluno que dá respostas amarelas consistentemente demonstra compreensão MAIS profunda do que aquele que só acerta (verdes).',
@@ -1354,7 +1354,7 @@ const texts = {
     s4_stage1_list1: '❌ NÃO há competição entre equipes',
     s4_stage1_list2: '📊 Pontos são FEEDBACK, não nota',
     s4_stage1_list3: '📝 Perguntas mais básicas/fundamentais',
-    s4_stage1_list4: '🟡 Algumas permitem relações (amarelas)',
+    s4_stage1_list4: '🟢🟡🔴 As três cores estão disponíveis em todas as consignas',
     s4_stage1_list5: '🎯 Foco: Preparação e colaboração interna',
     s4_stage1_example_label: 'Tipos de perguntas:',
     s4_stage1_example1: 'Definição: "O que é fotossíntese?"',
@@ -1408,7 +1408,7 @@ const texts = {
     s4_table_response_stage1: 'Definir, identificar, comparar',
     s4_table_response_stage2: 'Explicar, aplicar, justificar',
     s4_table_debate: 'Admite debate',
-    s4_table_debate_stage1: 'Algo (algumas amarelas)',
+    s4_table_debate_stage1: 'Sim — a equipe classifica com Verde, Amarelo ou Vermelho',
     s4_table_debate_stage2: 'Muito (maioria amarelas)',
 
 

@@ -16,8 +16,8 @@ const firebaseConfig = {
   measurementId: "G-73PXXPXK71",
 };
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig); // ← exportado
 
 export const database = getDatabase(app);
 export const auth = getAuth(app);
-export const storage = getStorage(app);  // ✅ NUEVO: Storage para CSVs
+export const storage = getStorage(app);

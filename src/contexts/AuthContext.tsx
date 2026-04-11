@@ -11,6 +11,8 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
 } from "firebase/auth";
 
 import { auth, database } from "../firebase.config";
@@ -64,15 +66,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminLoading, setAdminLoading] = useState(false);
 
-  // Refs para acceder en event listeners y logout
   const userRef = useRef<User | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const loginAtRef = useRef<number | null>(null);
-  
-  // Flag para saber si estamos en proceso de logout
   const isLoggingOutRef = useRef(false);
 
-  // Mantener refs sincronizados
   useEffect(() => {
     userRef.current = user;
   }, [user]);
@@ -80,6 +78,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
+
+  // -----------------------
+  // Manejo de resultado de redirect
+  // ✅ FIX: ignorar también el error "missing initial state" de Android Chrome
+  // -----------------------
+  useEffect(() => {
+    if (!authRequired) return;
+
+    getRedirectResult(auth).catch((error) => {
+      if (
+        error?.code !== 'auth/no-auth-event' &&
+        !error?.message?.includes('missing initial state')
+      ) {
+        console.error("❌ getRedirectResult error:", error);
+      }
+    });
+  }, [authRequired]);
 
   // -----------------------
   // Auth State
@@ -98,12 +113,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(user);
       setLoading(false);
 
-      // Si estamos haciendo logout, no resetear sessionId
       if (isLoggingOutRef.current) {
         return;
       }
 
-      // Verificar si este usuario es un referido pendiente
       if (user?.email) {
         try {
           const referralsSnap = await get(ref(database, "referrals"));
@@ -130,7 +143,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Lógica de sesiones
       if (user) {
         try {
           const loginAt = Date.now();
@@ -269,14 +281,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     if (!authRequired) return;
 
-    // Capturar valores ANTES de cualquier cambio de estado
     const currentUid = userRef.current?.uid;
     const currentSessionId = sessionIdRef.current;
 
-    // Marcar que estamos en proceso de logout
     isLoggingOutRef.current = true;
 
-    // Cerrar la sesión de métricas ANTES de signOut
     if (currentUid && currentSessionId) {
       try {
         await endTeacherSession(currentUid, currentSessionId);
@@ -284,36 +293,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn("⚠️ metrics endTeacherSession failed:", e);
       }
 
-      // Limpiar sessionStorage
       sessionStorage.removeItem(`session_loginAt_${currentSessionId}`);
       sessionStorage.removeItem(`session_lastVisible_${currentSessionId}`);
     }
 
-    // Limpiar refs
     sessionIdRef.current = null;
     loginAtRef.current = null;
     setSessionId(null);
 
-    // Hacer signOut
     await signOut(auth);
 
-    // Resetear el flag después de un pequeño delay
     setTimeout(() => {
       isLoggingOutRef.current = false;
     }, 100);
   };
 
   // -----------------------
-  // Google Popup
+  // Google Login
+  // ✅ FIX: popup primario en todos los dispositivos (incluido Android Chrome)
+  // El redirect falla en Android por Storage Partitioning / sessionStorage bloqueado.
+  // signInWithPopup funciona correctamente en Chrome Android moderno.
+  // Solo se cae a redirect si el popup fue explícitamente bloqueado por el browser.
   // -----------------------
   const loginWithGoogle = async () => {
     if (!authRequired) return;
 
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+
     try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
       await signInWithPopup(auth, provider);
     } catch (e) {
+      const code = (e as any)?.code;
+
+      // Solo si el popup fue bloqueado por el browser, caer a redirect
+      if (code === 'auth/popup-blocked') {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+
       console.error("❌ Google login failed:", e);
       throw new Error(`No se pudo iniciar sesión con Google: ${formatFirebaseError(e)}`);
     }

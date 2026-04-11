@@ -67,7 +67,7 @@ const localizedTexts: Record<string, Record<GameMode, { name: string; tagline: s
   es: {
     'traffic-light': {
       name: 'El Juego del Semáforo',
-      tagline: 'Donde aprender es divertido',
+      tagline: 'Donde aprendemos todos juntos',  // ← CAMBIADO
       welcomeTitle: '¡Bienvenido/a! 👋',
       welcomeSubtitle: '¿Qué querés hacer hoy?',
     },

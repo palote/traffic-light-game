@@ -1,4 +1,3 @@
-// src/App.tsx
 import { PWAMiniBadge } from './components/PWAMiniBadge';
 import './components/PWAMiniBadge.css';
 
@@ -21,7 +20,7 @@ import { LibraryPage } from "./pages/LibraryPage";
 import { JoinGamePage } from "./pages/JoinGamePage";
 import { ReferralPage } from "./pages/ReferralPage";
 import { WebinarRegistrationPage } from "./pages/WebinarRegistrationPage";
-import { PrivacyPage } from "./pages/PrivacyPage";   // <--- NUEVA LÍNEA
+import { PrivacyPage } from "./pages/PrivacyPage";
 
 // ✅ NUEVO: Componentes de propuestas
 import { SetupFlowManager } from "./components/setup/SetupFlowManager";
@@ -36,6 +35,12 @@ import { SelfEvalPage, TeacherEvaluationsPage } from "./components/PostGame";
 
 // ✅ CLASSROOM VIEWS REALES
 import { Stage1ClassroomView } from "./components/Stage1/Stage1ClassroomView";
+import { ProposalTeacherView } from "./components/Stage0/ProposalTeacherView";
+import { ProposalCurationView } from "./components/Stage0/ProposalCurationView";
+import {
+  closeProposalsAndStartCuration,
+  completeCurationAndStartStage1,
+} from "./services/stage0Service";
 import { ClassroomView as Stage2ClassroomView } from "./components/Stage2/ClassroomView";
 
 // ✅ PWA INSTALL BANNER
@@ -56,9 +61,62 @@ import type { Game } from "./types/game";
 // 🆕 Página de Guía Pedagógica (Lazy Load)
 const TeacherGuide = lazy(() => import('./pages/TeacherGuide'));
 
+// 🆕 Generador de Rúbricas (Lazy Load)
+const RubricGenerator = lazy(() =>
+  import('./pages/RubricGeneratorPage').then(m => ({ default: m.RubricGeneratorPage }))
+);
+
+// ✅ NUEVO: Adaptador de consignas (Lazy Load)
+const ConsignaAdapter = lazy(() =>
+  import('./pages/ConsignaAdapterPage').then(m => ({ default: m.ConsignaAdapterPage }))
+);
+
+// ✅ NUEVO: Generador de Informes (Lazy Load)
+const InformeGenerator = lazy(() =>
+  import('./pages/InformeGeneratorPage').then(m => ({ default: m.InformeGeneratorPage }))
+);
+
+// ✅ NUEVO: Generador de Planilla de Presentismo (Lazy Load)
+const PresentismoGenerator = lazy(() =>
+  import('./pages/PresentismoGeneratorPage').then(m => ({ default: m.PresentismoGeneratorPage }))
+);
+
+// 🆕 GENERADOR DE PRESENTACIONES (LAZY LOAD)
+const PresentacionGenerator = lazy(() =>
+  import('./pages/PresentacionGeneratorPage').then(m => ({ default: m.PresentacionGeneratorPage }))
+);
+
+// 🆕 GENERADOR DE HORARIOS (LAZY LOAD)
+const HorarioGenerator = lazy(() =>
+  import('./pages/HorarioGeneratorPage').then(m => ({ default: m.HorarioGeneratorPage }))
+);
+
+// 🆕 GENERADOR DE SECUENCIAS DIDÁCTICAS (LAZY LOAD)
+const SecuenciaGenerator = lazy(() =>
+  import('./pages/SecuenciaGeneratorPage').then(m => ({ default: m.SecuenciaGeneratorPage }))
+);
+// 🆕 CORRECTOR CON RÚBRICA (LAZY LOAD)
+const Correccion = lazy(() =>
+  import('./pages/CorreccionPage').then(m => ({ default: m.CorreccionPage }))
+);
+
+// 🆕 GENERADOR DE PLANIFICACIONES (LAZY LOAD)
+const PlanificacionGeneratorPage = lazy(() => import("./pages/PlanificacionGeneratorPage"));
+
+// ✅ NUEVO: Comparador de Países (Lazy Load)
+const ComparadorPaisesPage = lazy(() => import("./pages/ComparadorPaisesPage"));
+
+// 🆕 GENERADOR DE ECUACIONES (Lazy Load)
+const EcuacionesGeneratorPage = lazy(() => import("./pages/EcuacionesGeneratorPage"));
+
+// 🆕 ÁRBITRO DE LENGUA Y MATEMÁTICA (Lazy Load)
+const ArbitroConfigPage = lazy(() => import("./pages/ArbitroConfigPage"));
+const ArbitroSesionPage = lazy(() => import("./pages/ArbitroSesionPage"));
+
 // ✅ CORREGIDO: ClassroomView real para Stage 1
 function ClassroomRouteWrapper() {
   const { gameId } = useParams();
+  const navigate = useNavigate();
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -80,10 +138,10 @@ function ClassroomRouteWrapper() {
 
   if (loading) {
     return (
-      <div style={{ 
-        minHeight: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#f8fafc',
       }}>
@@ -102,6 +160,46 @@ function ClassroomRouteWrapper() {
         <div style={{ fontSize: 18, color: '#ef4444' }}>Juego no encontrado</div>
         <p style={{ color: '#64748b' }}>gameId: {gameId}</p>
       </div>
+    );
+  }
+
+  // Detectar Stage 0 y renderizar la vista correcta según la fase
+  const currentPhase = game.status?.currentPhase || "";
+  const currentStage = game.status?.currentStage ?? 1;
+
+  if (currentStage === 0 || currentPhase.startsWith("proposal")) {
+    const teams = game.teams
+      ? Object.values(game.teams as any).map((t: any) => ({ ...t, id: t.id }))
+      : [];
+
+    if (currentPhase === "proposal-curating") {
+      return (
+        <ProposalCurationView
+          gameId={gameId}
+          teams={teams as any}
+          onComplete={async (questions, bonusPoints) => {
+            await completeCurationAndStartStage1(gameId, questions, bonusPoints);
+            navigate(`/classroom/${gameId}`);
+          }}
+          onBack={() => navigate("/")}
+        />
+      );
+    }
+
+    // proposal-collecting o proposal-waiting
+    return (
+      <ProposalTeacherView
+        gameId={gameId}
+        config={{
+          maxProposalsPerTeam: game.config?.stage0Config?.maxProposalsPerTeam ?? 5,
+          timerMinutes: game.config?.stage0Config?.timerMinutes ?? null,
+          showLiveProposals: game.config?.stage0Config?.showLiveProposals ?? true,
+        }}
+        onCloseProposals={async () => {
+          await closeProposalsAndStartCuration(gameId);
+          navigate(`/classroom/${gameId}`);
+        }}
+      />
     );
   }
 
@@ -137,10 +235,10 @@ function ProposalRouteWrapper() {
   const { gameId, teamId } = useParams();
   const [teamData, setTeamData] = useState<{ name: string; emoji: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  
+
   useEffect(() => {
     if (!gameId || !teamId) return;
-    
+
     const teamRef = ref(database, `games/${gameId}/teams/${teamId}`);
     const unsubscribe = onValue(teamRef, (snapshot) => {
       if (snapshot.exists()) {
@@ -149,17 +247,17 @@ function ProposalRouteWrapper() {
       }
       setLoading(false);
     });
-    
+
     return () => unsubscribe();
   }, [gameId, teamId]);
-  
+
   if (!gameId || !teamId) return <div>Ruta inválida</div>;
   if (loading) {
     return (
-      <div style={{ 
-        minHeight: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#f8fafc',
       }}>
@@ -171,7 +269,7 @@ function ProposalRouteWrapper() {
     );
   }
   if (!teamData) return <div>Equipo no encontrado</div>;
-  
+
   return (
     <ProposalStudentView
       gameId={gameId}
@@ -186,10 +284,10 @@ function ProposalRouteWrapper() {
 function SetupFlowManagerWrapper() {
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   // ✅ Detectar si viene de biblioteca
   const fromLibrary = location.state?.fromLibrary === true;
-  
+
   // ✅ Si viene de biblioteca, ir directo al SetupScreen tradicional
   useEffect(() => {
     if (fromLibrary) {
@@ -197,12 +295,12 @@ function SetupFlowManagerWrapper() {
       navigate('/setup-traditional', { state: { fromLibrary: true } });
     }
   }, [fromLibrary, navigate]);
-  
+
   const handleGameCreated = (newGameId: string) => {
     console.log("Game created with ID:", newGameId);
     navigate(`/classroom/${newGameId}`);
   };
-  
+
   // Si viene de biblioteca, mostrar loading mientras redirige
   if (fromLibrary) {
     return (
@@ -211,7 +309,7 @@ function SetupFlowManagerWrapper() {
       </div>
     );
   }
-  
+
   return (
     <div className="App">
       <div style={{ position: "fixed", top: 16, right: 16, zIndex: 1000 }}>
@@ -393,13 +491,13 @@ function TeacherAppLegacy() {
 // 🆕 Componente de carga para lazy loading
 function LoadingSpinner() {
   return (
-    <div style={{ 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'center', 
-      height: '100vh' 
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      height: '100vh'
     }}>
-      <p>Cargando guía pedagógica...</p>
+      <p>Cargando...</p>
     </div>
   );
 }
@@ -446,12 +544,138 @@ function App() {
                 {/* WEBINAR REGISTRATION PAGE */}
                 <Route path="/webinar-registro" element={<WebinarRegistrationPage />} />
 
+                {/* 🆕 GENERADOR DE RÚBRICAS */}
+                <Route
+                  path="/rubric-generator"
+                  element={
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <RubricGenerator />
+                    </Suspense>
+                  }
+                />
+
+                {/* 🆕 ADAPTADOR DE CONSIGNAS */}
+                <Route
+                  path="/consigna-adapter"
+                  element={
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <ConsignaAdapter />
+                    </Suspense>
+                  }
+                />
+
+                {/* 🆕 GENERADOR DE INFORMES */}
+                <Route
+                  path="/informe-generator"
+                  element={
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <InformeGenerator />
+                    </Suspense>
+                  }
+                />
+
+                {/* 🆕 GENERADOR DE PLANILLA DE PRESENTISMO */}
+                <Route
+                  path="/presentismo-generator"
+                  element={
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <PresentismoGenerator />
+                    </Suspense>
+                  }
+                />
+
+                {/* 🆕 GENERADOR DE PRESENTACIONES */}
+                <Route
+                  path="/presentacion-generator"
+                  element={
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <PresentacionGenerator />
+                    </Suspense>
+                  }
+                />
+
+                {/* 🆕 GENERADOR DE HORARIOS */}
+                <Route
+                  path="/horario-generator"
+                  element={
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <HorarioGenerator />
+                    </Suspense>
+                  }
+                />
+
+                {/* 🆕 GENERADOR DE SECUENCIAS DIDÁCTICAS */}
+                <Route
+                  path="/secuencia-generator"
+                  element={
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <SecuenciaGenerator />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/correccion"
+                  element={
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Correccion />
+                    </Suspense>
+                  }
+                />
+
+                {/* 🆕 GENERADOR DE PLANIFICACIONES */}
+                <Route
+                  path="/planificacion-generator"
+                  element={
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <PlanificacionGeneratorPage />
+                    </Suspense>
+                  }
+                />
+
                 {/* 🆕 GUÍA PEDAGÓGICA DEL PROFESOR */}
                 <Route
                   path="/teacher-guide"
                   element={
                     <Suspense fallback={<LoadingSpinner />}>
                       <TeacherGuide />
+                    </Suspense>
+                  }
+                />
+
+                {/* ✅ COMPARADOR DE PAÍSES */}
+                <Route
+                  path="/comparador-paises"
+                  element={
+                    <Suspense fallback={<div>Cargando...</div>}>
+                      <ComparadorPaisesPage />
+                    </Suspense>
+                  }
+                />
+
+                {/* 🆕 GENERADOR DE ECUACIONES */}
+                <Route
+                  path="/ecuaciones-generator"
+                  element={
+                    <Suspense fallback={<div>Cargando...</div>}>
+                      <EcuacionesGeneratorPage />
+                    </Suspense>
+                  }
+                />
+
+                {/* 🆕 ÁRBITRO DE LENGUA Y MATEMÁTICA */}
+                <Route
+                  path="/arbitro-config"
+                  element={
+                    <Suspense fallback={<div>Cargando...</div>}>
+                      <ArbitroConfigPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/arbitro/:sessionId"
+                  element={
+                    <Suspense fallback={<div>Cargando...</div>}>
+                      <ArbitroSesionPage />
                     </Suspense>
                   }
                 />
@@ -567,10 +791,10 @@ function App() {
 
                 {/* ALUMNOS / EQUIPOS: SIN LOGIN */}
                 <Route path="/join" element={<JoinGamePage />} />
-                
+
                 {/* ✅ ALUMNOS: Vista de propuestas (NUEVO) */}
                 <Route path="/propose/:gameId/:teamId" element={<ProposalRouteWrapper />} />
-                
+
                 <Route path="/team/:gameId/:teamId" element={<TeamRouteWrapper />} />
                 <Route path="/stage2/team/:gameId/:teamId" element={<TeamRouteWrapper />} />
 

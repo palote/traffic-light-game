@@ -1,0 +1,8 @@
+{
+  "appId": "AAHAAKIWaak",
+  "intents": {
+    "design_editor": {
+      "entryPoint": "src/intents/design/index.tsx"
+    }
+  }
+}

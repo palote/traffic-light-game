@@ -10,53 +10,56 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
   },
 
-  // 🚀 Servidor de desarrollo (lo que necesitas para Canva)
+  // 🚀 Servidor de desarrollo (HTTPS para Canva)
   server: {
     https: true,      // ← HABILITA HTTPS PARA CANVA
-    port: 5173,       // Puerto que ya usas
-    host: true        // Permite conexiones desde la red local (opcional)
+    port: 5173,
+    host: true,       // Permite conexiones desde la red local (opcional)
   },
 
   // 📦 Configuración de build (optimizada para PWA y producción)
   build: {
-    // Generar source maps (útil para Sentry o debugging)
-    sourcemap: false, // Cambia a true si necesitas debugging en producción
-    
-    // Generar manifest y service worker en la raíz del build
+    sourcemap: true,  // Generar source maps para error tracking (Sentry, etc.)
+
     rollupOptions: {
       input: {
         main: './index.html',
       },
-      // Optimización: separa librerías externas en chunks aparte
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'firebase'],
-          // Puedes añadir más si lo deseas
-        }
-      }
+        // manualChunks como FUNCIÓN (no objeto) para evitar error
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'vendor-react';
+            }
+            if (id.includes('firebase')) {
+              return 'vendor-firebase';
+            }
+            return 'vendor';
+          }
+        },
+      },
     },
-    
-    // Optimizar para producción móvil
+
     target: 'esnext',
     minify: 'terser',
     terserOptions: {
       compress: {
         drop_console: true, // Eliminar console.logs en producción
-        drop_debugger: true // Eliminar debugger
+        drop_debugger: true,
       },
     },
-    
-    // Asegurar que los archivos grandes se dividan correctamente
-    chunkSizeWarningLimit: 1000, // Aumenta el límite de advertencia (opcional)
+
+    chunkSizeWarningLimit: 1000,
   },
 
-  // Asegurar que archivos estáticos (como service-worker.js) se sirvan correctamente
+  // Asegurar que archivos estáticos (service-worker.js) se sirvan correctamente
   publicDir: 'public',
-  
-  // Configuración adicional para el servidor de preview (producción local)
+
+  // Configuración para preview (producción local)
   preview: {
     port: 5173,
-    https: true,      // También HTTPS en preview
-    host: true
-  }
+    https: true,
+    host: true,
+  },
 });

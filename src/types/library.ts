@@ -83,7 +83,7 @@ export const PRIMARY_GRADES: PrimaryGrade[] = ['3°', '4°', '5°', '6°', '7°'
 // GAME MODES
 // ============================================
 export type LibraryGameMode = 'traffic-light' | 'coopetition';
-export type SecondaryLevel = 'secondary';
+export type SecondaryLevel = 'secondary' | 'higher';
 
 // ============================================
 // CSV LIBRARY ITEM

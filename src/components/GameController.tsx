@@ -1,8 +1,9 @@
 // src/components/GameController.tsx
-// ✅ VERSIÓN DEFINITIVA Y SEGURA: Sin hooks dentro de condiciones
+// ✅ VERSIÓN OPTIMIZADA: 3 fixes de performance/Firebase
+// ✅ NUEVO: driveLink pasado a TeamView desde game.config
 
-import { useEffect, useRef, useState } from "react";
-import { ref, update, get, onValue, } from "firebase/database"; // ✅ get agregado aquí
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ref, update, get, onValue, } from "firebase/database";
 import { database } from "../firebase.config";
 import type { Game, Player, Team, Round } from "../types/game";
 import {
@@ -25,7 +26,7 @@ import { useI18n } from "../i18n";
 import "./GameController.css";
 
 /* =========================
-   Helpers de normalización (mantenidos)
+   Helpers de normalización
 ========================= */
 
 function normalizePlayers(players: unknown): Player[] {
@@ -94,10 +95,6 @@ interface GameControllerProps {
   isTeacher?: boolean;
 }
 
-/* =========================
-   Dev helpers (Stage 2 view)
-========================= */
-
 type DevStage2ViewMode = "auto" | "classroom" | "team";
 
 /* =========================
@@ -109,9 +106,6 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showStage0TeacherPanel, setShowStage0TeacherPanel] = useState(false);
-  const transitionRequestedRef = useRef(false);
-  const stage2AutoStartRef = useRef(false);
-  const transitionSyncIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const [devStage2ViewMode, setDevStage2ViewMode] = useState<DevStage2ViewMode>(() => {
     const v = localStorage.getItem("devStage2ViewMode") as DevStage2ViewMode | null;
@@ -124,6 +118,45 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
 
   const { language = "es" } = useI18n();
 
+  const teamDataJson = JSON.stringify((game?.teams as any)?.[teamId] ?? null);
+
+  const team = useMemo(() => {
+    if (!game?.teams) return null;
+    const teamsNormalized = normalizeTeams(game.teams);
+    return teamsNormalized.find((t: any) => t?.id === teamId) ?? null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamDataJson, teamId]);
+
+  const currentRoundDataJson = JSON.stringify((() => {
+    const teamData = (game?.teams as any)?.[teamId];
+    const rn = teamData?.currentRound ?? 0;
+    return teamData?.stage1Rounds?.[rn] ?? null;
+  })());
+
+  const currentRound = useMemo(() => {
+    if (!game?.teams) return null;
+    const teamData = (game.teams as any)?.[teamId];
+    const roundsByNumber = normalizeRounds(teamData?.stage1Rounds);
+    const currentRoundNumber = teamData?.currentRound ?? 0;
+    return roundsByNumber[currentRoundNumber] ?? null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRoundDataJson, teamId]);
+
+  const questionsArray = useMemo(() => {
+    return Object.values(game?.questions || {}).sort((a: any, b: any) => {
+      const na = Number(String(a?.id || "").replace(/\D+/g, "")) || 0;
+      const nb = Number(String(b?.id || "").replace(/\D+/g, "")) || 0;
+      return na - nb;
+    });
+  }, [game?.questions]);
+
+  const totalStage1Questions = useMemo(() => {
+    return questionsArray.filter((q: any) => q?.suggestedStage === 1).length;
+  }, [questionsArray]);
+
+  // ✅ NUEVO: leer driveLink del config del juego
+  const driveLink = (game?.config as any)?.driveLink ?? null;
+
   useEffect(() => {
     localStorage.setItem("devStage2ViewMode", devStage2ViewMode);
   }, [devStage2ViewMode]);
@@ -133,60 +166,7 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
   }, [devStage2TeamId]);
 
   /* =========================
-     SYNC: Verificar estado durante transición (CORREGIDO)
-  ========================= */
-
-  useEffect(() => {
-    // ✅ CORREGIDO: Hook al nivel superior, no dentro de condicionales
-
-    if (!game?.status?.status || game.status.status !== "transition") {
-      // Limpiar intervalo si ya no estamos en transición
-      if (transitionSyncIntervalRef.current) {
-        clearInterval(transitionSyncIntervalRef.current);
-        transitionSyncIntervalRef.current = null;
-      }
-      return;
-    }
-
-    console.log('🔄 ACTIVE SYNC: Iniciando verificación de transición');
-
-    // Iniciar verificación activa
-    transitionSyncIntervalRef.current = setInterval(async () => {
-      try {
-        const gameSnap = await get(ref(database, `games/${gameId}`));
-        const currentGame = gameSnap.val() as Game;
-        const currentStatus = currentGame?.status?.status;
-
-        console.log('🔍 ACTIVE SYNC CHECK:', currentStatus);
-
-        if (currentStatus === "stage2") {
-          console.log('✅ ACTIVE SYNC: Transición completada, actualizando estado');
-
-          // Limpiar intervalo
-          if (transitionSyncIntervalRef.current) {
-            clearInterval(transitionSyncIntervalRef.current);
-            transitionSyncIntervalRef.current = null;
-          }
-
-          // Actualizar estado local
-          setGame(currentGame);
-        }
-      } catch (error) {
-        console.error('❌ ACTIVE SYNC: Error checking status:', error);
-      }
-    }, 1500); // Cada 1.5 segundos
-
-    // Cleanup al desmontar o salir de transición
-    return () => {
-      if (transitionSyncIntervalRef.current) {
-        clearInterval(transitionSyncIntervalRef.current);
-        transitionSyncIntervalRef.current = null;
-      }
-    };
-  }, [game?.status?.status, gameId]); // ✅ Dependencias correctas
-
-  /* =========================
-     SUSCRIPCIÓN AL JUEGO CON DETECCIÓN DE COMPLECIÓN
+     SUSCRIPCIÓN AL JUEGO
   ========================= */
 
   useEffect(() => {
@@ -197,28 +177,20 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
         setLoading(false);
         return;
       }
-
       setGame(updatedGame);
       setError(null);
       setLoading(false);
-
       console.log('📡 GAME SUBSCRIPTION: New status:', updatedGame.status?.status);
     });
-
     return () => unsubscribe();
-  }, [gameId, isTeacher]);
+  }, [gameId]);
+
   /* =========================
      Renderizado de pantalla
   ========================= */
 
   let screen: React.ReactNode = null;
-  // ✅ DEBUG: Ver qué status tiene el profesor
-  console.log('🎮 GAMECONTROLLER STATUS:', {
-    status: game?.status?.status,
-    isTeacher,
-    teamId,
-    hasGame: !!game,
-  });
+
   if (loading) {
     screen = (
       <div className="game-controller loading">
@@ -227,7 +199,6 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
       </div>
     );
   }
-  /// ✅ PANTALLA DE TRANSICIÓN (para ambos flujos)
   else if (game?.status?.status === "transition") {
     const transitionText = {
       title: language === 'es' ? '🔄 Preparando Etapa 2...'
@@ -262,7 +233,6 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
         <p style={{ fontSize: 16, opacity: 0.9 }}>
           {transitionText.subtitle}
         </p>
-
         <div style={{
           marginTop: 20,
           padding: '12px 24px',
@@ -274,8 +244,6 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
             ? '⏳ Esperando a que todos los jugadores se sincronicen...'
             : '⏳ El docente está preparando la siguiente etapa...'}
         </div>
-
-        {/* ✅ BOTÓN DE REFRESH PARA EQUIPOS */}
         {!isTeacher && (
           <button
             onClick={() => window.location.reload()}
@@ -294,25 +262,14 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
             {transitionText.refresh}
           </button>
         )}
-
-        {/* ✅ INDICADOR DE SINCRONIZACIÓN */}
-        <div style={{
-          marginTop: 15,
-          fontSize: 12,
-          opacity: 0.7,
-          fontStyle: 'italic'
-        }}>
+        <div style={{ marginTop: 15, fontSize: 12, opacity: 0.7, fontStyle: 'italic' }}>
           📡 Sincronizando con el estado del juego...
         </div>
-
-        {/* ✅ DEBUG: Mostrar status actual */}
-        <div style={{
-          marginTop: 10,
-          fontSize: 11,
-          opacity: 0.5,
-        }}>
-          Status: {game?.status?.status} | Stage: {game?.status?.currentStage}
-        </div>
+        {import.meta.env.VITE_APP_ENV !== 'production' && (
+          <div style={{ marginTop: 10, fontSize: 11, opacity: 0.5 }}>
+            Status: {game?.status?.status} | Stage: {game?.status?.currentStage}
+          </div>
+        )}
       </div>
     );
   }
@@ -324,10 +281,6 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
       </div>
     );
   } else {
-    const teamsNormalized = normalizeTeams(game.teams);
-    const team = teamsNormalized.find((t: any) => t?.id === teamId);
-
-    // ✅ CORREGIDO: Manejar equipo no encontrado al inicio
     if (!team) {
       screen = (
         <div className="game-controller error">
@@ -336,7 +289,6 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
         </div>
       );
     }
-    // ✅ CORREGIDO: Solo continuar si team existe
     else if (game.status?.status === "stage0") {
       if (isTeacher || showStage0TeacherPanel) {
         screen = <Stage0TeacherPanel game={game} />;
@@ -344,10 +296,8 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
         screen = <Stage0TeamView game={game} team={team} />;
       }
     }
-    // ✅ NUEVO: Manejar game_complete para mostrar QR de autoevaluación
     else if (game.status?.status === "game_complete") {
       if (isTeacher) {
-        // El docente ve el podio final
         screen = (
           <Stage2Controller
             key="classroom-complete"
@@ -356,7 +306,6 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
           />
         );
       } else {
-        // Los equipos ven el QR de autoevaluación (TeamDeviceView lo maneja)
         screen = (
           <Stage2Controller
             key={teamId + "-complete"}
@@ -383,16 +332,9 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
       );
     }
     else if (game.status?.status === "stage1-complete") {
-      // ✅ CORREGIDO: team siempre existe aquí
       screen = <Stage1CompleteScreen gameId={gameId} team={team} />;
     }
     else {
-      // ✅ CORREGIDO: team siempre existe aquí
-      const teamData = (game.teams as any)?.[teamId];
-      const roundsByNumber = normalizeRounds(teamData?.stage1Rounds);
-      const currentRoundNumber = teamData?.currentRound ?? 0;
-      const currentRound = roundsByNumber[currentRoundNumber];
-
       if (!currentRound) {
         screen = (
           <div className="game-controller waiting">
@@ -401,13 +343,10 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
           </div>
         );
       } else {
+        const teamData = (game.teams as any)?.[teamId];
         const currentQuestionIndex = teamData?.currentQuestionIndex ?? 0;
-        const questionsArray = Object.values(game.questions || {}).sort((a: any, b: any) => {
-          const na = Number(String(a?.id || "").replace(/\D+/g, "")) || 0;
-          const nb = Number(String(b?.id || "").replace(/\D+/g, "")) || 0;
-          return na - nb;
-        });
         const fallbackQuestion = questionsArray[currentQuestionIndex] as any;
+
         let questionText = "";
         if (currentRound?.questionId) {
           const q = (game.questions as any)?.[currentRound.questionId];
@@ -415,9 +354,6 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
         } else if (fallbackQuestion) {
           questionText = fallbackQuestion.text;
         }
-        const totalStage1Questions = Object.values(game.questions || {}).filter(
-          (q: any) => q?.suggestedStage === 1
-        ).length;
 
         screen = isTeacher ? (
           <Stage1ClassroomView
@@ -432,6 +368,8 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
             currentRound={currentRound}
             currentQuestion={questionText}
             totalStage1Questions={totalStage1Questions}
+            sourceTextPath={(game.config as any)?.sourceTextPath ?? null}
+            driveLink={driveLink}  // ✅ NUEVO
           />
         );
       }
@@ -442,7 +380,6 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
     <div className="game-controller" style={{ position: "relative", minHeight: "100vh" }}>
       {screen}
 
-      {/* Botón Stage 0 */}
       {game?.status?.status === "stage0" && (
         <button
           onClick={() => setShowStage0TeacherPanel(!showStage0TeacherPanel)}

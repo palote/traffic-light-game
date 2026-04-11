@@ -71,10 +71,7 @@ function normalizeTeams(raw: unknown): Team[] {
   return teamsArray
     .filter((t): t is Team => !!t && typeof t === "object" && !!t.id)
     .map((t) => {
-      const rawPlayers = (t as any).players || [];
-
-      // ✅ Normalizar jugadores consistente
-      const players = normalizePlayers(rawPlayers);
+      const players = normalizePlayers((t as any).players || []);
 
       return {
         id: t.id || "",
@@ -85,8 +82,9 @@ function normalizeTeams(raw: unknown): Team[] {
           : [],
         totalScore: t.totalScore || 0,
         stage1Completed: t.stage1Completed || false,
-        currentRound: t.currentRound || 0,
-      } as Team;
+        currentRound: (t.currentRound as number) || 0,
+        stage0Bonus: t.stage0Bonus === true, // o t.stage0Bonus || false según tu lógica
+      } satisfies Team; // ✅ Verifica que el objeto cumpla exactamente con Team
     });
 }
 
@@ -476,10 +474,11 @@ export async function teacherStartRespondingHelp(gameId: string) {
     [`${base}/respondingTeam/helpStartedAt`]: now,
     [`${base}/respondingTeam/helpDuration`]: duration,
     [`${base}/respondingTeam/helpRemainingSec`]: remainingBase,
+    [`${base}/respondingTeam/helpUsed`]: true,   // ✅ FIX: marcar aquí, no solo al terminar
     [`${GAMES_ROOT}/${gameId}/updatedAt`]: now,
   });
 
-  console.log("✅ Teacher started responding help");
+  console.log("✅ Teacher started responding help (helpUsed = true)");
 }
 
 export async function teacherPauseRespondingHelp(gameId: string) {
@@ -631,7 +630,7 @@ export async function getRatingProgress(
 
   const raters = Object.values(round.ratingTeams || {});
   const total = raters.length;
-  const rated = Object.values(ratingTeams).filter((r: any) => !!r?.rating).length;
+  const rated = raters.filter((r: any) => !!r?.rating).length;  // ✅ FIX: usar `raters`
 
   return { rated, total };
 }

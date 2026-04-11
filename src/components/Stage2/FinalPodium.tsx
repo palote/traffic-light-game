@@ -64,7 +64,7 @@ export function FinalPodium({ teams, gameId, config: propConfig }: FinalPodiumPr
   }, [gameId, propConfig]);
 
   // Verificar si autoevaluación está habilitada en config
-  const isSelfEvalEnabled = gameConfig?.pedagogicalDevices?.selfEvaluation?.enabled ?? false;
+  const isSelfEvalEnabled = true; // Siempre activa — ya no depende del config del setup
 
   const texts = {
     es: {

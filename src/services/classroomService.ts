@@ -48,13 +48,11 @@ export interface ClassroomAnnouncement {
 let cachedAccessToken: string | null = null;
 let tokenExpiry: number = 0;
 
-// Scopes necesarios para Classroom
+// ✅ SCOPES ACTUALIZADOS: Sincronizados con Google Cloud Console para la verificación
 const CLASSROOM_SCOPES = [
   "https://www.googleapis.com/auth/classroom.courses.readonly",
   "https://www.googleapis.com/auth/classroom.rosters.readonly",
   "https://www.googleapis.com/auth/classroom.announcements",
-  "https://www.googleapis.com/auth/classroom.profile.emails",
-  "https://www.googleapis.com/auth/classroom.profile.photos",
 ];
 
 /**

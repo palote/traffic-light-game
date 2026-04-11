@@ -40,7 +40,7 @@ Sentry.init({
   tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
   
   // Session Replay
-  replaysSessionSampleRate: import.meta.env.PROD ? 0.1 : 0.5,
+  replaysSessionSampleRate: import.meta.env.PROD ? 0.0 : 0.5,
   replaysOnErrorSampleRate: 1.0,
   
   // Filter common errors
@@ -52,6 +52,18 @@ Sentry.init({
     if (errorMessage.includes('ResizeObserver')) return null
     if (errorMessage.includes('chrome-extension://')) return null
     if (errorMessage.includes('Extension context')) return null
+
+    // ✅ NUEVO: filtrar errores que vienen de extensiones en el stack
+    const frames = event.exception?.values?.[0]?.stacktrace?.frames
+    if (frames?.some(f => f.filename?.includes('chrome-extension') || f.filename?.includes('moz-extension'))) {
+      return null
+    }
+
+    // ✅ Agregar esto: filtrar removeChild (causado por extensiones)
+    const errorMsg = event.exception?.values?.[0]?.value ?? '';
+    if (errorMsg.includes('removeChild') && errorMsg.includes('not a child')) {
+      return null;
+    }
     
     return event
   },
@@ -177,10 +189,5 @@ createRoot(document.getElementById('root')!).render(
 // Register Service Worker for PWA
 registerServiceWorker()
 
-// Send initialization event to Sentry
-setTimeout(() => {
-  if (import.meta.env.PROD) {
-    Sentry.captureMessage('🚦 Traffic Light Game deployed to production', 'info')
-  }
-  console.log('🚀 App initialized successfully in', import.meta.env.PROD ? 'production' : 'development')
-}, 1000)
+// App initialized successfully
+console.log('🚀 App initialized successfully in', import.meta.env.PROD ? 'production' : 'development')

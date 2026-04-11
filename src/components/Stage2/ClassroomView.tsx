@@ -46,7 +46,6 @@ import {
   isCountdownMusicPlaying
 } from "../../hooks/useCountdownMusic";
 import { ReconnectBadge } from "../ReconnectBadge";
-import { TeacherGuideButton } from '../TeacherGuideButton';
 import { useI18n } from "../../i18n";
 
 interface ClassroomViewProps {
@@ -624,7 +623,6 @@ export function ClassroomView({ gameId }: ClassroomViewProps) {
 
   return (
     <div style={styles.container}>
-      <TeacherGuideButton />
 
       <div style={styles.header}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>

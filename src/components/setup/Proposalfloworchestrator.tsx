@@ -5,6 +5,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ref, set, update, push } from "firebase/database";
 import { database } from "../../firebase.config";
+import {
+  closeProposalsAndStartCuration,
+  completeCurationAndStartStage1,
+} from "../../services/stage0Service";
 import { useAuth } from "../../contexts/AuthContext";
 import { useGameMode } from "../../contexts/GameModeContext";
 import { useI18n } from "../../i18n";
@@ -232,79 +236,26 @@ export function ProposalFlowOrchestrator({
     setStep("collecting");
   };
 
-  // Handler: Cerrar propuestas y pasar a curado
+  // Handler: Cerrar propuestas y pasar a curado (CAMBIO 2)
   const handleCloseProposals = async () => {
     if (!gameId) return;
-
-    await update(ref(database, `games/${gameId}/stage0`), {
-      phase: "curating",
-      closedAt: Date.now(),
-    });
-
-    await update(ref(database, `games/${gameId}/status`), {
-      currentPhase: "proposal-curating",
-    });
-
+    await closeProposalsAndStartCuration(gameId);
     setStep("curating");
   };
 
-  // Handler: Curado completado
+  // Handler: Curado completado (CAMBIO 3)
   const handleCurationComplete = async (
     questions: Question[],
     bonusPoints: Record<string, number>
   ) => {
     if (!gameId) return;
-
-    // ✅ DEBUG: Ver qué llega
-    console.log("🔍 handleCurationComplete questions:", questions.map(q => ({
-      id: q.id,
-      text: (q as any).questionText || (q as any).text,
-      hint: q.hint,
-      stage: (q as any).stage,
-    })));
-
-    // Guardar preguntas
-    const questionsRef = ref(database, `games/${gameId}/questions`);
-    const questionsData: Record<string, unknown> = {};
-    questions.forEach((q) => {
-      questionsData[q.id] = {
-        id: q.id,
-        text: q.questionText || q.text,
-        hint: q.hint || "",
-        suggestedStage: q.stage || 1,
-        order: q.order,
-      };
-    });
-    await set(questionsRef, questionsData);
-
-    // Actualizar bonus points en equipos
-    for (const [teamId, bonus] of Object.entries(bonusPoints)) {
-      if (bonus > 0) {
-        await update(ref(database, `games/${gameId}/teams/${teamId}`), {
-          stage0Bonus: bonus,
-          totalScore: bonus,
-        });
-      }
+    try {
+      await completeCurationAndStartStage1(gameId, questions, bonusPoints);
+      onGameCreated(gameId);
+    } catch (error) {
+      console.error("❌ Error completing curation:", error);
+      alert(`Error al finalizar el curado: ${(error as Error).message}`);
     }
-
-    // Actualizar estado del juego - marcar Stage 0 como completado
-    await update(ref(database, `games/${gameId}/stage0`), {
-      phase: "done",
-      completedAt: Date.now(),
-    });
-
-    // ✅ NUEVO: Cambiar a status "stage0" para que finishStage0AndStartStage1 funcione
-    await update(ref(database, `games/${gameId}/status`), {
-      status: "stage0",
-      currentStage: 0,
-    });
-
-    // ✅ NUEVO: Usar la función que inicializa Stage 1 correctamente
-    const { finishStage0AndStartStage1 } = await import("../../services/stage0Service");
-    await finishStage0AndStartStage1(gameId);
-
-    console.log("✅ Curation complete, Stage 1 started");
-    onGameCreated(gameId);
   };
 
   // Handler: Volver al paso anterior

@@ -1,6 +1,9 @@
 // src/hooks/useCountdownMusic.ts
 // Música de expectativa MEJORADA - Más intensa y notoria 🎵
 // Similar a Kahoot - sube de intensidad a medida que el tiempo baja
+// ✅ FIX: Guards en masterGain para prevenir 'Overload resolution failed'
+//         cuando stopCountdownMusic() se llama y masterGain = null
+//         pero musicLoop sigue corriendo durante el fade out de 600ms.
 
 let audioContext: AudioContext | null = null;
 let isPlaying = false;
@@ -77,13 +80,16 @@ function calculateVolume(timeRemaining: number, totalTime: number): number {
 
 // 🎵 NUEVO: Tocar nota melódica
 function playMelodicNote(ctx: AudioContext, freq: number, duration: number, volume: number, delay: number = 0) {
+  // ✅ FIX: Guard - masterGain puede ser null durante el fade out de stopCountdownMusic
+  if (!masterGain) return;
+
   const now = ctx.currentTime + delay;
   
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   
   osc.connect(gain);
-  gain.connect(masterGain!);
+  gain.connect(masterGain);
   
   osc.type = 'sine';
   osc.frequency.setValueAtTime(freq, now);
@@ -103,6 +109,9 @@ function playMelodicNote(ctx: AudioContext, freq: number, duration: number, volu
 
 // 🎵 MEJORADO: Beat más potente con capas
 function playBeat(ctx: AudioContext, intensity: number, isAccent: boolean, beatInMeasure: number) {
+  // ✅ FIX: Guard - masterGain puede ser null durante el fade out de stopCountdownMusic
+  if (!masterGain) return;
+
   const now = ctx.currentTime;
   
   // === CAPA 1: Kick/Bass drum ===
@@ -111,7 +120,7 @@ function playBeat(ctx: AudioContext, intensity: number, isAccent: boolean, beatI
     const kickGain = ctx.createGain();
     
     kickOsc.connect(kickGain);
-    kickGain.connect(masterGain!);
+    kickGain.connect(masterGain);
     
     kickOsc.type = 'sine';
     kickOsc.frequency.setValueAtTime(150, now);
@@ -133,7 +142,7 @@ function playBeat(ctx: AudioContext, intensity: number, isAccent: boolean, beatI
   const tickGain = ctx.createGain();
   
   tickOsc.connect(tickGain);
-  tickGain.connect(masterGain!);
+  tickGain.connect(masterGain);
   
   tickOsc.type = 'square';
   tickOsc.frequency.setValueAtTime(isAccent ? 800 : 600, now);
@@ -159,6 +168,9 @@ function playBeat(ctx: AudioContext, intensity: number, isAccent: boolean, beatI
 
 // 🎵 NUEVO: Bajo pulsante de fondo
 function startBackgroundBass(ctx: AudioContext) {
+  // ✅ FIX: Guard
+  if (!masterGain) return;
+
   const bassOsc = ctx.createOscillator();
   const bassGain = ctx.createGain();
   const lfo = ctx.createOscillator();
@@ -174,7 +186,7 @@ function startBackgroundBass(ctx: AudioContext) {
   bassOsc.type = 'sine';
   bassOsc.frequency.setValueAtTime(65, ctx.currentTime); // C2
   bassOsc.connect(bassGain);
-  bassGain.connect(masterGain!);
+  bassGain.connect(masterGain);
   bassGain.gain.setValueAtTime(0.15, ctx.currentTime);
   
   lfo.start(ctx.currentTime);
@@ -186,10 +198,16 @@ function startBackgroundBass(ctx: AudioContext) {
 
 // 🎵 NUEVO: Pad de tensión
 function startTensionPad(ctx: AudioContext) {
+  // ✅ FIX: Guard
+  if (!masterGain) return;
+
   // Acorde menor para tensión: Am (A-C-E)
   const frequencies = [220, 261.6, 329.6]; // A3, C4, E4
   
   frequencies.forEach((freq, i) => {
+    // ✅ FIX: Re-verificar masterGain dentro del forEach (puede cambiar entre iteraciones)
+    if (!masterGain) return;
+
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     
@@ -206,7 +224,7 @@ function startTensionPad(ctx: AudioContext) {
     vibratoGain.connect(osc.frequency);
     
     osc.connect(gain);
-    gain.connect(masterGain!);
+    gain.connect(masterGain);
     gain.gain.setValueAtTime(0.06, ctx.currentTime);
     
     vibrato.start(ctx.currentTime);
@@ -348,14 +366,19 @@ export function stopCountdownMusic() {
     masterGain.gain.setValueAtTime(masterGain.gain.value, now);
     masterGain.gain.linearRampToValueAtTime(0, now + 0.5);
     
+    // ✅ FIX: Capturar referencia local antes del setTimeout
+    // para que masterGain no sea null cuando se ejecute
+    const gainToDisconnect = masterGain;
+    masterGain = null; // ← Nullear YA para que playBeat/playMelodicNote no conecten más nodos
+
     setTimeout(() => {
       cleanupOscillators();
-      if (masterGain) {
-        masterGain.disconnect();
-        masterGain = null;
-      }
+      try {
+        gainToDisconnect.disconnect();
+      } catch (e) {}
     }, 600);
   } else {
+    masterGain = null;
     cleanupOscillators();
   }
   

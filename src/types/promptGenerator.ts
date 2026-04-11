@@ -1,14 +1,16 @@
 // src/types/promptGenerator.ts
 // Tipos para el generador de prompts de consignas
+// ✅ NUEVO: Nivel superior (terciario/universitario)
 
-export type EducationLevel = 'primary' | 'secondary';
+export type EducationLevel = 'primary' | 'secondary' | 'higher';
 
 export type PrimaryGrade = '3°' | '4°' | '5°' | '6°' | '7°';
 export type SecondaryGrade = '1°' | '2°' | '3°' | '4°' | '5°' | '6°';
+export type HigherGrade = '1° año' | '2° año' | '3° año' | '4° año' | '5° año';
 
 export type ContentCategory = 'subject' | 'history' | 'book' | 'fun';
 
-export type PromptLanguage = 'es' | 'en' | 'pt'; // ✅ Modificado: agregado 'pt'
+export type PromptLanguage = 'es' | 'en' | 'pt';
 
 // ============================================
 // MATERIAS CURRICULARES
@@ -35,6 +37,30 @@ export const SECONDARY_SUBJECTS_ES = [
   'Filosofía',
 ] as const;
 
+// ✅ NUEVO: Materias nivel superior (español)
+export const HIGHER_SUBJECTS_ES = [
+  'Derecho',
+  'Administración de Empresas',
+  'Contabilidad',
+  'Psicología',
+  'Enfermería',
+  'Pedagogía / Ciencias de la Educación',
+  'Comunicación Social',
+  'Trabajo Social',
+  'Ingeniería',
+  'Arquitectura',
+  'Medicina',
+  'Filosofía',
+  'Sociología',
+  'Economía',
+  'Marketing',
+  'Informática / Sistemas',
+  'Diseño',
+  'Turismo y Hotelería',
+  'Nutrición',
+  'Kinesiología / Fisioterapia',
+] as const;
+
 export const PRIMARY_SUBJECTS_EN = [
   'Language Arts',
   'Mathematics',
@@ -56,7 +82,30 @@ export const SECONDARY_SUBJECTS_EN = [
   'Philosophy',
 ] as const;
 
-// ✅ AGREGADO: Materias en portugués
+// ✅ NUEVO: Materias nivel superior (inglés)
+export const HIGHER_SUBJECTS_EN = [
+  'Law',
+  'Business Administration',
+  'Accounting',
+  'Psychology',
+  'Nursing',
+  'Education / Pedagogy',
+  'Communication',
+  'Social Work',
+  'Engineering',
+  'Architecture',
+  'Medicine',
+  'Philosophy',
+  'Sociology',
+  'Economics',
+  'Marketing',
+  'Computer Science',
+  'Design',
+  'Tourism & Hospitality',
+  'Nutrition',
+  'Physical Therapy',
+] as const;
+
 export const PRIMARY_SUBJECTS_PT = [
   'Língua Portuguesa',
   'Matemática',
@@ -76,6 +125,30 @@ export const SECONDARY_SUBJECTS_PT = [
   'Inglês',
   'Economia',
   'Filosofia',
+] as const;
+
+// ✅ NUEVO: Materias nivel superior (portugués)
+export const HIGHER_SUBJECTS_PT = [
+  'Direito',
+  'Administração de Empresas',
+  'Contabilidade',
+  'Psicologia',
+  'Enfermagem',
+  'Pedagogia / Ciências da Educação',
+  'Comunicação Social',
+  'Serviço Social',
+  'Engenharia',
+  'Arquitetura',
+  'Medicina',
+  'Filosofia',
+  'Sociologia',
+  'Economia',
+  'Marketing',
+  'Informática / Sistemas',
+  'Design',
+  'Turismo e Hotelaria',
+  'Nutrição',
+  'Fisioterapia',
 ] as const;
 
 // ============================================
@@ -102,7 +175,7 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
   { id: 'ancient-egypt', nameEs: 'Antiguo Egipto', nameEn: 'Ancient Egypt', category: 'universal', level: 'both' },
   { id: 'ancient-greece', nameEs: 'Antigua Grecia', nameEn: 'Ancient Greece', category: 'universal', level: 'both' },
   { id: 'roman-empire', nameEs: 'Imperio Romano', nameEn: 'Roman Empire', category: 'universal', level: 'both' },
-  
+
   // Argentina
   { id: 'revolucion-mayo', nameEs: 'Revolución de Mayo (1810)', nameEn: 'May Revolution (1810)', category: 'argentina', level: 'both' },
   { id: 'independencia-arg', nameEs: 'Independencia Argentina (9 de Julio)', nameEn: 'Argentine Independence (July 9)', category: 'argentina', level: 'both' },
@@ -110,7 +183,7 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
   { id: 'malvinas', nameEs: 'Guerra de Malvinas', nameEn: 'Falklands War', category: 'argentina', level: 'secondary' },
   { id: 'democracia-1983', nameEs: 'Retorno a la democracia (1983)', nameEn: 'Return to Democracy (1983)', category: 'argentina', level: 'secondary' },
   { id: 'conquista-desierto', nameEs: 'Conquista del Desierto', nameEn: 'Conquest of the Desert', category: 'argentina', level: 'secondary' },
-  
+
   // Américas
   { id: 'us-independence', nameEs: 'Independencia de Estados Unidos', nameEn: 'US Independence', category: 'americas', level: 'both' },
   { id: 'columbus', nameEs: 'Llegada de Colón a América', nameEn: 'Columbus arrives in America', category: 'americas', level: 'both' },
@@ -127,7 +200,7 @@ export interface Book {
   title: string;
   author: string;
   level: 'primary' | 'secondary' | 'both';
-  themes: string[]; // temas que se pueden trabajar
+  themes: string[];
 }
 
 export const BOOKS: Book[] = [
@@ -140,7 +213,7 @@ export const BOOKS: Book[] = [
   { id: 'harry-potter-1', title: 'Harry Potter y la piedra filosofal', author: 'J.K. Rowling', level: 'primary', themes: ['amistad', 'magia', 'valentía'] },
   { id: 'momo', title: 'Momo', author: 'Michael Ende', level: 'primary', themes: ['tiempo', 'amistad', 'valores'] },
   { id: 'historia-interminable', title: 'La historia interminable', author: 'Michael Ende', level: 'both', themes: ['fantasía', 'lectura', 'imaginación'] },
-  
+
   // Secundaria
   { id: '1984', title: '1984', author: 'George Orwell', level: 'secondary', themes: ['totalitarismo', 'libertad', 'vigilancia'] },
   { id: 'tunel', title: 'El túnel', author: 'Ernesto Sábato', level: 'secondary', themes: ['obsesión', 'soledad', 'existencialismo'] },
@@ -168,7 +241,7 @@ export interface MediaContent {
 }
 
 export const MEDIA_CONTENT: MediaContent[] = [
-  // Primaria - Películas
+  // Primaria
   { id: 'coco', title: 'Coco', type: 'movie', level: 'primary', themes: ['familia', 'cultura mexicana', 'memoria'], year: 2017 },
   { id: 'encanto', title: 'Encanto', type: 'movie', level: 'primary', themes: ['familia', 'diversidad', 'identidad'], year: 2021 },
   { id: 'intensamente', title: 'Intensamente (Inside Out)', type: 'movie', level: 'both', themes: ['emociones', 'crecimiento', 'memoria'], year: 2015 },
@@ -178,8 +251,8 @@ export const MEDIA_CONTENT: MediaContent[] = [
   { id: 'ratatouille', title: 'Ratatouille', type: 'movie', level: 'primary', themes: ['perseverancia', 'arte', 'sueños'], year: 2007 },
   { id: 'up', title: 'Up: Una aventura de altura', type: 'movie', level: 'both', themes: ['aventura', 'amistad', 'sueños'], year: 2009 },
   { id: 'zootopia', title: 'Zootopia', type: 'movie', level: 'both', themes: ['prejuicios', 'diversidad', 'justicia'], year: 2016 },
-  
-  // Secundaria - Películas
+
+  // Secundaria
   { id: 'social-network', title: 'The Social Network', type: 'movie', level: 'secondary', themes: ['tecnología', 'ética', 'emprendimiento'], year: 2010 },
   { id: 'hidden-figures', title: 'Hidden Figures (Talentos ocultos)', type: 'movie', level: 'secondary', themes: ['ciencia', 'discriminación', 'historia'], year: 2016 },
   { id: 'imitation-game', title: 'The Imitation Game', type: 'movie', level: 'secondary', themes: ['matemática', 'historia', 'criptografía'], year: 2014 },
@@ -189,7 +262,7 @@ export const MEDIA_CONTENT: MediaContent[] = [
   { id: 'good-will', title: 'Good Will Hunting', type: 'movie', level: 'secondary', themes: ['matemática', 'psicología', 'potencial'], year: 1997 },
   { id: 'schindler', title: "Schindler's List", type: 'movie', level: 'secondary', themes: ['holocausto', 'humanidad', 'historia'], year: 1993 },
   { id: '12-angry-men', title: '12 Angry Men', type: 'movie', level: 'secondary', themes: ['justicia', 'prejuicios', 'argumentación'], year: 1957 },
-  
+
   // Documentales/Series
   { id: 'cosmos', title: 'Cosmos', type: 'documentary', level: 'both', themes: ['ciencia', 'universo', 'historia'], year: 2014 },
   { id: 'planet-earth', title: 'Planet Earth', type: 'documentary', level: 'both', themes: ['naturaleza', 'ecología', 'biodiversidad'], year: 2006 },
@@ -222,13 +295,9 @@ export interface PromptConfig {
   grade: string;
   language: PromptLanguage;
   category: ContentCategory;
-  selection: string; // ID del item seleccionado o 'custom'
-  customSelection?: string; // Si eligió "Otro"
-  
-  // ✅ NUEVO: Contexto geográfico/cultural
-  culturalContext?: string; // Ej: "México, zona rural de Oaxaca"
-  
-  // Configuración avanzada
+  selection: string;
+  customSelection?: string;
+  culturalContext?: string;
   totalQuestions: number;
   stage1ProductionPercent: number;
   stage2ProductionPercent: number;

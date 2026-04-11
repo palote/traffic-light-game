@@ -607,4 +607,134 @@ export async function incrementPromptUsage(userId: string, promptId: string): Pr
       usedCount: (prompt.usedCount || 0) + 1,
     });
   }
+  
+}
+// ============================================
+// CERRAR PROPUESTAS Y PASAR A CURADO
+// ============================================
+
+export async function closeProposalsAndStartCuration(gameId: string): Promise<void> {
+  await update(ref(database, `games/${gameId}/stage0`), {
+    phase: 'curating',
+    closedAt: Date.now(),
+  });
+  await update(ref(database, `games/${gameId}/status`), {
+    currentPhase: 'proposal-curating',
+  });
+}
+
+// ============================================
+// GUARDAR PREGUNTAS CURADAS Y ARRANCAR STAGE 1
+// ============================================
+
+export async function completeCurationAndStartStage1(
+  gameId: string,
+  questions: Array<{ id: string; questionText?: string; text?: string; hint?: string; stage?: number; order?: number; }>,
+  bonusPoints: Record<string, number>
+): Promise<void> {
+
+  const gameSnap = await get(ref(database, `games/${gameId}`));
+  const game = gameSnap.val();
+  if (!game) throw new Error("Game not found");
+  if (!game.teams) throw new Error("No teams found in game");
+
+  const stage1Questions = questions.filter(q => (q.stage ?? 1) !== 2);
+  const firstQuestion = stage1Questions[0] || questions[0];
+  if (!firstQuestion) throw new Error("No questions found");
+
+  // Un solo update atómico — todo de una vez
+  const updates: Record<string, any> = {};
+
+  // Preguntas
+  questions.forEach((q) => {
+    updates[`questions/${q.id}`] = {
+      id: q.id,
+      text: q.questionText || q.text,
+      hint: q.hint || '',
+      suggestedStage: q.stage || 1,
+      order: q.order,
+    };
+  });
+
+  // Status final — directo a stage1
+  updates['status/status'] = 'stage1';
+  updates['status/currentStage'] = 1;
+  updates['status/currentPhase'] = 'stage1';
+  updates['stage0/phase'] = 'done';
+  updates['stage0/completedAt'] = Date.now();
+  updates['updatedAt'] = Date.now();
+
+  // Equipos
+  for (const [teamKey, teamVal] of Object.entries(game.teams)) {
+    const team = teamVal as any;
+    if (!team || typeof team !== 'object') continue;
+
+    const teamId = team.id || teamKey;
+    const bonus = bonusPoints[teamId] || 0;
+    if (bonus > 0) {
+      const prevScore = (team.totalScore ?? team.score ?? 0) as number;
+      updates[`teams/${teamKey}/stage0Bonus`] = bonus;
+      updates[`teams/${teamKey}/totalScore`] = prevScore + bonus;
+      updates[`teams/${teamKey}/score`] = prevScore + bonus;
+    }
+
+    // Players
+    const playersRaw = team.players;
+    let players: any[] = [];
+    if (playersRaw) {
+      if (Array.isArray(playersRaw)) {
+        players = playersRaw.filter((p: any) => p && p.id);
+      } else {
+        players = Object.entries(playersRaw).map(([key, val]: [string, any]) => ({
+          id: val?.id || key,
+          name: val?.name || 'Jugador',
+          score: val?.score || 0,
+          consecutiveLastPlace: val?.consecutiveLastPlace || 0,
+        }));
+      }
+    }
+    players = players.filter(p =>
+      p.name && p.name !== 'Jugador' && p.name !== 'Capitán' && p.name !== 'Equipo'
+    );
+
+    let firstRound: any;
+    if (players.length === 0) {
+      firstRound = {
+        roundNumber: 0,
+        questionId: firstQuestion.id,
+        respondingPlayerId: null,
+        respondingPlayerName: 'Equipo',
+        captainId: null,
+        captainName: 'Equipo',
+        ratings: {},
+        pointsAwarded: {},
+        hasResponded: false,
+        timestamp: Date.now(),
+      };
+    } else {
+      const sorted = [...players].sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
+      const responder = sorted[0];
+      const captain = players.find(p => p.id !== responder.id) || players[0];
+      firstRound = {
+        roundNumber: 0,
+        questionId: firstQuestion.id,
+        respondingPlayerId: responder.id,
+        respondingPlayerName: responder.name,
+        captainId: captain.id,
+        captainName: captain.name,
+        ratings: {},
+        pointsAwarded: {},
+        hasResponded: false,
+        timestamp: Date.now(),
+      };
+    }
+
+    updates[`teams/${teamKey}/stage1Rounds/0`] = firstRound;
+    updates[`teams/${teamKey}/currentRound`] = 0;
+    updates[`teams/${teamKey}/currentQuestionIndex`] = 0;
+    updates[`teams/${teamKey}/stage1Completed`] = false;
+  }
+
+  // Un solo write — no hay writes intermedios que disparen listeners
+  await update(ref(database, `games/${gameId}`), updates);
 }
