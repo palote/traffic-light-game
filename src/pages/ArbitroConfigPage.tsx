@@ -243,6 +243,7 @@ export default function ArbitroConfigPage() {
   const areaConfig    = area ? AREAS[area] : null;
   const headerGrad    = areaConfig ? areaConfig.gradient : theme.primaryGradient;
   const accentColor   = areaConfig ? areaConfig.primary  : theme.primary;
+  const isCoopetition = mode === "coopetition";
 
   const materiasDisponibles = areaConfig
     ? Object.entries(areaConfig.materias).filter(([, m]) => m.niveles.includes(nivel))
@@ -515,26 +516,12 @@ export default function ArbitroConfigPage() {
                   📄 Documento imprimible
                 </button>
 
-                {/* Link a la dinámica completa */}
-                <div style={{
-                  marginTop: 14, padding: "12px 16px",
-                  backgroundColor: `${accentColor}08`,
-                  borderRadius: 10,
-                  border: `1px solid ${accentColor}30`,
-                  textAlign: "center" as const
-                }}>
+                <div style={{ marginTop: 12, padding: "12px 16px", backgroundColor: `${accentColor}08`, borderRadius: 10, border: `1px solid ${accentColor}25`, textAlign: "center" as const }}>
                   <div style={{ fontSize: 12, color: "#475569", marginBottom: 4 }}>
-                    ¿Querés completar la dinámica con el juego para toda la clase?
+                    ¿Querés activar la comprensión de toda la clase?
                   </div>
-                  <button
-                    onClick={() => window.location.href = "/"}
-                    style={{
-                      background: "none", border: "none",
-                      color: accentColor, fontWeight: 700,
-                      fontSize: 13, cursor: "pointer",
-                      textDecoration: "underline", padding: 0
-                    }}>
-                    {theme.icon} Ver El Juego del Semáforo →
+                  <button onClick={() => navigate("/")} style={{ background: "none", border: "none", color: accentColor, fontWeight: 700, fontSize: 13, cursor: "pointer", textDecoration: "underline", padding: 0 }}>
+                    {theme.icon} Ver {isCoopetition ? "El Juego de la Coopetición" : "El Juego del Semáforo"} →
                   </button>
                 </div>
 
