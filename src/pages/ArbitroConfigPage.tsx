@@ -514,6 +514,30 @@ export default function ArbitroConfigPage() {
                 <button onClick={() => setShowPrint(true)} style={{ width: "100%", padding: "10px", borderRadius: 10, border: `1px solid ${accentColor}`, backgroundColor: `${accentColor}08`, color: accentColor, fontWeight: 600, fontSize: 13, cursor: "pointer", marginBottom: 6 }}>
                   📄 Documento imprimible
                 </button>
+
+                {/* Link a la dinámica completa */}
+                <div style={{
+                  marginTop: 14, padding: "12px 16px",
+                  backgroundColor: `${accentColor}08`,
+                  borderRadius: 10,
+                  border: `1px solid ${accentColor}30`,
+                  textAlign: "center" as const
+                }}>
+                  <div style={{ fontSize: 12, color: "#475569", marginBottom: 4 }}>
+                    ¿Querés completar la dinámica con el juego para toda la clase?
+                  </div>
+                  <button
+                    onClick={() => window.location.href = "/"}
+                    style={{
+                      background: "none", border: "none",
+                      color: accentColor, fontWeight: 700,
+                      fontSize: 13, cursor: "pointer",
+                      textDecoration: "underline", padding: 0
+                    }}>
+                    {theme.icon} Ver El Juego del Semáforo →
+                  </button>
+                </div>
+
                 <button onClick={() => setSesion(null)} style={{ background: "none", border: "none", color: "#15803d", textDecoration: "underline", fontSize: 12, marginTop: 8, cursor: "pointer" }}>
                   Crear otra sesión
                 </button>
