@@ -11,6 +11,7 @@
     "audit:a11y": "axe https://www.thetrafficlightgame.com --save audit-results.json"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@sentry/browser": "^10.38.0",
     "@sentry/react": "^10.38.0",
     "@sentry/tracing": "^7.120.4",

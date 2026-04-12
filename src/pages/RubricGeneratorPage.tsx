@@ -326,7 +326,7 @@ Respondé ÚNICAMENTE con un array JSON de strings, sin texto adicional, sin mar
       contextBlock = `Tipo de evaluación: Evaluación de período\nOrganización del año: ${orgLabel}\nPeríodo evaluado: ${selectedPeriodLabel}\nNOTA: Los descriptores deben reflejar evolución, constancia y proceso a lo largo del período.`;
     }
 
-    const prompt = `Generá una rúbrica de evaluación para docentes argentinos:
+    const prompt = `Generá una rúbrica de evaluación para docentes:
 
 Nivel: ${levelLabel}
 Año/Grado: ${grade}
@@ -341,7 +341,9 @@ Escala (de menor a mayor): ${currentScale.labels.join(' → ')}
 INSTRUCCIONES:
 - Descripciones concretas y observables, 15-40 palabras por celda
 - Específicas para la materia y el nivel (no genéricas)
-- Lenguaje claro para docentes argentinos
+- Lenguaje claro y accesible
+
+Además de los criterios específicos de la materia, incluí al menos 2 criterios transversales relacionados con capacidades generales de aprendizaje, por ejemplo: comunicación oral o escrita, pensamiento crítico y argumentación, trabajo colaborativo, resolución de problemas, o autonomía en el aprendizaje. Estos criterios deben estar adaptados al nivel y tipo de actividad elegidos.
 
 Respondé ÚNICAMENTE con JSON válido, sin markdown:
 {
@@ -510,13 +512,13 @@ Respondé ÚNICAMENTE con JSON válido, sin markdown:
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
               <div style={{ flex: 1, minWidth: 220 }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: '#166534', marginBottom: 6 }}>
-                  🚦 ¿Querés generar una dinámica áulica con un juego para que los alumnos aprendan este tema?
+                  🚦 ¿Querés trabajar este contenido con toda la clase?
                 </div>
                 <p style={{ margin: 0, fontSize: 13, color: '#1e40af', lineHeight: 1.5 }}>
-                  Creá una actividad con el Juego del Semáforo para que tus alumnos trabajen y debatan el contenido antes de la evaluación.
+                  Creá una actividad con el Juego del Semáforo — los alumnos debaten, clasifican y consolidan juntos.
                 </p>
               </div>
-              <button onClick={() => navigate('/setup')}
+              <button onClick={() => navigate('/')}
                 style={{ padding: '12px 20px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, boxShadow: '0 4px 12px rgba(34,197,94,0.3)' }}>
                 Crear juego →
               </button>

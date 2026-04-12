@@ -10,7 +10,6 @@ import {
 import PptxGenJS from "pptxgenjs";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as admin from "firebase-admin";
-import { getDatabase } from "firebase-admin/database";
 
 // Inicializar Firebase Admin UNA SOLA VEZ
 if (!admin.apps.length) {
@@ -173,7 +172,6 @@ export const generateAttendanceSheet = onCall(
     const ROW_DATA_END = ROW_DATA_START + studentCount - 1;
     const ROW_TOTALS = showTotals ? ROW_DATA_END + 1 : null;
 
-    // Título
     ws.getRow(ROW_TITLE).height = 30;
     ws.mergeCells(ROW_TITLE, 1, ROW_TITLE, LAST_COL);
     const titleCell = ws.getCell(ROW_TITLE, 1);
@@ -182,7 +180,6 @@ export const generateAttendanceSheet = onCall(
     titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD6E4F0" } };
     titleCell.alignment = { horizontal: "center", vertical: "middle" };
 
-    // Headers
     ws.getRow(ROW_HEADER).height = 42;
     styleHeader(ws.getCell(ROW_HEADER, COL_NUM), "FF1F3864", "FFBDD7EE");
     ws.getCell(ROW_HEADER, COL_NUM).value = "N°";
@@ -223,7 +220,6 @@ export const generateAttendanceSheet = onCall(
       ws.getColumn(COL_OBS).width = 32;
     }
 
-    // Filas de datos
     const zebraFill: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF5F8FF" } };
     for (let s = 0; s < studentCount; s++) {
       const row = ROW_DATA_START + s;
@@ -285,7 +281,6 @@ export const generateAttendanceSheet = onCall(
       }
     }
 
-    // Dropdowns
     const attendRange = `${cellRef(ROW_DATA_START, COL_DAYS_START)}:${cellRef(ROW_DATA_END, COL_DAYS_END)}`;
     (ws as any).dataValidations.add(attendRange, {
       type: "list", allowBlank: true,
@@ -293,7 +288,6 @@ export const generateAttendanceSheet = onCall(
       showErrorMessage: false, showInputMessage: false,
     });
 
-    // Formato condicional
     const cfRules: ExcelJS.ConditionalFormattingRule[] = [
       {
         type: "cellIs", operator: "equal", formulae: [`"${presentSymbol}"`], priority: 1,
@@ -312,7 +306,6 @@ export const generateAttendanceSheet = onCall(
     }
     ws.addConditionalFormatting({ ref: attendRange, rules: cfRules });
 
-    // Fila de totales
     if (ROW_TOTALS) {
       ws.getRow(ROW_TOTALS).height = 22;
       const lbl = ws.getCell(ROW_TOTALS, COL_NAME);
@@ -333,7 +326,6 @@ export const generateAttendanceSheet = onCall(
       });
     }
 
-    // Freeze panes
     ws.views = [{
       state: "frozen", xSplit: 2, ySplit: 2,
       topLeftCell: cellRef(ROW_DATA_START, COL_DAYS_START)
@@ -347,7 +339,7 @@ export const generateAttendanceSheet = onCall(
   }
 );
 
-// generatePresentation (completo)
+// generatePresentation
 const PALETTES: Record<string, { primary: string; secondary: string; accent: string; text: string; bg: string; name: string }> = {
   midnight: { primary: "1E2761", secondary: "CADCFC", accent: "4A90D9", text: "FFFFFF", bg: "F8FAFF", name: "Midnight Azul" },
   forest: { primary: "2C5F2D", secondary: "97BC62", accent: "4A7C59", text: "FFFFFF", bg: "F5FFF5", name: "Verde Bosque" },
@@ -525,7 +517,7 @@ export const generatePresentation = onCall(
   }
 );
 
-// generateComparadorPaises (resumido pero completo)
+// generateComparadorPaises
 interface ComparadorEntity { name: string; iso2?: string; wb: string; }
 interface ComparadorDimConfig { enabled: boolean; indicators: string[]; }
 interface ComparadorRequest {
@@ -867,7 +859,7 @@ function buildFuentesSheet(wb: ExcelJS.Workbook, req: ComparadorRequest, indicat
 }
 
 async function getAIAnalysis(entityData: EntityData[], req: ComparadorRequest): Promise<Record<string, string>> {
-  const apiKey = CLAUDE_KEY.value();
+  const apiKey = GEMINI_KEY.value();
   if (!apiKey) return {};
   const enabledDims = Object.keys(req.dimensiones);
   const dataSummary = entityData.map((e) => {
@@ -882,13 +874,10 @@ async function getAIAnalysis(entityData: EntityData[], req: ComparadorRequest): 
   }).join("\n\n");
   const prompt = `Sos docente especialista en geografía. Analizá comparativamente para uso educativo:\n\n${dataSummary}\n\nRespondé ÚNICAMENTE con JSON válido sin backticks:\n{\n  ${enabledDims.filter(d => d !== "geografica").map(d => `"${d}": "análisis de 2 párrafos sobre dimensión ${d}"`).join(",\n  ")},\n  "conclusion": "síntesis de diferencias y similitudes",\n  "para_el_aula": "sugerencia para trabajar en clase"\n}`;
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 2000, messages: [{ role: "user", content: prompt }] }),
-    });
-    const json = await res.json() as any;
-    const text: string = json.content?.[0]?.text ?? "{}";
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
     return JSON.parse(text.replace(/```json|```/g, "").trim());
   } catch {
     return { conclusion: "Análisis no disponible.", para_el_aula: "Usar datos de la hoja Comparativa." };
@@ -896,7 +885,7 @@ async function getAIAnalysis(entityData: EntityData[], req: ComparadorRequest): 
 }
 
 export const generateComparadorPaises = onCall(
-  { secrets: [CLAUDE_KEY], invoker: "public", maxInstances: 5, timeoutSeconds: 240, memory: "512MiB" },
+  { secrets: [GEMINI_KEY], invoker: "public", maxInstances: 5, timeoutSeconds: 240, memory: "512MiB" },
   async (request) => {
     const data = request.data as ComparadorRequest;
     if (!data.entidades || data.entidades.length < 2) throw new HttpsError("invalid-argument", "Se requieren al menos 2 entidades.");
@@ -970,7 +959,7 @@ interface PlanContent {
   cronograma: Array<{ periodo: string; eje: string; contenidos: string; objetivos_capacidades: string; estrategias: string; evaluacion: string }>;
 }
 export const generatePlanificacion = onCall(
-  { secrets: [CLAUDE_KEY], invoker: "public", timeoutSeconds: 180, memory: "512MiB" },
+  { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 180, memory: "512MiB" },
   async (request) => {
     const data = request.data as PlanificacionInput;
     if (!data.materia || !data.eje) throw new HttpsError("invalid-argument", "Materia y eje temático son requeridos.");
@@ -984,15 +973,11 @@ export const generatePlanificacion = onCall(
       ? 'El cronograma debe tener 3-4 filas. El campo "periodo" debe decir "Período 1", "Período 2", etc.'
       : 'El cronograma debe tener 6-8 filas. El campo "periodo" debe decir "Semana 1", "Semana 2", etc.';
     const prompt = `Sos un especialista en didáctica y planificación docente. Generá una planificación completa.\n\nDATOS: Materia: ${data.materia} | Nivel: ${data.nivel} | Año/Grado: ${data.anio || "no especificado"} | Duración: ${data.duracion} | Eje: ${data.eje} | Modalidad: ${data.modalidad} | Enfoque: ${isCapacidades ? "capacidades" : "objetivos clásicos"}\n\nRespondé ÚNICAMENTE con JSON válido sin backticks:\n{\n  "fundamentacion": "párrafo de 3-4 oraciones",\n  "objetivos_generales": ["objetivo 1", "objetivo 2", "objetivo 3"],\n  "objetivos_especificos": ["específico 1", "específico 2", "específico 3", "específico 4"],\n  "expectativas_logro": ["expectativa 1", "expectativa 2", "expectativa 3"],\n  "contenidos_conceptuales": ["contenido 1", "contenido 2", "contenido 3"],\n  "contenidos_procedimentales": ["contenido 1", "contenido 2", "contenido 3"],\n  "contenidos_actitudinales": ["contenido 1", "contenido 2"],\n  "estrategias": ["estrategia 1", "estrategia 2", "estrategia 3"],\n  "evaluacion": "párrafo de 2-3 oraciones",\n  "bibliografia": ["Apellido, A. (año). Título. Editorial.", "Apellido, B. (año). Título. Editorial."],\n  "cronograma": [{"periodo": "Período 1", "eje": "nombre del eje", "contenidos": "contenidos", "objetivos_capacidades": "${objetivosLabel}", "estrategias": "estrategias", "evaluacion": "tipo de evaluación"}]\n}\n\nINSTRUCCIONES: ${capacidadesNota} ${cronogramaEstructura} Todo en español.`;
-    const apiKey = CLAUDE_KEY.value();
-    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 4000, messages: [{ role: "user", content: prompt }] }),
-    });
-    if (!anthropicRes.ok) throw new HttpsError("internal", `Anthropic error: ${anthropicRes.status}`);
-    const anthropicData = await anthropicRes.json() as any;
-    const rawText: string = anthropicData.content?.[0]?.text ?? "";
+    const apiKey = GEMINI_KEY.value();
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
+    const result = await model.generateContent(prompt);
+    const rawText: string = result.response.text();
     let content: PlanContent;
     try {
       content = JSON.parse(rawText.replace(/```json|```/g, "").trim());
@@ -1318,19 +1303,24 @@ export const crearSesionArbitro = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 60 },
   async (request) => {
     try {
-      const { materia, nivel, anio, tema, materialAdicional, duracionHoras = 3 } = request.data;
+      const { area, materia, nivel, anio, tema, subtema, ejercicio, duracion = "clase" } = request.data;
       if (!materia || !nivel || !anio || !tema) {
         throw new HttpsError("invalid-argument", "Faltan campos obligatorios: materia, nivel, año y tema");
       }
       const sessionId = generateSessionId();
       const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + duracionHoras);
+      expiresAt.setHours(expiresAt.getHours() + (duracion === "dia" ? 24 : 3));
       await db.collection("sesiones_arbitro").doc(sessionId).set({
-        materia, nivel, anio, tema,
-        materialAdicional: materialAdicional || null,
+        area: area || null,
+        materia,
+        nivel,
+        anio,
+        tema,
+        subtema: subtema || null,
+        ejercicio: ejercicio || null,
         createdAt: new Date().toISOString(),
         expiresAt: expiresAt.toISOString(),
-        duracionHoras,
+        duracion,
       });
       return {
         id: sessionId,
@@ -1356,6 +1346,7 @@ export const getSesionArbitro = onCall(
       throw new HttpsError("deadline-exceeded", "Sesión expirada.");
     }
     return {
+      area: data.area || null,
       materia: data.materia,
       nivel: data.nivel,
       anio: data.anio,
@@ -1367,141 +1358,152 @@ export const getSesionArbitro = onCall(
   }
 );
 
+// ── Helper compartido del árbitro ─────────────────────────────────────────────
+
+async function runArbitro(params: {
+  sessionId: string;
+  desacuerdo: string;
+  posicionA: string;
+  posicionB: string;
+}): Promise<object> {
+  const { sessionId, desacuerdo, posicionA, posicionB } = params;
+
+  const sessionDoc = await db.collection("sesiones_arbitro").doc(sessionId).get();
+  if (!sessionDoc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró.");
+  const session = sessionDoc.data()!;
+  if (new Date(session.expiresAt) < new Date()) {
+    throw new HttpsError("failed-precondition", "La sesión ha expirado.");
+  }
+
+  const apiKey = GEMINI_KEY.value();
+  if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada.");
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
+
+  const prompt = `Sos un árbitro experto en ${session.materia} de nivel ${session.nivel} (año ${session.anio}).
+El tema específico es: "${session.tema}".
+${session.ejercicio ? `Material de referencia: ${session.ejercicio}` : ""}
+
+Tu tarea es arbitrar un desacuerdo entre dos estudiantes. Respondé ÚNICAMENTE con JSON válido sin backticks:
+{
+  "resultado": "A",
+  "veredicto": "una oración que resume quién tiene razón",
+  "explicacion": "2-3 oraciones explicando el concepto de forma pedagógica",
+  "paraSeguirPensando": "una pregunta para que el grupo procese el resultado"
+}
+
+El campo "resultado" debe ser exactamente uno de: "A", "B", "ambas_correctas", "ambas_incorrectas".
+
+Reglas:
+- Solo arbitrá sobre "${session.tema}".
+- Si las dos posiciones son equivalentes, usá "ambas_correctas".
+- No resolvás ejercicios completos, solo arbitrá el desacuerdo puntual.
+
+Desacuerdo: ${desacuerdo}
+Posición A: ${posicionA}
+Posición B: ${posicionB}`;
+
+  const result = await model.generateContent({
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.2, maxOutputTokens: 600 },
+  });
+
+  const raw = result.response.text().trim().replace(/```json|```/g, "").trim();
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    parsed = {
+      resultado: "ambas_incorrectas",
+      veredicto: "No se pudo determinar con claridad.",
+      explicacion: raw.slice(0, 300),
+      paraSeguirPensando: "¿Pueden reformular el desacuerdo con más precisión?",
+    };
+  }
+
+  await db.collection("sesiones_arbitro").doc(sessionId).collection("consultas").add({
+    desacuerdo, posicionA, posicionB,
+    resultado: parsed.resultado,
+    timestamp: new Date().toISOString(),
+  });
+
+  return parsed;
+}
+
+// ── arbitrarDesacuerdo ────────────────────────────────────────────────────────
+
 export const arbitrarDesacuerdo = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 90, memory: "256MiB" },
   async (request) => {
     const { sessionId, desacuerdo, posicionA, posicionB } = request.data;
     if (!sessionId || !desacuerdo || !posicionA || !posicionB) {
-      throw new HttpsError("invalid-argument", "Faltan datos del desacuerdo");
+      throw new HttpsError("invalid-argument", "Faltan datos del desacuerdo.");
     }
-    const sessionDoc = await db.collection("sesiones_arbitro").doc(sessionId).get();
-    if (!sessionDoc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró");
-    const session = sessionDoc.data()!;
-    if (new Date(session.expiresAt) < new Date()) {
-      throw new HttpsError("failed-precondition", "La sesión ha expirado");
+    return runArbitro({ sessionId, desacuerdo, posicionA, posicionB });
+  }
+);
+
+// ── requestVeredicto (llamado desde ArbitroSesionPage) ────────────────────────
+
+export const requestVeredicto = onCall(
+  { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 90, memory: "256MiB" },
+  async (request) => {
+    const { sessionId, conflicto, desacuerdo, posicionA, posicionB } = request.data;
+    const texto = conflicto || desacuerdo;
+    if (!sessionId || !texto || !posicionA || !posicionB) {
+      throw new HttpsError("invalid-argument", "Faltan campos: sessionId, conflicto, posicionA, posicionB.");
+    }
+    return runArbitro({ sessionId, desacuerdo: texto, posicionA, posicionB });
+  }
+);
+
+// ── generarConsignasArbitro ───────────────────────────────────────────────────
+
+export const generarConsignasArbitro = onCall(
+  { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 60 },
+  async (request) => {
+    const { materia, nivel, anio, tema, subtema } = request.data as {
+      materia: string; nivel: string; anio: string; tema: string; subtema?: string;
+    };
+    if (!materia || !nivel || !anio || !tema) {
+      throw new HttpsError("invalid-argument", "Faltan datos obligatorios.");
     }
     const apiKey = GEMINI_KEY.value();
     if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada");
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-    const systemPrompt = `Eres un árbitro experto en ${session.materia} de nivel ${session.nivel} (año ${session.anio}). 
-El tema específico es: "${session.tema}".
-${session.materialAdicional ? `Material de referencia: ${session.materialAdicional}` : ""}
-
-Tu tarea es arbitrar desacuerdos entre dos estudiantes. Debes:
-1. Determinar quién tiene razón.
-2. Explicar el concepto de manera pedagógica.
-3. Hacer una pregunta para que el grupo procese el resultado.
-
-Reglas:
-- Solo arbitra sobre "${session.tema}".
-- Si las posiciones son iguales, indica que reformulen.
-- No resuelvas ejercicios completos.
-
-Formato: tres párrafos separados por línea en blanco.`;
-    const userPrompt = `Desacuerdo: ${desacuerdo}
-Posición A: ${posicionA}
-Posición B: ${posicionB}`;
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: systemPrompt + "\n\n" + userPrompt }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 500 },
-    });
-    const veredicto = result.response.text();
-    await db.collection("sesiones_arbitro").doc(sessionId).collection("consultas").add({
-      desacuerdo, posicionA, posicionB, veredicto, timestamp: new Date().toISOString(),
-    });
-    return { veredicto };
-  }
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AGREGADO AL FINAL: funciones para el Árbitro de Aprendizaje
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const generarConsignasArbitro = onCall(
-  { secrets: ["GEMINI_KEY"], region: "us-central1" },
-  async (request) => {
-    const { materia, nivel, anio, tema, subtema } = request.data as {
-      materia: string;
-      nivel: string;
-      anio: string;
-      tema: string;
-      subtema?: string;
-    };
-
-    if (!materia || !nivel || !anio || !tema) {
-      throw new HttpsError("invalid-argument", "Faltan datos obligatorios.");
-    }
-
-    const { GoogleGenerativeAI } = await import("@google/generative-ai");
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
+    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
     const prompt = `Sos un docente experto en ${materia} para ${nivel} ${anio} en Argentina.
-
-Generá exactamente 6 consignas/preguntas sobre el tema: "${tema}"${subtema ? ` (específicamente: ${subtema})` : ""}.
-
-Las consignas deben:
-- Ser adecuadas para ${nivel} ${anio}
-- Fomentar el debate y el intercambio entre compañeros (no tener respuesta obvia de sí/no)
-- Ser variadas: incluir al menos 2 de definición/concepto, 2 de aplicación/ejemplo, 2 de análisis/comparación
-- Estar numeradas del 1 al 6
-- Ser concisas (máximo 2 líneas cada una)
-
+Generá exactamente 6 consignas sobre el tema: "${tema}"${subtema ? ` (específicamente: ${subtema})` : ""}.
+Las consignas deben fomentar el debate entre compañeros, estar numeradas del 1 al 6, y ser concisas.
 Respondé SOLO con las 6 consignas numeradas, sin introducción ni cierre.`;
-
     const result = await model.generateContent(prompt);
-    const consignas = result.response.text().trim();
-
-    return { consignas };
+    return { consignas: result.response.text().trim() };
   }
 );
+
+// ── requestConsigna ───────────────────────────────────────────────────────────
 
 export const requestConsigna = onCall(
-  { secrets: ["GEMINI_KEY"], region: "us-central1" },
+  { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 60 },
   async (request) => {
     const { sessionId } = request.data as { sessionId: string };
-
-    if (!sessionId) {
-      throw new HttpsError("invalid-argument", "sessionId es requerido.");
+    if (!sessionId) throw new HttpsError("invalid-argument", "sessionId es requerido.");
+    const sessionDoc = await db.collection("sesiones_arbitro").doc(sessionId).get();
+    if (!sessionDoc.exists) throw new HttpsError("not-found", "Sesión no encontrada.");
+    const session = sessionDoc.data()!;
+    if (new Date(session.expiresAt) < new Date()) {
+      throw new HttpsError("failed-precondition", "La sesión ha expirado.");
     }
-
-    // Leer sesión del RTDB
-    const dbRT = getDatabase();
-    const sesionRef = dbRT.ref(`arbitro_sessions/${sessionId}`);
-    const snap = await sesionRef.once("value");
-    const sesion = snap.val();
-
-    if (!sesion) {
-      throw new HttpsError("not-found", "Sesión no encontrada.");
-    }
-
-    const now = Date.now();
-    if (sesion.expiresAt && now > sesion.expiresAt) {
-      throw new HttpsError("failed-precondition", "La sesión está expirada.");
-    }
-
-    const { materia, nivel, anio, tema, subtema } = sesion;
-
-    const { GoogleGenerativeAI } = await import("@google/generative-ai");
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-    const prompt = `Sos un asistente pedagógico para una clase de ${materia}, ${nivel} ${anio}, tema: "${tema}"${subtema ? ` (${subtema})` : ""}.
-
-Generá UNA SOLA pregunta para que un grupo de alumnos debata entre ellos.
-
-La pregunta debe:
-- Ser adecuada para el nivel ${nivel} ${anio}
-- Tener más de una respuesta posible o requerir razonamiento para resolver
-- No ser trivial (no de sí/no)
-- Ser breve y clara (máximo 2 líneas)
-
-Respondé ÚNICAMENTE con el texto de la pregunta, sin comillas, sin numeración, sin introducción.`;
-
+    const { materia, nivel, anio, tema, subtema } = session;
+    const apiKey = GEMINI_KEY.value();
+    if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada");
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
+    const prompt = `Generá UNA SOLA pregunta de debate para alumnos de ${materia}, ${nivel} ${anio}, tema: "${tema}"${subtema ? ` (${subtema})` : ""}.
+No debe ser de sí/no. Máximo 2 líneas. Respondé SOLO con la pregunta.`;
     const result = await model.generateContent(prompt);
-    const consigna = result.response.text().trim();
-
-    return { consigna };
+    return { consigna: result.response.text().trim() };
   }
 );

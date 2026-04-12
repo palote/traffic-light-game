@@ -447,10 +447,10 @@ export default function PlanificacionGeneratorPage() {
                   <span style={{ fontSize: "32px" }}>🚦</span>
                   <div>
                     <p style={{ fontWeight: 700, fontSize: "16px", margin: "0 0 6px" }}>
-                      ¿Querés generar una dinámica áulica con un juego para que los alumnos aprendan este tema?
+                      🚦 ¿Querés trabajar este contenido con toda la clase?
                     </p>
                     <p style={{ fontSize: "13px", opacity: 0.9, margin: 0 }}>
-                      Creá una actividad con el Juego del Semáforo para que tus alumnos trabajen y debatan el contenido antes de la evaluación.
+                      Creá una actividad con el Juego del Semáforo — los alumnos debaten, clasifican y consolidan juntos.
                     </p>
                     <button
                       onClick={() => navigate("/")}

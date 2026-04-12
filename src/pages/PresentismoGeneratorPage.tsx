@@ -350,15 +350,15 @@ export function PresentismoGeneratorPage() {
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: 200 }}>
                       <div style={{ fontSize: 14, fontWeight: 700, color: '#166534', marginBottom: 6 }}>
-                        🚦 ¿Querés generar una dinámica áulica para consolidar el aprendizaje de tu clase?
+                        🚦 ¿Querés trabajar este contenido con toda la clase?
                       </div>
                       <p style={{ margin: 0, fontSize: 13, color: '#1e40af', lineHeight: 1.5 }}>
-                        El Juego del Semáforo — dinámicas grupales para primaria y secundaria, gratuito.
+                        Creá una actividad con el Juego del Semáforo — los alumnos debaten, clasifican y consolidan juntos.
                       </p>
                     </div>
-                    <button onClick={() => navigate('/setup')}
+                    <button onClick={() => navigate('/')}
                       style={{ padding: '10px 18px', fontSize: 13, fontWeight: 700, borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', color: 'white', cursor: 'pointer', flexShrink: 0 }}>
-                      Conocer el juego →
+                      Crear juego →
                     </button>
                   </div>
                 </div>

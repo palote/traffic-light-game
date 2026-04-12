@@ -659,13 +659,13 @@ Respondé ÚNICAMENTE con el texto del informe, sin título, sin comillas, sin e
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
                       <div style={{ flex: 1, minWidth: 200 }}>
                         <div style={{ fontSize: 15, fontWeight: 700, color: '#166534', marginBottom: 6 }}>
-                          🚦 ¿Querés que tus alumnos se preparen mejor para la próxima evaluación?
+                          🚦 ¿Querés trabajar este contenido con toda la clase?
                         </div>
                         <p style={{ margin: 0, fontSize: 13, color: '#1e40af', lineHeight: 1.5 }}>
-                          Creá una actividad grupal con el Juego del Semáforo — los equipos debaten y consolidan el aprendizaje juntos.
+                          Creá una actividad con el Juego del Semáforo — los alumnos debaten, clasifican y consolidan juntos.
                         </p>
                       </div>
-                      <button onClick={() => navigate('/setup')}
+                      <button onClick={() => navigate('/')}
                         style={{ padding: '12px 20px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', color: 'white', cursor: 'pointer', flexShrink: 0 }}>
                         Crear juego →
                       </button>

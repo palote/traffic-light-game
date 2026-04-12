@@ -341,7 +341,7 @@ export default function ComparadorPaisesPage() {
           </div>
 
           {/* PASO 3 */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4" style={{ marginBottom: 20 }}>
+          <div className="relative bg-white rounded-xl border border-gray-200 p-5 space-y-4" style={{ marginBottom: 20 }}>
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">
@@ -407,8 +407,8 @@ export default function ComparadorPaisesPage() {
                 <div className="flex items-start gap-3">
                   <span className="text-3xl">🚦</span>
                   <div>
-                    <p className="font-bold text-lg leading-tight">¿Querés que tus alumnos trabajen con estos datos en clase?</p>
-                    <p className="text-sm mt-2 text-yellow-100">Creá una actividad con el Juego del Semáforo para que debatan y comparen los países antes de la evaluación.</p>
+                    <p className="font-bold text-lg leading-tight">🚦 ¿Querés trabajar este contenido con toda la clase?</p>
+                    <p className="text-sm mt-2 text-yellow-100">Creá una actividad con el Juego del Semáforo — los alumnos debaten, clasifican y consolidan juntos.</p>
                     <button onClick={() => navigate("/")} className="mt-4 bg-white text-orange-500 font-bold py-2 px-5 rounded-lg text-sm hover:bg-yellow-50 transition-colors">
                       Crear juego →
                     </button>

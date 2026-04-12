@@ -613,6 +613,7 @@ function App() {
                     </Suspense>
                   }
                 />
+                {/* ✗ DESACTIVADO: Corrector de Rúbricas
                 <Route
                   path="/correccion"
                   element={
@@ -621,6 +622,7 @@ function App() {
                     </Suspense>
                   }
                 />
+                */}
 
                 {/* 🆕 GENERADOR DE PLANIFICACIONES */}
                 <Route

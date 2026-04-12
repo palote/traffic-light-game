@@ -261,8 +261,8 @@ export default function EcuacionesGeneratorPage() {
                 <div className="flex items-start gap-3">
                   <span className="text-3xl">🚦</span>
                   <div>
-                    <p className="font-bold text-lg leading-tight">¿Querés que tus alumnos trabajen con estas ecuaciones en clase?</p>
-                    <p className="text-sm mt-2 text-yellow-100">Creá una actividad con el Juego del Semáforo para que analicen y debatan los conceptos matemáticos antes de la evaluación.</p>
+                    <p className="font-bold text-lg leading-tight">🚦 ¿Querés trabajar este contenido con toda la clase?</p>
+                    <p className="text-sm mt-2 text-yellow-100">Creá una actividad con el Juego del Semáforo — los alumnos debaten, clasifican y consolidan juntos.</p>
                     <button onClick={() => navigate("/")} className="mt-4 bg-white text-orange-500 font-bold py-2 px-5 rounded-lg text-sm hover:bg-yellow-50 transition-colors">
                       Crear juego →
                     </button>
