@@ -1,13 +1,15 @@
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import fetch from "node-fetch";
-import ExcelJS from "exceljs";
-import {
-  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-  HeadingLevel, AlignmentType, PageOrientation, BorderStyle, WidthType,
-  ShadingType, VerticalAlign, LevelFormat, SectionType,
-} from "docx";
-import PptxGenJS from "pptxgenjs";
+// ExcelJS, docx y pptxgenjs son librerías pesadas que antes se cargaban acá arriba
+// para TODAS las funciones, aunque solo las usan un puñado de ellas (planillas,
+// planificaciones, presentaciones). Eso hacía que Node tardara demasiado en
+// levantar el archivo y el deploy fallara con "Cannot determine backend
+// specification. Timeout after 10000". Por eso acá solo importamos los TIPOS
+// (se borran al compilar, no generan código) y cada función que las necesita
+// las carga en el momento con `await import(...)`.
+import type ExcelJS from "exceljs";
+import type PptxGenJS from "pptxgenjs";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as admin from "firebase-admin";
 
@@ -19,6 +21,7 @@ const db = admin.firestore();
 
 const CLAUDE_KEY = defineSecret("CLAUDE_KEY");
 const GEMINI_KEY = defineSecret("GEMINI_KEY");
+const GA4_SERVICE_ACCOUNT = defineSecret("GA4_SERVICE_ACCOUNT");
 
 // ============================================================================
 // CONSTANTES Y AUXILIARES (para generateAttendanceSheet)
@@ -151,6 +154,7 @@ export const generateAttendanceSheet = onCall(
     const showPercentage: boolean = d.showPercentage ?? true;
     const showObservations: boolean = d.showObservations ?? false;
 
+    const ExcelJS = (await import("exceljs")).default;
     const wb = new ExcelJS.Workbook();
     wb.creator = "El Juego del Semáforo";
     const ws = wb.addWorksheet(sheetName, {
@@ -495,7 +499,8 @@ export const generatePresentation = onCall(
     if (!cfg?.slides?.length) throw new HttpsError("invalid-argument", "Se requieren diapositivas");
     const pal = PALETTES[cfg.paletteId] ?? PALETTES.midnight;
     const font = FONTS[cfg.fontId] ?? FONTS.modern;
-    const pres = new PptxGenJS();
+    const PptxGenJSCtor = (await import("pptxgenjs")).default as unknown as typeof PptxGenJS;
+    const pres = new PptxGenJSCtor();
     pres.layout = "LAYOUT_16x9";
     pres.author = "El Juego del Semáforo";
     pres.title = cfg.presentationTitle || "Presentación";
@@ -931,6 +936,7 @@ export const generateComparadorPaises = onCall(
       return { name: entity.name, wb: entity.wb, iso2: entity.iso2, geo: geoMap[entity.iso2 ?? ""] ?? {}, wbData, temporal: temp };
     });
     const analysis = await getAIAnalysis(entityDataList, data);
+    const ExcelJS = (await import("exceljs")).default;
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "El Juego del Semáforo";
     workbook.created = new Date();
@@ -992,6 +998,11 @@ export const generatePlanificacion = onCall(
   }
 );
 async function buildPlanificacionDoc(data: PlanificacionInput, content: PlanContent, isCapacidades: boolean, isPeriodBased: boolean): Promise<Buffer> {
+  const {
+    Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+    HeadingLevel, AlignmentType, PageOrientation, BorderStyle, WidthType,
+    ShadingType, VerticalAlign, LevelFormat, SectionType,
+  } = await import("docx");
   const COLOR_PRIMARY = "1E40AF";
   const COLOR_ACCENT = "DBEAFE";
   const COLOR_BORDER = "BFDBFE";
@@ -1020,7 +1031,7 @@ async function buildPlanificacionDoc(data: PlanificacionInput, content: PlanCont
   if (data.docente) headerLines.push(`Docente: ${data.docente}`);
   const objetivosTitle = isCapacidades ? "CAPACIDADES GENERALES" : "OBJETIVOS GENERALES";
   const objetivosEspTitle = isCapacidades ? "CAPACIDADES ESPECÍFICAS" : "OBJETIVOS ESPECÍFICOS";
-  const portraitChildren: Paragraph[] = [
+  const portraitChildren = [
     ...(headerLines.length > 0 ? [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 80 }, children: headerLines.map((line, i) => new TextRun({ text: line + (i < headerLines.length - 1 ? "   " : ""), size: 22, bold: i === 0, font: "Arial", color: "555555" })) })] : []),
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 100, after: 80 }, children: [new TextRun({ text: `PLANIFICACIÓN ${data.duracion.toUpperCase()}`, bold: true, size: 36, font: "Arial", color: COLOR_PRIMARY })] }),
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 60 }, children: [new TextRun({ text: data.materia.toUpperCase(), bold: true, size: 30, font: "Arial", color: COLOR_PRIMARY })] }),
@@ -1140,6 +1151,7 @@ export const generateEcuaciones = onCall(
     if (paso <= 0 || xFin <= xInicio) throw new HttpsError("invalid-argument", "Rango inválido.");
     const nPoints = Math.min(500, Math.floor((xFin - xInicio) / paso) + 1);
     if (nPoints < 2) throw new HttpsError("invalid-argument", "El rango genera menos de 2 puntos.");
+    const ExcelJS = (await import("exceljs")).default;
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "El Juego del Semáforo";
     workbook.created = new Date();
@@ -1303,7 +1315,7 @@ export const crearSesionArbitro = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 60 },
   async (request) => {
     try {
-      const { area, materia, nivel, anio, tema, subtema, ejercicio, duracion = "clase" } = request.data;
+      const { area, materia, nivel, anio, tema, subtema, ejercicio, duracion = "clase", tiempoPregunta, textoFuente } = request.data;
       if (!materia || !nivel || !anio || !tema) {
         throw new HttpsError("invalid-argument", "Faltan campos obligatorios: materia, nivel, año y tema");
       }
@@ -1318,13 +1330,18 @@ export const crearSesionArbitro = onCall(
         tema,
         subtema: subtema || null,
         ejercicio: ejercicio || null,
+        creadoEn: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         expiresAt: expiresAt.toISOString(),
         duracion,
+        tiempoPregunta: tiempoPregunta ?? 0,
+        textoFuente: textoFuente || "",
+        docenteUid: request.auth?.uid ?? null,
+        docenteEmail: request.auth?.token?.email ?? null,
       });
       return {
         id: sessionId,
-        link: `https://eljuegodelsemaforo.com/arbitro/${sessionId}`,
+        link: `https://eljuegodelsemaforo.com/sesion/${sessionId}`,
         expiresAt: expiresAt.toISOString(),
       };
     } catch (error: any) {
@@ -1353,10 +1370,195 @@ export const getSesionArbitro = onCall(
       tema: data.tema,
       subtema: data.subtema || "",
       ejercicio: data.ejercicio || "",
+      tiempoPregunta: data.tiempoPregunta ?? 0,
+      textoFuente: data.textoFuente || "",
       expiresAt: data.expiresAt,
+      docenteEmail: data.docenteEmail || "",
     };
   }
 );
+
+// ── Helper compartido del árbitro ─────────────────────────────────────────────
+
+// ── Generador de prompt diferenciado por área ────────────────────────────────
+
+function buildArbitroPrompt(params: {
+  area: string | null;
+  materia: string;
+  nivel: string;
+  anio: string;
+  tema: string;
+  subtema?: string;
+  ejercicio?: string;
+  textoFuente?: string;
+  desacuerdo: string;
+  posicionA: string;
+  posicionB: string;
+  esJuegoOral?: boolean;
+}): string {
+  const { area, materia, nivel, anio, tema, subtema, ejercicio, textoFuente, desacuerdo, posicionA, posicionB, esJuegoOral } = params;
+
+  // ── Instrucción de nivel de idioma (R02) ──────────────────────────────────
+  const anioNum = parseInt(anio, 10);
+  let nivelIdioma: string;
+  if (!isNaN(anioNum) && anioNum <= 3) {
+    nivelIdioma = "Usá un vocabulario muy simple y accesible, con oraciones cortas, como si le hablaras a un chico de primaria.";
+  } else if (!isNaN(anioNum) && anioNum <= 6) {
+    nivelIdioma = "Usá un vocabulario claro y directo, adecuado para la escuela primaria avanzada o primer ciclo secundario.";
+  } else {
+    nivelIdioma = "Podés usar terminología disciplinar precisa, apropiada para un estudiante de secundaria media o superior.";
+  }
+
+  // ── Preguntas previstas para la sesión (banco cargado por el docente) ─────
+  const refMaterial = ejercicio ? `\nPreguntas previstas para la sesión (las cargó el docente; el equipo pudo elegir una de estas o escribir la suya):\n${ejercicio}` : "";
+  const subtemaLine = subtema ? `\nSubtema: "${subtema}"` : "";
+
+  // ── Texto base de la sesión ───────────────────────────────────────────────
+  // Lo carga el docente al crear la sesión y viaja en el documento de Firestore,
+  // no desde el cliente. Se recorta a 8000 caracteres para acotar el prompt.
+  const textoFuenteBlock = textoFuente
+    ? `\nTEXTO BASE DE LA SESIÓN:\n"""\n${textoFuente.substring(0, 8000)}\n"""\n\nFundamentá tu veredicto señalando qué parte del texto sostiene cada posición. Si el texto no alcanza para decidir entre las dos, decilo explícitamente en vez de inventar un fundamento.\n`
+    : "";
+
+  // ── Formato de respuesta JSON (compartido) ────────────────────────────────
+  const jsonFormat = `Respondé ÚNICAMENTE con JSON válido sin backticks ni texto extra:
+{
+  "resultado": "A",
+  "elementosClave": "qué elementos específicos necesitaría una respuesta completa a ESTA pregunta puntual (uno solo, o varios si la pregunta lo requiere), y cuáles de esos mencionó el equipo de forma concreta y no genérica",
+  "calificacionRecomendada": "completa",
+  "veredicto": "una oración que resume quién tiene razón",
+  "explicacion": "2-3 oraciones explicando el concepto de forma pedagógica",
+  "paraSeguirPensando": "una pregunta que invite al grupo a seguir reflexionando"
+}
+
+El campo "elementosClave" es un paso de análisis obligatorio que tenés que resolver ANTES de decidir "calificacionRecomendada": pensá primero qué necesitaría decir una respuesta completa a esta pregunta puntual, y compará eso con lo que el equipo realmente dijo. No lo saltees — la categoría de abajo tiene que salir de esa comparación, no de una impresión general.
+
+El campo "resultado" debe ser exactamente uno de: "A", "B", "ambas_correctas", "ambas_incorrectas".
+
+El campo "calificacionRecomendada" es INDEPENDIENTE de "resultado": indica qué puntaje merece la respuesta del equipo EN SÍ MISMA, evaluada por vos con tu propio conocimiento de la materia — no solo comparando qué posición del desacuerdo "ganó". Debe ser exactamente uno de:
+- "completa": la respuesta es correcta y cubre los elementos específicos que hacían falta para esta pregunta puntual.
+- "incompleta": la respuesta ES CORRECTA en todo lo que afirma Y menciona al menos un dato, nombre o idea ESPECÍFICA y CONCRETA sobre el tema — no genérica ni obvia, algo que demuestre que el equipo sabe algo puntual — pero le falta desarrollo, justificación, precisión o ejemplos. Si la respuesta completa requiere varios elementos (varias causas, varios nombres, varios pasos de un proceso), usá "incompleta" cuando el equipo mencione ALGUNOS de esos elementos de forma específica y correcta, aunque falten otros.
+- "no": la respuesta tiene un error conceptual o factual — un nombre, dato, concepto o relación que está mal — sin importar qué tan convincente sea el argumento de quien la defiende, ni qué tan cerca esté del tema correcto. Confundir un personaje, una fecha o un dato por otro NUNCA es "incompleta" ni "un poco vaga": es un error, y va como "no". TAMBIÉN es "no" una respuesta vacía, evasiva o tan genérica que no menciona ningún dato específico y verificable del tema — que serviría como respuesta a casi cualquier pregunta del mismo tema sin demostrar comprensión real (ejemplo: si preguntan quiénes son los protagonistas y responden solo "la familia" sin nombrar a nadie ni dar ningún detalle). Y TAMBIÉN es "no" cuando la respuesta completa requería varios elementos y el equipo solo dio uno o dos, y esos pocos son genéricos u obvios en vez de específicos — ahí tampoco alcanza para "incompleta", aunque no haya ningún dato objetivamente erróneo. Sé estricto, no condescendiente — no le subas la categoría a una respuesta vacía o casi vacía solo para no ser duro. Chequeo de consistencia obligatorio: si en "explicacion" vos mismo decís que algo "es incorrecto", "está mal" o "confunde X con Y", entonces "calificacionRecomendada" tiene que ser "no" — nunca "incompleta". Esos dos campos no pueden contradecirse. Usá "no" incluso si el equipo que calificó originalmente había puesto "incompleta" — si vos detectás que en realidad está mal o es demasiado vacía, corregilo a "no".`;
+
+  // ── Pertinencia (R05) ─────────────────────────────────────────────────────
+  // Se juzga por la PREGUNTA, no por el bloque completo del desacuerdo: una
+  // respuesta pobre o un argumento flojo no vuelven "fuera de tema" a una
+  // pregunta que sí es del tema. Con texto base, el criterio es el texto; sin
+  // texto base, el área y el tema, con margen amplio.
+  const jsonFueraDeTema = `{"resultado":"fuera_de_tema","calificacionRecomendada":"no","veredicto":"Este desacuerdo no corresponde al tema de la sesión.","explicacion":"El árbitro solo puede intervenir en desacuerdos sobre ${materia} — tema: ${tema}. Como la pregunta no corresponde al tema, no corresponde puntaje por esta respuesta.","paraSeguirPensando":"¿La pregunta que querían plantear sí tiene que ver con ${tema}?"}`;
+
+  const validacionTema = textoFuente
+    ? `PERTINENCIA: juzgá la pertinencia SOLO por la pregunta que se hizo — no por la calidad de la respuesta ni de los argumentos. Una respuesta floja, vaga o casi vacía NO vuelve la pregunta "fuera de tema": eso se resuelve con la calificación, no rechazando el arbitraje.
+Una pregunta es pertinente si puede responderse o evaluarse usando el TEXTO BASE de la sesión. No rechaces por comparación literal con el nombre del tema: usá el texto base como criterio de pertinencia.
+Solo si la pregunta es claramente ajena al texto base y al tema, o no tiene ningún contenido, respondé exactamente:
+${jsonFueraDeTema}`
+    : `PERTINENCIA: juzgá la pertinencia SOLO por la pregunta que se hizo — no por la calidad de la respuesta ni de los argumentos. Una respuesta floja, vaga o casi vacía NO vuelve la pregunta "fuera de tema": eso se resuelve con la calificación, no rechazando el arbitraje.
+Una pregunta es pertinente si corresponde razonablemente al área y al tema configurados, entendidos con criterio amplio: una materia incluye sus subtemas, sus períodos y temas vecinos, y también las preguntas sobre la disciplina misma (sus métodos, sus fuentes, sus ciencias auxiliares). Ante la duda, arbitrá: es mejor dar un veredicto que rechazar.
+Solo si la pregunta es claramente ajena a ${materia} y al tema "${tema}", o no tiene ningún contenido, respondé exactamente:
+${jsonFueraDeTema}`;
+
+  // ── Contexto específico del juego oral competitivo (Árbitro de Aprendizaje) ─
+  const contextoJuego = esJuegoOral ? `
+CONTEXTO DEL JUEGO: Esto es una ronda en vivo de "Árbitro de Aprendizaje", un juego oral entre dos equipos con puntaje. Un equipo le hizo la pregunta al otro en voz alta, escuchó la respuesta oral, y le puso una calificación. El equipo que respondió no está de acuerdo con esa calificación y pidió tu intervención. Los dos equipos están esperando tu fallo en el momento para seguir jugando, así que tu resolución tiene que ser clara, decisiva y breve — evitá quedarte en un "depende" cuando exista una respuesta objetivamente mejor.
+Actuá como un árbitro deportivo: firme y justo, que reconoce lo que está bien y corrige lo que está mal sin desalentar al equipo.
+Muy importante: "calificacionRecomendada" tiene que reflejar el mérito real de la respuesta oral que dieron, no premiar al equipo que argumentó con más convicción en la disputa — si la respuesta tiene un error de fondo, es "no" aunque ese equipo defienda su postura con seguridad. No suavices el puntaje por compasión: confundir un nombre, un dato o un concepto por otro no es "responder vago", es un error, y corresponde "no" — sé un árbitro estricto y justo, no uno condescendiente. Lo mismo vale para una respuesta vacía, evasiva o demasiado genérica sin ningún dato concreto: no tener errores no alcanza para "incompleta" si tampoco hay nada específico — en ese caso también corresponde "no".
+La pregunta de "paraSeguirPensando" tiene que servir para los DOS equipos por igual, porque se lee en voz alta para toda la clase.
+` : "";
+
+  // ── Prompts diferenciados por área (R01) ──────────────────────────────────
+  const areaLower = (area || "").toLowerCase();
+
+  if (areaLower === "exactas") {
+    return `Sos un árbitro experto en ${materia}, especializado en Ciencias Exactas. Estás en una sesión de nivel ${nivel} (${anio}° año).
+Tema: "${tema}"${subtemaLine}${refMaterial}
+
+${nivelIdioma}
+
+Tu rol es arbitrar desacuerdos con precisión: en Exactas hay respuestas correctas e incorrectas. Identificá el error conceptual o de procedimiento con claridad, sin ambigüedad. Si ambas posiciones tienen un error distinto, usá "ambas_incorrectas" y explicá cada error por separado. Si el desacuerdo es sobre una convención (ej. notación), aclaralo explícitamente.
+
+${validacionTema}
+${contextoJuego}
+${jsonFormat}
+
+Reglas adicionales para Exactas:
+- Señalá el paso exacto donde está el error si es un procedimiento.
+- No des la solución completa al ejercicio; solo arbitrá el punto en disputa.
+- Si hay unidades o dimensiones involucradas, verificalas.
+
+${textoFuenteBlock}
+Desacuerdo: ${desacuerdo}
+Posición A: ${posicionA}
+Posición B: ${posicionB}`;
+  }
+
+  if (areaLower === "sociales") {
+    return `Sos un árbitro experto en ${materia}, especializado en Ciencias Sociales. Estás en una sesión de nivel ${nivel} (${anio}° año).
+Tema: "${tema}"${subtemaLine}${refMaterial}
+
+${nivelIdioma}
+
+Tu rol es arbitrar desacuerdos con matiz: en Ciencias Sociales muchas respuestas admiten perspectivas distintas, pero existen afirmaciones factuales incorrectas y generalizaciones inapropiadas. Distinguí entre desacuerdos interpretativos legítimos y errores factuales. Promové el pensamiento crítico y el análisis de fuentes.
+
+${validacionTema}
+${contextoJuego}
+${jsonFormat}
+
+Reglas adicionales para Sociales:
+- Si el desacuerdo es interpretativo y ambas posiciones tienen sustento, usá "ambas_correctas" y explicá los enfoques.
+- Si hay un error factual claro (fecha, personaje, concepto histórico), señalalo con precisión.
+- Invitá a considerar el contexto histórico, geográfico o cultural en la pregunta paraSeguirPensando.
+
+${textoFuenteBlock}
+Desacuerdo: ${desacuerdo}
+Posición A: ${posicionA}
+Posición B: ${posicionB}`;
+  }
+
+  if (areaLower === "arte" || areaLower === "lenguajes") {
+    return `Sos un árbitro experto en ${materia}, especializado en Arte y Lenguajes Artísticos. Estás en una sesión de nivel ${nivel} (${anio}° año).
+Tema: "${tema}"${subtemaLine}${refMaterial}
+
+${nivelIdioma}
+
+Tu rol es arbitrar desacuerdos valorando tanto los aspectos técnicos (que tienen respuesta precisa) como los interpretativos (que admiten diversidad). En Arte, la subjetividad tiene lugar, pero existen criterios técnicos y convenciones del lenguaje artístico que son objetivos. Distinguí entre los dos tipos de disputa.
+
+${validacionTema}
+${contextoJuego}
+${jsonFormat}
+
+Reglas adicionales para Arte:
+- Si el desacuerdo es sobre una técnica o elemento del lenguaje artístico (ritmo, armonía, perspectiva, etc.), arbitrá con precisión técnica.
+- Si es interpretativo, reconocé la validez de múltiples lecturas y usá "ambas_correctas" cuando corresponda.
+- La pregunta paraSeguirPensando debe invitar a explorar, crear o investigar más.
+
+${textoFuenteBlock}
+Desacuerdo: ${desacuerdo}
+Posición A: ${posicionA}
+Posición B: ${posicionB}`;
+  }
+
+  // ── Prompt genérico (fallback) ────────────────────────────────────────────
+  return `Sos un árbitro pedagógico experto en ${materia} de nivel ${nivel} (${anio}° año).
+Tema: "${tema}"${subtemaLine}${refMaterial}
+
+${nivelIdioma}
+
+Tu tarea es arbitrar un desacuerdo entre dos estudiantes con criterio pedagógico y precisión disciplinar.
+
+${validacionTema}
+${contextoJuego}
+${jsonFormat}
+
+Reglas:
+- Solo arbitrá sobre "${tema}".
+- Si las dos posiciones son equivalentes, usá "ambas_correctas".
+- No resolvás ejercicios completos; solo arbitrá el punto en disputa.
+
+${textoFuenteBlock}
+Desacuerdo: ${desacuerdo}
+Posición A: ${posicionA}
+Posición B: ${posicionB}`;
+}
 
 // ── Helper compartido del árbitro ─────────────────────────────────────────────
 
@@ -1365,8 +1567,9 @@ async function runArbitro(params: {
   desacuerdo: string;
   posicionA: string;
   posicionB: string;
+  esJuegoOral?: boolean;
 }): Promise<object> {
-  const { sessionId, desacuerdo, posicionA, posicionB } = params;
+  const { sessionId, desacuerdo, posicionA, posicionB, esJuegoOral } = params;
 
   const sessionDoc = await db.collection("sesiones_arbitro").doc(sessionId).get();
   if (!sessionDoc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró.");
@@ -1381,32 +1584,24 @@ async function runArbitro(params: {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
 
-  const prompt = `Sos un árbitro experto en ${session.materia} de nivel ${session.nivel} (año ${session.anio}).
-El tema específico es: "${session.tema}".
-${session.ejercicio ? `Material de referencia: ${session.ejercicio}` : ""}
-
-Tu tarea es arbitrar un desacuerdo entre dos estudiantes. Respondé ÚNICAMENTE con JSON válido sin backticks:
-{
-  "resultado": "A",
-  "veredicto": "una oración que resume quién tiene razón",
-  "explicacion": "2-3 oraciones explicando el concepto de forma pedagógica",
-  "paraSeguirPensando": "una pregunta para que el grupo procese el resultado"
-}
-
-El campo "resultado" debe ser exactamente uno de: "A", "B", "ambas_correctas", "ambas_incorrectas".
-
-Reglas:
-- Solo arbitrá sobre "${session.tema}".
-- Si las dos posiciones son equivalentes, usá "ambas_correctas".
-- No resolvás ejercicios completos, solo arbitrá el desacuerdo puntual.
-
-Desacuerdo: ${desacuerdo}
-Posición A: ${posicionA}
-Posición B: ${posicionB}`;
+  const prompt = buildArbitroPrompt({
+    area: session.area || null,
+    materia: session.materia,
+    nivel: session.nivel,
+    anio: session.anio,
+    tema: session.tema,
+    subtema: session.subtema || "",
+    ejercicio: session.ejercicio || "",
+    textoFuente: session.textoFuente || "",
+    desacuerdo,
+    posicionA,
+    posicionB,
+    esJuegoOral,
+  });
 
   const result = await model.generateContent({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.2, maxOutputTokens: 600 },
+    generationConfig: { temperature: 0.2, maxOutputTokens: 700 },
   });
 
   const raw = result.response.text().trim().replace(/```json|```/g, "").trim();
@@ -1417,15 +1612,19 @@ Posición B: ${posicionB}`;
   } catch {
     parsed = {
       resultado: "ambas_incorrectas",
+      calificacionRecomendada: "incompleta",
       veredicto: "No se pudo determinar con claridad.",
       explicacion: raw.slice(0, 300),
       paraSeguirPensando: "¿Pueden reformular el desacuerdo con más precisión?",
     };
   }
 
+  // Registrar consulta (incluye resultado fuera_de_tema para análisis)
   await db.collection("sesiones_arbitro").doc(sessionId).collection("consultas").add({
     desacuerdo, posicionA, posicionB,
     resultado: parsed.resultado,
+    area: session.area || null,
+    materia: session.materia,
     timestamp: new Date().toISOString(),
   });
 
@@ -1450,12 +1649,12 @@ export const arbitrarDesacuerdo = onCall(
 export const requestVeredicto = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 90, memory: "256MiB" },
   async (request) => {
-    const { sessionId, conflicto, desacuerdo, posicionA, posicionB } = request.data;
+    const { sessionId, conflicto, desacuerdo, posicionA, posicionB, modo } = request.data;
     const texto = conflicto || desacuerdo;
     if (!sessionId || !texto || !posicionA || !posicionB) {
       throw new HttpsError("invalid-argument", "Faltan campos: sessionId, conflicto, posicionA, posicionB.");
     }
-    return runArbitro({ sessionId, desacuerdo: texto, posicionA, posicionB });
+    return runArbitro({ sessionId, desacuerdo: texto, posicionA, posicionB, esJuegoOral: modo === "juego_oral" });
   }
 );
 
@@ -1464,20 +1663,55 @@ export const requestVeredicto = onCall(
 export const generarConsignasArbitro = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 60 },
   async (request) => {
-    const { materia, nivel, anio, tema, subtema } = request.data as {
-      materia: string; nivel: string; anio: string; tema: string; subtema?: string;
+    const { materia, nivel, anio, tema, subtema, cantidad, tipoPreguntas } = request.data as {
+      materia: string; nivel: string; anio: string; tema: string; subtema?: string; cantidad?: number;
+      tipoPreguntas?: "memoristica" | "mixta" | "capacidades";
     };
     if (!materia || !nivel || !anio || !tema) {
       throw new HttpsError("invalid-argument", "Faltan datos obligatorios.");
     }
+    // La cantidad la elige el docente en la configuración de la sesión; la acotamos
+    // a un rango razonable (3 a 30) para no generar listas inmanejables durante el juego.
+    const n = Math.min(30, Math.max(3, Math.round(cantidad || 6)));
+    const tipo = tipoPreguntas === "memoristica" || tipoPreguntas === "capacidades" ? tipoPreguntas : "mixta";
     const apiKey = GEMINI_KEY.value();
     if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada");
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
+
+    // Operaciones de pensamiento que buscan desarrollar capacidades (pensamiento
+    // crítico, argumentación) en vez de pura memoria — versión curada para preguntas
+    // orales breves, alineada con las mismas capacidades que usa el Juego del Semáforo.
+    const OPERACIONES_CAPACIDADES = [
+      "Comparar: presentar dos interpretaciones, posturas o elementos del tema y pedir cuál es más sólido y por qué.",
+      "Detectar un error: plantear una afirmación con un error conceptual sobre el tema y pedir que lo identifiquen y corrijan.",
+      "Argumentar una posición: pedir que defiendan una postura discutible sobre el tema con al menos dos razones.",
+      "Cuestionar un supuesto: presentar una idea muy extendida sobre el tema y pedir que evalúen si es así o no, y por qué.",
+      "Relacionar conceptos: pedir que expliquen la conexión entre dos elementos del tema.",
+    ];
+
+    const bloqueTipo = tipo === "memoristica"
+      ? `Priorizá preguntas de dato concreto: nombres, fechas, definiciones, hechos puntuales del tema.`
+      : tipo === "capacidades"
+      ? `La gran mayoría de las preguntas (al menos 8 de cada 10) tienen que pedir alguna de estas operaciones de pensamiento en vez de un dato suelto, para que ayuden a desarrollar capacidades y no solo memoria:
+${OPERACIONES_CAPACIDADES.map((o) => `- ${o}`).join("\n")}
+Estas preguntas siguen necesitando una respuesta verificable y justificable con el tema — no es opinión libre, es razonamiento que el árbitro pueda evaluar.`
+      : `Combiná dos tipos de preguntas en partes similares: la mitad de dato concreto (nombres, fechas, definiciones) y la otra mitad que pida alguna de estas operaciones de pensamiento, para que ayuden a desarrollar capacidades y no solo memoria:
+${OPERACIONES_CAPACIDADES.map((o) => `- ${o}`).join("\n")}
+Estas últimas también necesitan una respuesta verificable y justificable con el tema — no es opinión libre, es razonamiento que el árbitro pueda evaluar.`;
+
     const prompt = `Sos un docente experto en ${materia} para ${nivel} ${anio} en Argentina.
-Generá exactamente 6 consignas sobre el tema: "${tema}"${subtema ? ` (específicamente: ${subtema})` : ""}.
-Las consignas deben fomentar el debate entre compañeros, estar numeradas del 1 al 6, y ser concisas.
-Respondé SOLO con las 6 consignas numeradas, sin introducción ni cierre.`;
+Generá exactamente ${n} preguntas sobre el tema: "${tema}"${subtema ? ` (específicamente: ${subtema})` : ""}.
+Estas preguntas se van a usar en un juego oral por equipos: un equipo le hace la pregunta en voz alta
+a otro, que debe responder también en voz alta, y un árbitro (o el docente) evalúa si la respuesta es
+completa, incompleta o incorrecta. Por eso cada pregunta debe:
+- Tener una respuesta verificable, que el árbitro pueda evaluar como correcta, incompleta o incorrecta (evitar preguntas de opinión libre sin ningún criterio posible).
+- Ser breve y clara para decirla en voz alta.
+- Variar en dificultad (algunas más simples, otras más desafiantes).
+
+${bloqueTipo}
+
+Numerá las preguntas del 1 al ${n}. Respondé SOLO con las preguntas numeradas, sin introducción ni cierre.`;
     const result = await model.generateContent(prompt);
     return { consignas: result.response.text().trim() };
   }
@@ -1505,5 +1739,454 @@ export const requestConsigna = onCall(
 No debe ser de sí/no. Máximo 2 líneas. Respondé SOLO con la pregunta.`;
     const result = await model.generateContent(prompt);
     return { consigna: result.response.text().trim() };
+  }
+);
+
+// ── GA4 A/B Report ─────────────────────────────────────────
+// Datos de envíos hardcodeados (actualizar manualmente con cada campaña)
+const DATOS_ENVIOS: Record<string, { lista: string; enviados: number }> = {
+  v1: { lista: "historia_geografia", enviados: 294 },
+  v2: { lista: "biologia_matematica", enviados: 285 },
+  v3: { lista: "idiomas", enviados: 280 },
+};
+
+interface VersionAccum {
+  sesiones: number;
+  usuariosUnicos: number;
+  sesionesComprometidas: number;
+  duracionTotal: number;
+  bounceRateSum: number;
+  paginasPorSesionSum: number;
+  eventosTotal: number;
+  porMateria: Record<string, number>;
+}
+
+// onRequest con CORS nativo de Firebase v2 — consumible con fetch() desde el browser
+export const getMetricsGA4 = onRequest(
+  { region: "us-central1", secrets: ["GA4_SERVICE_ACCOUNT"], cors: true },
+  async (_req, res) => {
+    try {
+      const { BetaAnalyticsDataClient } = await import("@google-analytics/data");
+
+      const serviceAccountJson = GA4_SERVICE_ACCOUNT.value();
+      if (!serviceAccountJson) {
+        res.status(500).json({ error: "GA4_SERVICE_ACCOUNT secret not configured" });
+        return;
+      }
+
+      const credentials = JSON.parse(serviceAccountJson);
+      const analyticsClient = new BetaAnalyticsDataClient({ credentials });
+
+      const [response] = await analyticsClient.runReport({
+        property: "properties/533122058",
+        dateRanges: [{ startDate: "60daysAgo", endDate: "today" }],
+        dimensions: [
+          { name: "sessionManualAdContent" },
+          { name: "sessionManualTerm" },
+        ],
+        metrics: [
+          { name: "sessions" },
+          { name: "totalUsers" },
+          { name: "engagedSessions" },
+          { name: "userEngagementDuration" },
+          { name: "bounceRate" },
+          { name: "screenPageViewsPerSession" },
+          { name: "eventCount" },
+        ],
+        dimensionFilter: {
+          filter: {
+            fieldName: "sessionCampaignName",
+            stringFilter: { value: "arbitro_2026", matchType: "EXACT" },
+          },
+        },
+      });
+
+      // Acumular por versión
+      const metricas: Record<string, VersionAccum> = {};
+
+      for (const row of response.rows ?? []) {
+        const utmContent = row.dimensionValues?.[0]?.value ?? "";
+        const utmTerm    = row.dimensionValues?.[1]?.value ?? "";
+        const version    = utmContent.split("_")[0];
+
+        if (!version.match(/^v[123]$/)) continue;
+
+        if (!metricas[version]) {
+          metricas[version] = {
+            sesiones: 0, usuariosUnicos: 0,
+            sesionesComprometidas: 0, duracionTotal: 0,
+            bounceRateSum: 0, paginasPorSesionSum: 0, eventosTotal: 0,
+            porMateria: {},
+          };
+        }
+
+        const m = metricas[version];
+        const sesiones = parseInt(row.metricValues?.[0]?.value ?? "0");
+        m.sesiones              += sesiones;
+        m.usuariosUnicos        += parseInt(row.metricValues?.[1]?.value ?? "0");
+        m.sesionesComprometidas += parseInt(row.metricValues?.[2]?.value ?? "0");
+        m.duracionTotal         += parseFloat(row.metricValues?.[3]?.value ?? "0");
+        m.bounceRateSum         += parseFloat(row.metricValues?.[4]?.value ?? "0") * sesiones;
+        m.paginasPorSesionSum   += parseFloat(row.metricValues?.[5]?.value ?? "0") * sesiones;
+        m.eventosTotal          += parseInt(row.metricValues?.[6]?.value ?? "0");
+
+        if (utmTerm && utmTerm !== "(not set)") {
+          const materia = utmTerm
+            .replace(/_/g, " ")
+            .replace(/\b\w/g, (l: string) => l.toUpperCase());
+          m.porMateria[materia] = (m.porMateria[materia] ?? 0) + parseInt(row.metricValues?.[0]?.value ?? "0");
+        }
+      }
+
+      // Formatear respuesta con el mismo shape que espera ABTestDashboard
+      const resultado = ["v1", "v2", "v3"].map((version) => {
+        const d = metricas[version] ?? {
+          sesiones: 0, usuariosUnicos: 0,
+          sesionesComprometidas: 0, duracionTotal: 0,
+          bounceRateSum: 0, paginasPorSesionSum: 0, eventosTotal: 0,
+          porMateria: {},
+        };
+
+        const bounceRate = d.sesiones > 0
+          ? Math.round((d.bounceRateSum / d.sesiones) * 1000) / 1000
+          : 0;
+
+        const paginasPorSesion = d.sesiones > 0
+          ? Math.round((d.paginasPorSesionSum / d.sesiones) * 10) / 10
+          : 0;
+
+        const eventosPorSesion = d.sesiones > 0
+          ? Math.round((d.eventosTotal / d.sesiones) * 10) / 10
+          : 0;
+
+        return {
+          version,
+          sesiones:        d.sesiones,
+          usuariosUnicos:  d.usuariosUnicos,
+          engagementRate:  d.sesiones > 0
+            ? Math.round((d.sesionesComprometidas / d.sesiones) * 100) / 100
+            : 0,
+          tiempoPromedio:  d.sesiones > 0
+            ? Math.round(d.duracionTotal / d.sesiones)
+            : 0,
+          bounceRate,
+          paginasPorSesion,
+          eventosPorSesion,
+          eventosTotal:    d.eventosTotal,
+          porMateria:      d.porMateria,
+          enviados:        DATOS_ENVIOS[version]?.enviados ?? 0,
+          lista:           DATOS_ENVIOS[version]?.lista ?? "",
+        };
+      });
+
+      res.json(resultado);
+
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error("[getMetricsGA4] Error:", msg);
+      res.status(500).json({ error: "Error al obtener métricas de GA4", message: msg });
+    }
+  }
+);
+
+// ── generarInformeSesion ──────────────────────────────────────────────────────
+// Genera un informe pedagógico de una sesión de árbitro usando Gemini.
+// Guarda el informe en sesiones_arbitro/{sessionId}/informe y lo devuelve.
+
+export const generarInformeSesion = onCall(
+  { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 120, memory: "256MiB" },
+  async (request) => {
+    const { sessionId, forceRegenerar } = request.data as { sessionId: string; forceRegenerar?: boolean };
+    if (!sessionId) throw new HttpsError("invalid-argument", "sessionId es requerido.");
+
+    // Cargar sesión
+    const sessionDoc = await db.collection("sesiones_arbitro").doc(sessionId).get();
+    if (!sessionDoc.exists) throw new HttpsError("not-found", "Sesión no encontrada.");
+    const session = sessionDoc.data()!;
+
+    // Cargar consultas
+    const consultasSnap = await db
+      .collection("sesiones_arbitro")
+      .doc(sessionId)
+      .collection("consultas")
+      .orderBy("timestamp", "asc")
+      .get();
+
+    if (consultasSnap.empty) {
+      throw new HttpsError("failed-precondition", "La sesión no tiene consultas registradas aún.");
+    }
+
+    const consultas = consultasSnap.docs.map((d) => d.data());
+
+    // Registros ronda por ronda: viven en la subcolección "informes" (un doc por
+    // mesa, lo escribe guardarInformeArbitro al enviar la metacognición). Se leen
+    // ANTES del early return de caché para que un informe ya generado también
+    // muestre las preguntas pasadas, sin obligar a regenerarlo con Gemini.
+    const informesSnap = await db
+      .collection("sesiones_arbitro")
+      .doc(sessionId)
+      .collection("informes")
+      .get();
+
+    const rondasPasadas: any[] = [];
+    informesSnap.docs.forEach((doc) => {
+      const d = doc.data();
+      if (Array.isArray(d.registros)) {
+        d.registros.forEach((r: any) => {
+          if (r?.calificacion === "pasada") rondasPasadas.push(r);
+        });
+      }
+    });
+
+    // tiempoSegundos puede venir undefined: las sesiones anteriores a esta
+    // semana no lo registraban.
+    const rondasPasadasPayload = rondasPasadas.map((r) => ({
+      pregunta: r.pregunta || "",
+      equipoPregunta: r.equipoPregunta || "",
+      tiempoSegundos: typeof r.tiempoSegundos === "number" ? r.tiempoSegundos : null,
+    }));
+
+    // Si ya existe informe guardado, devolverlo directamente — salvo que el
+    // docente pida explícitamente regenerarlo (por ejemplo, porque terminaron
+    // de jugar más parejas después de la primera vez que se generó el informe).
+    // Siempre viajamos totalConsultasActual para que el panel pueda detectar
+    // que hay consultas nuevas desde la última generación y ofrecer el botón
+    // de actualizar, sin gastar una llamada a Gemini de más por su cuenta.
+    if (session.informe && !forceRegenerar) {
+      return { ...session.informe, totalConsultasActual: consultas.length, rondasPasadas: rondasPasadasPayload };
+    }
+
+    const apiKey = GEMINI_KEY.value();
+    if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada.");
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
+
+    // Construir resumen de consultas para el prompt
+    const resumenConsultas = consultas.map((c, i) => {
+      const resultadoLabel: Record<string, string> = {
+        A: "Posición A correcta",
+        B: "Posición B correcta",
+        ambas_correctas: "Ambas correctas",
+        ambas_incorrectas: "Ambas incorrectas",
+        fuera_de_tema: "Fuera de tema",
+      };
+      return `Consulta ${i + 1}:
+  Desacuerdo: ${c.desacuerdo}
+  Posición A: ${c.posicionA}
+  Posición B: ${c.posicionB}
+  Resultado: ${resultadoLabel[c.resultado] ?? c.resultado}`;
+    }).join("\n\n");
+
+    const totalConsultas = consultas.length;
+    const fueraDeTema = consultas.filter((c) => c.resultado === "ambas_incorrectas" || c.resultado === "fuera_de_tema").length;
+    const correctasA = consultas.filter((c) => c.resultado === "A").length;
+    const correctasB = consultas.filter((c) => c.resultado === "B").length;
+    const ambasCorrectas = consultas.filter((c) => c.resultado === "ambas_correctas").length;
+    const ambasIncorrectas = consultas.filter((c) => c.resultado === "ambas_incorrectas").length;
+
+    // Las preguntas pasadas se excluyen del análisis pedagógico pero se listan
+    // aparte: son señal de dificultad y el docente tiene que verlas.
+    const rondasPasadasSection = rondasPasadas.length > 0
+      ? `\n\nPREGUNTAS PASADAS (NO las incluyas en el análisis pedagógico — no cuentan como debate ni como error; listalas solo para que el docente las vea):\n${
+          rondasPasadas.map((r, i) => `${i + 1}. "${r.pregunta || "(sin texto)"}" — pasada por ${r.equipoPregunta || "un equipo"}`).join("\n")
+        }`
+      : "";
+
+    const prompt = `Sos un asistente pedagógico especializado en análisis de aprendizaje colaborativo.
+Analizá la siguiente sesión de debate arbitrado y generá un informe para el docente.
+
+DATOS DE LA SESIÓN:
+- Materia: ${session.materia}
+- Área: ${session.area || "No especificada"}
+- Nivel: ${session.nivel} — ${session.anio}° año
+- Tema: ${session.tema}
+${session.subtema ? `- Subtema: ${session.subtema}` : ""}
+- Total de consultas al árbitro: ${totalConsultas}
+- Resultados: A correcta: ${correctasA} | B correcta: ${correctasB} | Ambas correctas: ${ambasCorrectas} | Ambas incorrectas: ${ambasIncorrectas} | Fuera de tema: ${fueraDeTema}
+
+DETALLE DE CONSULTAS:
+${resumenConsultas}
+
+Respondé ÚNICAMENTE con JSON válido sin backticks ni texto adicional:
+{
+  "resumenEjecutivo": "2-3 oraciones que resumen el desempeño general del grupo",
+  "conceptosDebatidos": ["lista de conceptos o ideas centrales que aparecieron en las consultas"],
+  "fortalezas": "párrafo describiendo lo que el grupo comprendió bien o debatió con profundidad",
+  "areasDeOportunidad": "párrafo describiendo los conceptos donde hubo más confusión o errores",
+  "patronesObservados": "párrafo describiendo patrones: si hubo debate genuino, si las posiciones eran polarizadas, si las preguntas eran superficiales o profundas",
+  "recomendacionesDocente": ["3-4 recomendaciones concretas para el docente para la próxima clase"],
+  "preguntasParaRetomar": ["2-3 preguntas que quedaron sin resolver o merecen ser retomadas en clase"],
+  "nivelDebate": "superficial" | "adecuado" | "profundo"
+}${rondasPasadasSection}`;
+
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 1200 },
+    });
+
+    const raw = result.response.text().trim().replace(/```json|```/g, "").trim();
+
+    let informe: any;
+    try {
+      informe = JSON.parse(raw);
+    } catch {
+      informe = {
+        resumenEjecutivo: "No se pudo generar el análisis completo.",
+        conceptosDebatidos: [],
+        fortalezas: raw.slice(0, 400),
+        areasDeOportunidad: "",
+        patronesObservados: "",
+        recomendacionesDocente: [],
+        preguntasParaRetomar: [],
+        nivelDebate: "adecuado",
+      };
+    }
+
+    // Enriquecer con metadatos
+    informe.generadoEn = new Date().toISOString();
+    informe.totalConsultas = totalConsultas;
+    informe.estadisticas = { correctasA, correctasB, ambasCorrectas, ambasIncorrectas, fueraDeTema };
+
+    // Guardar en Firestore para no regenerar
+    await db.collection("sesiones_arbitro").doc(sessionId).update({ informe });
+
+    return { ...informe, totalConsultasActual: totalConsultas, rondasPasadas: rondasPasadasPayload };
+  }
+);
+
+// listarSesionesDocente
+
+export const listarSesionesDocente = onCall(
+  { invoker: "public", timeoutSeconds: 30 },
+  async (request) => {
+    const { uid, limit: lim } = request.data as { uid?: string; limit?: number };
+    if (!uid) throw new HttpsError("invalid-argument", "uid es requerido.");
+
+    const snap = await db
+      .collection("sesiones_arbitro")
+      .where("docenteUid", "==", uid)
+      .orderBy("creadoEn", "desc")
+      .limit(lim ?? 50)
+      .get();
+
+    // Cuántas partidas (equipos que ya jugaron y enviaron su metacognición)
+    // tiene cada sesión — una sesión con 25-30 alumnos jugando de a parejas
+    // puede acumular 6-7 partidas bajo el mismo link, y el docente necesita
+    // ver ese número de un vistazo en la lista, sin entrar a cada una.
+    const sesiones = await Promise.all(
+      snap.docs.map(async (d) => {
+        const countSnap = await d.ref.collection("informes").count().get();
+        return {
+          id: d.id,
+          ...d.data(),
+          tieneInforme: !!d.data().informe,
+          partidasCount: countSnap.data().count,
+        };
+      })
+    );
+
+    return { sesiones };
+  }
+);
+
+export const guardarInformeArbitro = onCall(
+  { region: "us-central1", invoker: "public" },
+  async (request) => {
+    const data = request.data;
+
+    // ── Modo competitivo: { sessionId, modo, equipos, registros } ──────────
+    if (data.modo === "competitivo" && data.equipos) {
+      const { sessionId, equipos, registros } = data;
+      if (!sessionId || !equipos?.length) {
+        throw new HttpsError("invalid-argument", "sessionId y equipos son requeridos para el modo competitivo");
+      }
+      const informeRef = db
+        .collection("sesiones_arbitro")
+        .doc(sessionId)
+        .collection("informes")
+        .doc(); // genera ID único por grupo
+
+      await informeRef.set({
+        modo: "competitivo",
+        grupoNombre: equipos[0]?.nombre || "Grupo",
+        equipos,
+        registros: registros || [],
+        creadoEn: new Date().toISOString(),
+      });
+      return { ok: true };
+    }
+
+    // ── Modo normal: { sessionId, nombreAlumno, nombreEquipo, respuestas } ──
+    const { sessionId, nombreAlumno, nombreEquipo, respuestas } = data;
+    if (!sessionId || !nombreAlumno) {
+      throw new HttpsError("invalid-argument", "sessionId y nombreAlumno son requeridos");
+    }
+    const informeRef = db
+      .collection("sesiones_arbitro")
+      .doc(sessionId)
+      .collection("informes")
+      .doc();
+
+    await informeRef.set({
+      nombreAlumno,
+      nombreEquipo: nombreEquipo || "",
+      respuestas,
+      creadoEn: new Date().toISOString(),
+    });
+    return { ok: true };
+  }
+);
+
+// ── getInformesMetacognicion ───────────────────────────────────────────────
+
+export const getInformesMetacognicion = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { sessionId } = request.data;
+    if (!sessionId) {
+      throw new HttpsError("invalid-argument", "sessionId es requerido");
+    }
+
+    const snapshot = await db
+      .collection("sesiones_arbitro")
+      .doc(sessionId)
+      .collection("informes")
+      .orderBy("creadoEn", "asc")
+      .get();
+
+    const informes = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    return { informes };
+  }
+);
+
+// ── listarTodasSesionesAdmin ────────────────────────────────────────────────
+
+export const listarTodasSesionesAdmin = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const ADMIN_UID = "P2lU12xoCxMkZ0AdZdMoGGksJ5o1";
+
+    if (request.auth?.uid !== ADMIN_UID) {
+      throw new HttpsError("permission-denied", "Solo el administrador puede acceder a esta función.");
+    }
+
+    const snap = await db
+      .collection("sesiones_arbitro")
+      .orderBy("creadoEn", "desc")
+      .limit(100)
+      .get();
+
+    const sesiones = snap.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+      tieneInforme: !!d.data().informe,
+    }));
+
+    return { sesiones };
   }
 );

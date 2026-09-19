@@ -3,6 +3,7 @@ import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
+import { getFunctions } from "firebase/functions";
 
 // Config Firebase
 const firebaseConfig = {
@@ -21,3 +22,4 @@ export const app = initializeApp(firebaseConfig); // ← exportado
 export const database = getDatabase(app);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
+export const functions = getFunctions(app, "us-central1");

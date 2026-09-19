@@ -41,6 +41,13 @@ export interface ClassroomAnnouncement {
   updateTime: string;
 }
 
+export interface SimpleStudent {
+  id: string;
+  name: string;
+  email?: string;
+  photoUrl?: string;
+}
+
 // ============================================
 // TOKEN MANAGEMENT
 // ============================================
@@ -53,6 +60,7 @@ const CLASSROOM_SCOPES = [
   "https://www.googleapis.com/auth/classroom.courses.readonly",
   "https://www.googleapis.com/auth/classroom.rosters.readonly",
   "https://www.googleapis.com/auth/classroom.announcements",
+  "https://www.googleapis.com/auth/classroom.coursework.students", // ← nuevo
 ];
 
 /**
@@ -182,20 +190,11 @@ export async function getStudents(courseId: string): Promise<SimpleStudent[]> {
     }
 
     const data = await response.json();
-    
-    // 🔴 DEBUG: Ver qué viene de la API
-    console.log("🔴 RAW API RESPONSE:", JSON.stringify(data, null, 2));
-    
     if (data.students) {
       allStudents.push(...data.students);
     }
     pageToken = data.nextPageToken;
   } while (pageToken);
-
-  // 🔴 DEBUG: Ver estructura de un estudiante
-  if (allStudents.length > 0) {
-    console.log("🔴 FIRST STUDENT STRUCTURE:", JSON.stringify(allStudents[0], null, 2));
-  }
 
   // Transformar a estructura simple
   const result = allStudents.map(s => {
@@ -206,11 +205,6 @@ export async function getStudents(courseId: string): Promise<SimpleStudent[]> {
       s.profile?.emailAddress?.split("@")[0] ||
       s.name ||
       "";
-    
-    console.log("🔴 Student mapping:", { 
-      raw: s.profile?.name, 
-      extracted: name.trim() 
-    });
     
     return {
       id: s.userId || s.profile?.id || "",
@@ -303,4 +297,56 @@ export async function createSelfEvaluationAnnouncement(
   const text = `${msg.title}\n\n${msg.body}\n${evaluationLink}\n\n${msg.reminder}`;
 
   return createAnnouncement(courseId, text);
+}
+
+// ── API: Tareas (CourseWork) ───────────────────────────────────────────────────
+
+export interface ClassroomCourseWork {
+  id: string;
+  courseId: string;
+  title: string;
+  alternateLink: string;
+}
+
+export async function createCourseWork(
+  courseId: string,
+  title: string,
+  description: string,
+  sessionLink: string,
+  dueDate?: Date,
+  panelLink?: { url: string; title: string },
+): Promise<ClassroomCourseWork> {
+  const token = await getClassroomAccessToken();
+
+  const materials = [{ link: { url: sessionLink, title: "Abrir Árbitro de Aprendizaje" } }];
+  // Segundo material opcional: el panel del docente, como su propio link
+  // clickeable (no mezclado como texto plano en la descripción).
+  if (panelLink) {
+    materials.push({ link: { url: panelLink.url, title: panelLink.title } });
+  }
+
+  const body = {
+    title,
+    description,
+    state: "PUBLISHED",
+    workType: "ASSIGNMENT",
+    materials,
+  };
+
+  const response = await fetch(
+    `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+
+  if (!response.ok) {
+    if (response.status === 401) { clearClassroomToken(); throw new Error("Sesión expirada. Intentá de nuevo."); }
+    if (response.status === 403) throw new Error("No tenés permiso para crear tareas en este curso.");
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(`Error al crear tarea: ${response.status} — ${JSON.stringify(errorData)}`);
+  }
+  return await response.json();
 }

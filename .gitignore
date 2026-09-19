@@ -1,3 +1,6 @@
+# GA4 service account credentials — NEVER commit this
+functions/ga4-credentials.json
+
 # Logs
 logs
 *.log

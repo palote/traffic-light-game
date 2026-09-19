@@ -4,9 +4,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ref, get, set } from "firebase/database";
-import { database } from "../../firebase.config";
+import { database, functions } from "../../firebase.config";
+import { httpsCallable } from "firebase/functions";
 import { useI18n } from "../../i18n";
 import { ConnectionIndicator, ConnectionPeakChart } from "../../components/ConnectionIndicator";
+import { ABTestDashboard } from "../../components/ABTestDashboard";
+import { InformesDocente } from "../../components/InformesDocente";
 
 type TeacherMetrics = {
   profile?: { uid?: string; email?: string };
@@ -66,6 +69,14 @@ type GameData = {
 
 type SortDir = 1 | -1;
 
+type GA4Row = {
+  campaign: string;
+  version: string;
+  path: string;
+  sessions: number;
+  users: number;
+};
+
 export function AdminMetricsPage() {
   const { t, language } = useI18n();
   const navigate = useNavigate();
@@ -74,7 +85,7 @@ export function AdminMetricsPage() {
   const [referrals, setReferrals] = useState<Record<string, Referral>>({});
   const [webinarRegistrations, setWebinarRegistrations] = useState<Record<string, WebinarRegistration>>({});
   const [games, setGames] = useState<Record<string, GameData>>({});
-  const [activeTab, setActiveTab] = useState<"teachers" | "referrals" | "webinars" | "analytics" | "config">("teachers");
+  const [activeTab, setActiveTab] = useState<"teachers" | "referrals" | "webinars" | "analytics" | "config" | "abemail" | "informes">("teachers");
 
   const [teacherSort, setTeacherSort] = useState<{ col: string; dir: SortDir }>({ col: "totalDurationSec", dir: -1 });
   const [teacherSearch, setTeacherSearch] = useState("");
@@ -113,6 +124,23 @@ export function AdminMetricsPage() {
   });
   const [configSaving, setConfigSaving] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
+
+  const [ga4Data, setGa4Data] = useState<GA4Row[]>([]);
+  const [ga4Loading, setGa4Loading] = useState(false);
+  const [ga4Error, setGa4Error] = useState("");
+
+  const loadGA4 = async () => {
+    setGa4Loading(true);
+    setGa4Error("");
+    try {
+      const fn = httpsCallable(functions, "getGA4AbReport");
+      const result = await fn({});
+      setGa4Data((result.data as { rows: GA4Row[] }).rows);
+    } catch (e: any) {
+      setGa4Error(e.message ?? "Error cargando datos de GA4");
+    }
+    setGa4Loading(false);
+  };
 
   useEffect(() => {
     async function load() {
@@ -349,6 +377,8 @@ export function AdminMetricsPage() {
         <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")}>📈 Analytics</TabButton>
         <TabButton active={activeTab === "referrals"} onClick={() => setActiveTab("referrals")}>👥 Referidos ({analytics.totalReferrals})</TabButton>
         <TabButton active={activeTab === "webinars"} onClick={() => setActiveTab("webinars")}>🎥 Webinar ({analytics.totalWebinarRegs})</TabButton>
+        <TabButton active={activeTab === "abemail"} onClick={() => { setActiveTab("abemail"); loadGA4(); }}>📊 A/B Email</TabButton>
+        <TabButton active={activeTab === "informes"} onClick={() => setActiveTab("informes")}>📄 Informes Árbitro</TabButton>
         <TabButton active={activeTab === "config"} onClick={() => setActiveTab("config")}>⚙️ Configuración</TabButton>
       </div>
 
@@ -400,6 +430,16 @@ export function AdminMetricsPage() {
               <div style={{ marginTop: 24 }}><ConnectionPeakChart days={30} /></div>
             </div>
           </div>
+        )}
+
+        {/* A/B Email Tab */}
+        {activeTab === "abemail" && (
+          <ABTestDashboard />
+        )}
+
+        {/* Informes Árbitro Tab */}
+        {activeTab === "informes" && (
+          <InformesDocente />
         )}
 
         {/* Config Tab */}

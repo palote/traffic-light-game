@@ -26,17 +26,17 @@ export function AboutPage() {
     
     howItWorks: "¿Cómo funciona el juego?",
     stages: [
-      { 
-        title: "Stage 0 – Preparación (antes del juego)", 
-        desc: "Antes de jugar, los estudiantes trabajan con los contenidos propuestos por el docente mediante clases, lecturas, actividades u otros materiales didácticos.\n\nDesde una perspectiva pedagógica, el proceso mental de anticipar que esos contenidos serán utilizados luego en un juego competitivo entre equipos cumple un rol clave.\n\nEsta expectativa aumenta la motivación, pero también mejora la comprensión, ya que los estudiantes tienden a organizar mejor las ideas, identificar qué entienden realmente y detectar vacíos conceptuales antes de jugar." 
+      {
+        title: "Etapa 0 – Preparación (antes del juego)",
+        desc: "Antes de jugar, los estudiantes trabajan con los contenidos propuestos por el docente mediante clases, lecturas, actividades u otros materiales didácticos.\n\nDesde una perspectiva pedagógica, el proceso mental de anticipar que esos contenidos serán utilizados luego en un juego competitivo entre equipos cumple un rol clave.\n\nEsta expectativa aumenta la motivación, pero también mejora la comprensión, ya que los estudiantes tienden a organizar mejor las ideas, identificar qué entienden realmente y detectar vacíos conceptuales antes de jugar."
       },
-      { 
-        title: "Stage 1 – Comprensión individual con colaboración interna", 
-        desc: "Los estudiantes responden consignas de manera individual, pero siempre como parte de un equipo estable.\n\nLas respuestas se evalúan mediante un sistema de colores tipo semáforo (verde, amarillo, rojo), que permite visualizar el nivel de comprensión sin una lógica punitiva.\n\nEn esta etapa no hay competencia entre equipos. Cada equipo utiliza el juego para saber si está realmente preparado para competir. Cuando aparecen dificultades, el propio dispositivo habilita instancias para ajustar la comprensión, ayudarse entre pares y prepararse mejor.\n\nDe este modo, el Stage 1 funciona como un espacio diagnóstico y formativo, donde la colaboración interna es una condición central del aprendizaje." 
+      {
+        title: "Etapa 1 – Comprensión individual con colaboración interna",
+        desc: "Los estudiantes responden consignas de manera individual, pero siempre como parte de un equipo estable.\n\nLas respuestas se evalúan mediante un sistema de colores tipo semáforo (verde, amarillo, rojo), que permite visualizar el nivel de comprensión sin una lógica punitiva.\n\nEn esta etapa no hay competencia entre equipos. Cada equipo utiliza el juego para saber si está realmente preparado para competir. Cuando aparecen dificultades, el propio dispositivo habilita instancias para ajustar la comprensión, ayudarse entre pares y prepararse mejor.\n\nDe este modo, la Etapa 1 funciona como un espacio diagnóstico y formativo, donde la colaboración interna es una condición central del aprendizaje."
       },
-      { 
-        title: "Stage 2 – Competencia entre equipos basada en la colaboración", 
-        desc: "Los equipos compiten entre sí resolviendo desafíos de mayor complejidad cognitiva.\n\nEsta etapa se apoya en el trabajo realizado durante el Stage 1 y pone en juego:\n• Argumentación y justificación\n• Toma de decisiones colectivas\n• Representación del equipo\n• Evaluación entre pares\n\nEl principio que organiza esta etapa es claro: solo los equipos que colaboran eficazmente en su interior pueden competir con éxito hacia afuera." 
+      {
+        title: "Etapa 2 – Competencia entre equipos basada en la colaboración",
+        desc: "Los equipos compiten entre sí resolviendo desafíos de mayor complejidad cognitiva.\n\nEsta etapa se apoya en el trabajo realizado durante la Etapa 1 y pone en juego:\n• Argumentación y justificación\n• Toma de decisiones colectivas\n• Representación del equipo\n• Evaluación entre pares\n\nEl principio que organiza esta etapa es claro: solo los equipos que colaboran eficazmente en su interior pueden competir con éxito hacia afuera."
       },
     ],
     
@@ -74,17 +74,17 @@ export function AboutPage() {
     
     howItWorks: "Como funciona o jogo?",
     stages: [
-      { 
-        title: "Stage 0 – Preparação (antes do jogo)", 
-        desc: "Antes de jogar, os estudantes trabalham com os conteúdos propostos pelo professor através de aulas, leituras, atividades ou outros materiais didáticos.\n\nDe uma perspectiva pedagógica, o processo mental de antecipar que esses conteúdos serão utilizados depois em um jogo competitivo entre equipes cumpre um papel chave.\n\nEssa expectativa aumenta a motivação, mas também melhora a compreensão, já que os estudantes tendem a organizar melhor as ideias, identificar o que realmente entendem e detectar lacunas conceituais antes de jogar." 
+      {
+        title: "Etapa 0 – Preparação (antes do jogo)",
+        desc: "Antes de jogar, os estudantes trabalham com os conteúdos propostos pelo professor através de aulas, leituras, atividades ou outros materiais didáticos.\n\nDe uma perspectiva pedagógica, o processo mental de antecipar que esses conteúdos serão utilizados depois em um jogo competitivo entre equipes cumpre um papel chave.\n\nEssa expectativa aumenta a motivação, mas também melhora a compreensão, já que os estudantes tendem a organizar melhor as ideias, identificar o que realmente entendem e detectar lacunas conceituais antes de jogar."
       },
-      { 
-        title: "Stage 1 – Compreensão individual com colaboração interna", 
-        desc: "Os estudantes respondem questões de maneira individual, mas sempre como parte de uma equipe estável.\n\nAs respostas são avaliadas através de um sistema de cores tipo semáforo (verde, amarelo, vermelho), que permite visualizar o nível de compreensão sem uma lógica punitiva.\n\nNesta etapa não há competição entre equipes. Cada equipe utiliza o jogo para saber se está realmente preparada para competir. Quando aparecem dificuldades, o próprio dispositivo habilita instâncias para ajustar a compreensão, ajudar-se entre pares e preparar-se melhor.\n\nDesta forma, o Stage 1 funciona como um espaço diagnóstico e formativo, onde a colaboração interna é uma condição central da aprendizagem." 
+      {
+        title: "Etapa 1 – Compreensão individual com colaboração interna",
+        desc: "Os estudantes respondem questões de maneira individual, mas sempre como parte de uma equipe estável.\n\nAs respostas são avaliadas através de um sistema de cores tipo semáforo (verde, amarelo, vermelho), que permite visualizar o nível de compreensão sem uma lógica punitiva.\n\nNesta etapa não há competição entre equipes. Cada equipe utiliza o jogo para saber se está realmente preparada para competir. Quando aparecem dificuldades, o próprio dispositivo habilita instâncias para ajustar a compreensão, ajudar-se entre pares e preparar-se melhor.\n\nDesta forma, a Etapa 1 funciona como um espaço diagnóstico e formativo, onde a colaboração interna é uma condição central da aprendizagem."
       },
-      { 
-        title: "Stage 2 – Competição entre equipes baseada na colaboração", 
-        desc: "As equipes competem entre si resolvendo desafios de maior complexidade cognitiva.\n\nEsta etapa se apoia no trabalho realizado durante o Stage 1 e coloca em jogo:\n• Argumentação e justificativa\n• Tomada de decisões coletivas\n• Representação da equipe\n• Avaliação entre pares\n\nO princípio que organiza esta etapa é claro: somente as equipes que colaboram eficazmente internamente podem competir com sucesso externamente." 
+      {
+        title: "Etapa 2 – Competição entre equipes baseada na colaboração",
+        desc: "As equipes competem entre si resolvendo desafios de maior complexidade cognitiva.\n\nEsta etapa se apoia no trabalho realizado durante a Etapa 1 e coloca em jogo:\n• Argumentação e justificativa\n• Tomada de decisões coletivas\n• Representação da equipe\n• Avaliação entre pares\n\nO princípio que organiza esta etapa é claro: somente as equipes que colaboram eficazmente internamente podem competir com sucesso externamente."
       },
     ],
     
@@ -232,47 +232,6 @@ export function AboutPage() {
           </p>
         </div>
 
-        {/* ✅ NUEVO: Botón para ver teoría completa */}
-        <div style={{
-          backgroundColor: "#faf5ff",
-          borderRadius: 16,
-          padding: 24,
-          marginBottom: 32,
-          border: "2px solid #c4b5fd",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          textAlign: "center",
-          gap: 12,
-        }}>
-          <p style={{
-            margin: 0,
-            fontSize: 14,
-            color: "#7c3aed",
-            maxWidth: 500,
-          }}>
-            {content.theoryButtonDesc}
-          </p>
-          <button
-            onClick={() => navigate("/teacher-guide")}
-            style={{
-              padding: "14px 28px",
-              fontSize: 16,
-              fontWeight: 700,
-              borderRadius: 12,
-              border: "none",
-              background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
-              color: "white",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              boxShadow: "0 4px 15px rgba(139, 92, 246, 0.3)",
-            }}
-          >
-            {content.theoryButtonText}
-          </button>
-        </div>
 
         {/* Pedagogical Approach */}
         <section style={{

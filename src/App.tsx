@@ -109,9 +109,32 @@ const ComparadorPaisesPage = lazy(() => import("./pages/ComparadorPaisesPage"));
 // 🆕 GENERADOR DE ECUACIONES (Lazy Load)
 const EcuacionesGeneratorPage = lazy(() => import("./pages/EcuacionesGeneratorPage"));
 
+// 🆕 VIANDAS DE MIRE (Lazy Load)
+const ViandasMirePage = lazy(() => import("./pages/ViandasMirePage"));
+
+// 🆕 TABLAS DE MULTIPLICAR — BINGO (Lazy Load)
+const TablasBingoPage      = lazy(() => import("./pages/TablasBingoPage"));
+const BingoSumasRestasPage = lazy(() => import("./pages/BingoSumasRestasPage"));
+const BingoSumasPage       = lazy(() => import("./pages/BingoSumasPage"));
+const BingoTablasDosPage   = lazy(() => import("./pages/BingoTablasDosPage"));
+const BingoTablasTresPage  = lazy(() => import("./pages/BingoTablasTresPage"));
+const BingoFamiliarPage    = lazy(() => import("./pages/BingoFamiliarPage"));
+
 // 🆕 ÁRBITRO DE LENGUA Y MATEMÁTICA (Lazy Load)
 const ArbitroConfigPage = lazy(() => import("./pages/ArbitroConfigPage"));
 const ArbitroSesionPage = lazy(() => import("./pages/ArbitroSesionPage"));
+const ArbitroPanelPage = lazy(() => import("./pages/ArbitroPanelPage"));
+const ArbitroLandingPage = lazy(() => import("./pages/ArbitroLandingPage"));
+const ArbitrosInfoPage = lazy(() => import("./pages/ArbitrosInfoPage"));
+const ArbitroJuegoPage = lazy(() => import("./pages/ArbitroJuegoPage"));
+
+// 🆕 LEARNING REFEREE — English version (Lazy Load)
+const LearningRefereeConfigPage = lazy(() => import("./pages/LearningRefereeConfigPage"));
+
+// 📊 A/B TEST DASHBOARD
+import { ABTestDashboard } from "./components/ABTestDashboard";
+// LearningRefereeSesionPage is loaded lazily inside LearningRefereeLandingPage (dual-route pattern)
+const LearningRefereeLandingPage = lazy(() => import("./pages/LearningRefereeLandingPage"));
 
 // ✅ CORREGIDO: ClassroomView real para Stage 1
 function ClassroomRouteWrapper() {
@@ -664,6 +687,51 @@ function App() {
                   }
                 />
 
+                {/* 🆕 LEARNING REFEREE — English version */}
+                <Route
+                  path="/learning-referee-config"
+                  element={
+                    <Suspense fallback={<div>Loading...</div>}>
+                      <LearningRefereeConfigPage />
+                    </Suspense>
+                  }
+                />
+                {/* Single route handles both /learning-referee/:area (landing) and /learning-referee/:sessionId (session).
+                    LearningRefereeLandingPage checks if the param is a known area key; if not, renders the session page. */}
+                <Route
+                  path="/learning-referee/:area"
+                  element={
+                    <Suspense fallback={<div>Loading...</div>}>
+                      <LearningRefereeLandingPage />
+                    </Suspense>
+                  }
+                />
+
+                {/* 🆕 VIANDAS DE MIRE */}
+                <Route
+                  path="/viandas-mire"
+                  element={
+                    <Suspense fallback={<div>Cargando...</div>}>
+                      <ViandasMirePage />
+                    </Suspense>
+                  }
+                />
+
+                {/* 🆕 TABLAS DE MULTIPLICAR — BINGO */}
+                <Route
+                  path="/tablas-multiplicar-nivel-uno"
+                  element={
+                    <Suspense fallback={<div>Cargando...</div>}>
+                      <TablasBingoPage />
+                    </Suspense>
+                  }
+                />
+                <Route path="/bingo-sumas-restas-nivel-uno" element={<Suspense fallback={<div>Cargando...</div>}><BingoSumasRestasPage /></Suspense>} />
+                <Route path="/bingo-sumas-nivel-dos"        element={<Suspense fallback={<div>Cargando...</div>}><BingoSumasPage /></Suspense>} />
+                <Route path="/bingo-tablas-nivel-dos"       element={<Suspense fallback={<div>Cargando...</div>}><BingoTablasDosPage /></Suspense>} />
+                <Route path="/bingo-tablas-nivel-tres"      element={<Suspense fallback={<div>Cargando...</div>}><BingoTablasTresPage /></Suspense>} />
+                <Route path="/bingo-familiar"               element={<Suspense fallback={<div>Cargando...</div>}><BingoFamiliarPage /></Suspense>} />
+
                 {/* 🆕 ÁRBITRO DE LENGUA Y MATEMÁTICA */}
                 <Route
                   path="/arbitro-config"
@@ -673,11 +741,46 @@ function App() {
                     </Suspense>
                   }
                 />
+                {/* 🆕 ÁRBITRO: Landing por área (link limpio para mails) */}
                 <Route
-                  path="/arbitro/:sessionId"
+                  path="/arbitro/:area"
+                  element={
+                    <Suspense fallback={<div>Cargando...</div>}>
+                      <ArbitroLandingPage />
+                    </Suspense>
+                  }
+                />
+                {/* 🆕 ÁRBITRO: Página de información */}
+                <Route
+                  path="/arbitros-info"
+                  element={
+                    <Suspense fallback={<div>Cargando...</div>}>
+                      <ArbitrosInfoPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/sesion/:sessionId"
                   element={
                     <Suspense fallback={<div>Cargando...</div>}>
                       <ArbitroSesionPage />
+                    </Suspense>
+                  }
+                />
+                {/* ⚔️ ÁRBITRO: Modo competitivo — 2 equipos con tablero de puntos */}
+                <Route
+                  path="/arbitro-juego/:sessionId"
+                  element={
+                    <Suspense fallback={<div>Cargando...</div>}>
+                      <ArbitroJuegoPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/arbitro-panel"
+                  element={
+                    <Suspense fallback={<div>Cargando...</div>}>
+                      <ArbitroPanelPage />
                     </Suspense>
                   }
                 />
@@ -799,6 +902,9 @@ function App() {
 
                 <Route path="/team/:gameId/:teamId" element={<TeamRouteWrapper />} />
                 <Route path="/stage2/team/:gameId/:teamId" element={<TeamRouteWrapper />} />
+
+                {/* 📊 A/B TEST DASHBOARD — campaña arbitro_2026 */}
+                <Route path="/abtest" element={<ABTestDashboard />} />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />

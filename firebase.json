@@ -1,4 +1,7 @@
 {
+  "firestore": {
+    "indexes": "firestore.indexes.json"
+  },
   "functions": {
     "source": "functions",
     "codebase": "default"
@@ -11,6 +14,48 @@
         "firebase.json",
         "**/.*",
         "**/node_modules/**"
+      ],
+      "redirects": [
+        {
+          "source": "/a/exactas",
+          "destination": "/arbitro/exactas",
+          "type": 301
+        },
+        {
+          "source": "/a/sociales",
+          "destination": "/arbitro/sociales",
+          "type": 301
+        },
+        {
+          "source": "/a/lenguajes",
+          "destination": "/arbitro/lenguajes",
+          "type": 301
+        },
+        {
+          "source": "/a/arte",
+          "destination": "/arbitro/arte",
+          "type": 301
+        },
+        {
+          "source": "/r/exactas",
+          "destination": "/learning-referee/exactas",
+          "type": 301
+        },
+        {
+          "source": "/r/sociales",
+          "destination": "/learning-referee/sociales",
+          "type": 301
+        },
+        {
+          "source": "/r/lenguajes",
+          "destination": "/learning-referee/lenguajes",
+          "type": 301
+        },
+        {
+          "source": "/r/arte",
+          "destination": "/learning-referee/arte",
+          "type": 301
+        }
       ],
       "rewrites": [
         {
@@ -26,6 +71,48 @@
         "firebase.json",
         "**/.*",
         "**/node_modules/**"
+      ],
+      "redirects": [
+        {
+          "source": "/a/exactas",
+          "destination": "/arbitro/exactas",
+          "type": 301
+        },
+        {
+          "source": "/a/sociales",
+          "destination": "/arbitro/sociales",
+          "type": 301
+        },
+        {
+          "source": "/a/lenguajes",
+          "destination": "/arbitro/lenguajes",
+          "type": 301
+        },
+        {
+          "source": "/a/arte",
+          "destination": "/arbitro/arte",
+          "type": 301
+        },
+        {
+          "source": "/r/exactas",
+          "destination": "/learning-referee/exactas",
+          "type": 301
+        },
+        {
+          "source": "/r/sociales",
+          "destination": "/learning-referee/sociales",
+          "type": 301
+        },
+        {
+          "source": "/r/lenguajes",
+          "destination": "/learning-referee/lenguajes",
+          "type": 301
+        },
+        {
+          "source": "/r/arte",
+          "destination": "/learning-referee/arte",
+          "type": 301
+        }
       ],
       "rewrites": [
         {

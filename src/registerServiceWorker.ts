@@ -7,20 +7,20 @@ export function registerServiceWorker() {
         .then((registration) => {
           console.log('✅ Service Worker registrado:', registration.scope);
 
+          // Forzar chequeo de actualización apenas carga la página
+          registration.update();
+
           // Detectar actualizaciones
           registration.addEventListener('updatefound', () => {
             const newWorker = registration.installing;
             if (newWorker) {
               newWorker.addEventListener('statechange', () => {
                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  // Hay una nueva versión disponible
-                  console.log('🔄 Nueva versión disponible. Por favor, recarga la página.');
-                  
-                  // Opcionalmente mostrar notificación al usuario
-                  if (confirm('Hay una nueva versión disponible. ¿Deseas actualizar?')) {
-                    newWorker.postMessage({ type: 'SKIP_WAITING' });
-                    window.location.reload();
-                  }
+                  // Hay una nueva versión: activarla y recargar automáticamente,
+                  // sin esperar confirmación del usuario (evita que se quede
+                  // viendo la versión vieja indefinidamente).
+                  console.log('🔄 Nueva versión detectada. Actualizando automáticamente...');
+                  newWorker.postMessage({ type: 'SKIP_WAITING' });
                 }
               });
             }
