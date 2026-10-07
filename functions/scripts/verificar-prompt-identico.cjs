@@ -35,14 +35,18 @@ function diff(a, b) {
 }
 
 // Cambios permitidos
-const COMPLETITUD_QUITADA = (l) => l.startsWith('- "incompleta":');
-const COMPLETITUD_AGREGADA = (l) => l.startsWith('- "incompleta":') || l === "" || l.startsWith("REGLA DE COMPLETITUD:");
+// Sinónimos / coherencia: cambian las líneas de "elementosClave" y "paraSeguirPensando" del JSON, la frase del
+// texto base («no exijas que la respuesta repita sus palabras») y se agrega el bloque «EVALUÁ EL CONCEPTO, NO LAS PALABRAS».
+const SINONIMOS_QUITADA = (l) => l.startsWith('  "elementosClave":') || l.startsWith('  "paraSeguirPensando":') || l.startsWith("Fundamentá tu veredicto");
+const SINONIMOS_AGREGADA = (l) => l.startsWith('  "elementosClave":') || l.startsWith('  "paraSeguirPensando":') || l.startsWith("Fundamentá tu veredicto") || l.startsWith("EVALUÁ EL CONCEPTO, NO LAS PALABRAS:");
+const COMPLETITUD_QUITADA = (l) => l.startsWith('- "incompleta":') || SINONIMOS_QUITADA(l);
+const COMPLETITUD_AGREGADA = (l) => l.startsWith('- "incompleta":') || l === "" || l.startsWith("REGLA DE COMPLETITUD:") || SINONIMOS_AGREGADA(l);
 const ORAL_QUITADA = (l) => COMPLETITUD_QUITADA(l) || /puntosResponde|puntosPregunta/.test(l) || l.startsWith('  "veredicto": "una oración que resume')
   || l.startsWith("- Si la respuesta") || l.startsWith("- Si los dos") || l.startsWith("- Si la objeción") || l.startsWith("- Si NINGUNA")
   || l.startsWith("Además de \"calificacionRecomendada\", tenés que repartir") || l.startsWith("Muy importante: evaluá el mérito real de cada argumento")
   || l.startsWith('El campo "resultado" debe ser exactamente uno de')
   || l.startsWith("No lo saltees");   // en oral la línea sigue con el bloque de completitud
-const ORAL_AGREGADA = (l) => COMPLETITUD_AGREGADA(l) || /tieneRazon|grado|QUIÉN ES QUIÉN|vos no escribas puntajes|^- "(tieneRazon|grado)"|veredicto" tiene que decir|Muy importante: evaluá|No lo saltees|Vos NO escribís puntajes|En esta ronda, "resultado"/.test(l);
+const ORAL_AGREGADA = (l) => COMPLETITUD_AGREGADA(l) || /tieneRazon|grado|QUIÉN ES QUIÉN|vos no escribas puntajes|^- "(tieneRazon|grado)"|veredicto" tiene que decir|COHERENCIA CON "grado"|Muy importante: evaluá|No lo saltees|Vos NO escribís puntajes|En esta ronda, "resultado"/.test(l);
 
 let n = 0;
 for (const v of variantes) for (const area of areas) {
@@ -69,7 +73,7 @@ console.log(`OK: ${n} combinaciones: solo cambian los bloques previstos (complet
 const oral = nuevo({ ...base, esJuegoOral: true, equipoPregunta: "Rojos", equipoResponde: "Azules" });
 for (const frag of ['"tieneRazon": "pregunta" | "responde" | "ambos" | "ninguno"', '"grado": "total" | "parcial"',
   'el equipo que PREGUNTÓ es "Rojos" (es la Posición A) y el equipo que RESPONDIÓ es "Azules" (es la Posición B)',
-  "REGLA DE COMPLETITUD", "identificá el error", "NO lo uses para exigir información que la pregunta no pidió"])
+  "REGLA DE COMPLETITUD", "EVALUÁ EL CONCEPTO, NO LAS PALABRAS", "«vestigios» o «restos arqueológicos» corresponden a «fuentes materiales»", "nunca a recordar la palabra exacta", 'COHERENCIA CON "grado"', "Si \"grado\" es \"parcial\", NO puede decir que la respuesta es incorrecta", "identificá el error", "NO lo uses para exigir información que la pregunta no pidió"])
   assert.ok(oral.includes(frag), "falta en el prompt oral: " + frag);
 assert.ok(!/"puntosResponde"|"puntosPregunta"/.test(oral), "el prompt oral no debe pedir puntajes al modelo");
 assert.ok(!nuevo({ ...base }).includes("tieneRazon"), "el prompt no oral no debe hablar de tieneRazon");

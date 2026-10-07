@@ -23,6 +23,7 @@ interface SesionData {
   textoFuente?: string;
   expiresAt: string;
   docenteEmail?: string;
+  permitirPreguntasPropias?: boolean; // «Permitir preguntas propias»; las sesiones viejas no lo traen (= permitido)
 }
 
 interface Veredicto {
@@ -33,6 +34,7 @@ interface Veredicto {
   veredicto: string;
   explicacion: string;
   paraSeguirPensando: string;
+  consultaId?: string; // id de la consulta guardada por el servidor: registrarRonda toma de ahí el veredicto y el reparto
 }
 
 interface RegistroRonda {
@@ -46,7 +48,15 @@ interface RegistroRonda {
   fueAlArbitro: boolean;
   veredictoArbitro?: string;
   tiempoSegundos?: number;
+  consultaId?: string;   // solo cliente: para registrar la ronda en el servidor
+  registrada?: boolean;  // solo cliente: true cuando registrarRonda confirmó el guardado
 }
+
+// Id de la partida (une las rondas de una misma partida bajo el mismo link de sesión).
+const nuevoIdPartida = (): string => {
+  try { return crypto.randomUUID().replace(/-/g, "").slice(0, 24); }
+  catch { return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
+};
 
 // Los colores por área (AREA_COLORS) viven en utils/arbitroPalette.ts, indexados por
 // la clave corta del área; coloresArea() acepta también el nombre completo de las
@@ -191,6 +201,9 @@ export default function ArbitroJuegoPage() {
   // Al cargar, si hay una partida guardada en curso se pregunta si continuar o empezar de nuevo.
   // "resuelta" queda en false mientras haya una decisión pendiente: hasta entonces NO se guarda
   // nada, para que el estado inicial vacío no pise la partida guardada.
+  const [partidaId, setPartidaId] = useState<string>(nuevoIdPartida);
+  const [validandoPropia, setValidandoPropia] = useState(false);
+  const [errorPropia, setErrorPropia] = useState<string | null>(null);
   const [rec, setRec] = useState<{ guardada: PartidaGuardada | null; resuelta: boolean }>(() => {
     const g = leerPartida(sessionId);
     return { guardada: g, resuelta: !g };
@@ -204,6 +217,7 @@ export default function ArbitroJuegoPage() {
     setPreguntaNumero(g.preguntaNumero); setEquipoPreguntaIdx(g.equipoPreguntaIdx);
     setPuntosEquipo1(g.puntosEquipo1); setPuntosEquipo2(g.puntosEquipo2);
     setRegistros(g.registros);
+    if (g.partidaId) setPartidaId(g.partidaId);
     setPreguntaActual(g.preguntaActual); setUsarPreguntaPropia(g.usarPreguntaPropia); setPreguntaBorrador(g.preguntaBorrador);
     setRespuestaActual(g.respuestaActual); setCalificacionActual(g.calificacionActual); setJustificacionCalificacion(g.justificacionCalificacion);
     setDisputaPregunta(g.disputaPregunta); setDisputaRespuesta(g.disputaRespuesta);
@@ -222,6 +236,7 @@ export default function ArbitroJuegoPage() {
   const continuarPartida = () => { if (rec.guardada) aplicarPartida(rec.guardada); };
   const empezarDeNuevo = () => {
     if (sessionId) borrarPartida(sessionId);
+    setPartidaId(nuevoIdPartida()); // partida nueva = id nuevo
     setRec({ guardada: null, resuelta: true });
   };
 
@@ -265,7 +280,7 @@ export default function ArbitroJuegoPage() {
     const sinDatos = pantalla === "setup" && !nombreEquipo1 && !nombreEquipo2 && !integrantesEquipo1 && !integrantesEquipo2;
     if (sinDatos) { borrarPartida(sessionId); return; }
     guardarPartida(sessionId, {
-      v: 1, expiresAt: sesion.expiresAt, guardadoEn: Date.now(),
+      v: 1, expiresAt: sesion.expiresAt, guardadoEn: Date.now(), partidaId,
       nombreEquipo1, nombreEquipo2, colorEquipo1, colorEquipo2, integrantesEquipo1, integrantesEquipo2,
       vueltasTotales,
       pantalla: pantalla === "arbitro" && !veredictoArbitro ? "disputa" : pantalla,
@@ -276,7 +291,7 @@ export default function ArbitroJuegoPage() {
       meta: [meta1E1, meta2E1, meta3E1, meta4E1, meta1E2, meta2E2, meta3E2, meta4E2],
     });
   }, [
-    sessionId, sesion, rec.resuelta, metaEnviada,
+    sessionId, sesion, rec.resuelta, metaEnviada, partidaId,
     nombreEquipo1, nombreEquipo2, colorEquipo1, colorEquipo2, integrantesEquipo1, integrantesEquipo2, vueltasTotales,
     pantalla, preguntaNumero, equipoPreguntaIdx, puntosEquipo1, puntosEquipo2, registros,
     preguntaActual, usarPreguntaPropia, preguntaBorrador, respuestaActual, calificacionActual, justificacionCalificacion,
@@ -284,6 +299,40 @@ export default function ArbitroJuegoPage() {
     veredictoArbitro, segundos, tiempoVencido, corriendo, sonidoActivo, metaEquipoActual,
     meta1E1, meta2E1, meta3E1, meta4E1, meta1E2, meta2E2, meta3E2, meta4E2,
   ]);
+
+  // ── Registro de rondas en el servidor ─────────────────────────────────────
+  // Cada ronda confirmada se registra con registrarRonda (el cliente no escribe directo en la base).
+  // La llamada es idempotente (id = partida + número de ronda): si falla la red, se reintenta; y si se
+  // recarga la página, las rondas que quedaron sin registrar (registrada !== true) se mandan al volver.
+  const rondasEnVuelo = useRef<Set<number>>(new Set());
+  const intentosRonda = useRef<Map<number, number>>(new Map());
+  const [reintentoTick, setReintentoTick] = useState(0);
+  useEffect(() => {
+    if (!sessionId || !sesion || !rec.resuelta) return;
+    const pendientes = registros.filter(r =>
+      r.registrada !== true && !rondasEnVuelo.current.has(r.ronda) && (intentosRonda.current.get(r.ronda) ?? 0) < 4
+      && (!r.fueAlArbitro || !!r.consultaId));
+    pendientes.forEach(r => {
+      rondasEnVuelo.current.add(r.ronda);
+      intentosRonda.current.set(r.ronda, (intentosRonda.current.get(r.ronda) ?? 0) + 1);
+      const fn = httpsCallable(getFunctions(app, "us-central1"), "registrarRonda");
+      fn({
+        sessionId, partidaId, ronda: r.ronda,
+        equipoPregunta: r.equipoPregunta, equipoResponde: r.equipoResponde,
+        pregunta: r.pregunta, calificacion: r.calificacion,
+        consultaId: r.consultaId, tiempoSegundos: r.tiempoSegundos,
+      })
+        .then(() => setRegistros(prev => prev.map(x => (x.ronda === r.ronda ? { ...x, registrada: true } : x))))
+        .catch((e: any) => {
+          console.error("registrarRonda:", e);
+          const code = String(e?.code || "");
+          // Errores que no se arreglan reintentando (sesión vencida, datos inválidos): no insistir.
+          if (/invalid-argument|failed-precondition|not-found/.test(code)) intentosRonda.current.set(r.ronda, 99);
+          else setTimeout(() => setReintentoTick(n => n + 1), 8000);
+        })
+        .finally(() => { rondasEnVuelo.current.delete(r.ronda); });
+    });
+  }, [registros, sessionId, sesion, rec.resuelta, partidaId, reintentoTick]);
 
   // ── Temporizador ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -534,6 +583,7 @@ export default function ArbitroJuegoPage() {
       fueAlArbitro,
       veredictoArbitro: veredicto,
       tiempoSegundos: segundos,
+      consultaId: fueAlArbitro ? veredictoArbitro?.consultaId : undefined,
     } as any]);
 
     // Limpiar estado de ronda
@@ -568,6 +618,7 @@ export default function ArbitroJuegoPage() {
       fueAlArbitro: true,
       veredictoArbitro: veredictoArbitro?.veredicto,
       tiempoSegundos: segundos,
+      consultaId: veredictoArbitro?.consultaId,
     }]);
     detenerTimer();
     setPreguntaActual("");
@@ -793,11 +844,29 @@ export default function ArbitroJuegoPage() {
   // Pantalla única: el equipo elige del banco (o escribe la suya), y recién
   // ahí arranca el cronómetro y se muestra la pregunta para leerla en voz alta.
   if (pantalla === "turno_pregunta") {
-    const escribiendoPropia = usarPreguntaPropia || preguntasDisponibles.length === 0;
+    // «Permitir preguntas propias» (opción de la sesión): si el docente la desactivó, solo se elige de la lista
+    // (salvo que la lista esté vacía: entonces no habría con qué jugar).
+    const permitirPropias = sesion.permitirPreguntasPropias !== false;
+    const escribiendoPropia = (permitirPropias && usarPreguntaPropia) || preguntasDisponibles.length === 0;
 
-    const confirmarPreguntaPropia = () => {
+    // Antes de pasarle la pregunta al otro equipo se verifica con Gemini que corresponda al texto base y al tema.
+    // Si no corresponde, se avisa y NO se gasta la ronda ni arranca el reloj. Si la verificación no está
+    // disponible (red, IA caída), se sigue: el árbitro igual puede marcar la pregunta como fuera de tema.
+    const confirmarPreguntaPropia = async () => {
       const texto = preguntaBorrador.trim();
-      if (!texto) return;
+      if (!texto || validandoPropia) return;
+      setErrorPropia(null);
+      setValidandoPropia(true);
+      let pertinente = true;
+      try {
+        const fn = httpsCallable(getFunctions(app, "us-central1"), "validarPreguntaPropia", { timeout: 20000 });
+        const res = await fn({ sessionId, pregunta: texto }) as { data: { pertinente?: boolean } };
+        pertinente = res.data?.pertinente !== false;
+      } catch (e) {
+        console.error("validarPreguntaPropia:", e);
+      }
+      setValidandoPropia(false);
+      if (!pertinente) { setErrorPropia(t.ownQuestionOffTopic); return; }
       setPreguntaActual(texto);
       iniciarTimer();
     };
@@ -920,11 +989,13 @@ export default function ArbitroJuegoPage() {
                     );
                   })}
                 </div>
-                <button
-                  onClick={() => { setUsarPreguntaPropia(true); setPreguntaBorrador(""); }}
-                  style={{ marginTop: 10, background: "none", border: "none", color: "#0369a1", fontSize: 12, fontWeight: 600, textDecoration: "underline", cursor: "pointer", padding: 0, minHeight: 44 }}>
-                  ✏️ Escribir mi propia pregunta
-                </button>
+                {permitirPropias && (
+                  <button
+                    onClick={() => { setUsarPreguntaPropia(true); setPreguntaBorrador(""); setErrorPropia(null); }}
+                    style={{ marginTop: 10, background: "none", border: "none", color: "#0369a1", fontSize: 12, fontWeight: 600, textDecoration: "underline", cursor: "pointer", padding: 0, minHeight: 44 }}>
+                    ✏️ Escribir mi propia pregunta
+                  </button>
+                )}
               </div>
             )}
 
@@ -937,20 +1008,27 @@ export default function ArbitroJuegoPage() {
                 <textarea
                   id="pregunta-propia"
                   value={preguntaBorrador}
-                  onChange={e => setPreguntaBorrador(e.target.value)}
+                  onChange={e => { setPreguntaBorrador(e.target.value); if (errorPropia) setErrorPropia(null); }}
+                  aria-describedby={errorPropia ? "pregunta-propia-error" : undefined}
+                  aria-invalid={errorPropia ? true : undefined}
                   rows={3}
                   placeholder="Escribí la pregunta que le van a hacer..."
                   style={{ ...inp, resize: "none", fontFamily: "inherit" }}
                 />
+                {errorPropia && (
+                  <div id="pregunta-propia-error" role="alert" style={{ marginTop: 10, backgroundColor: "#fff7ed", border: "1px solid #fdba74", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: PALETA.naranjaOscuro, lineHeight: 1.5 }}>
+                    🚫 {errorPropia}
+                  </div>
+                )}
                 <button
                   onClick={confirmarPreguntaPropia}
-                  disabled={!preguntaBorrador.trim()}
-                  style={{ ...btnPrimario(colors.gradient, !preguntaBorrador.trim()), marginTop: 10 }}>
-                  ✅ Confirmar pregunta
+                  disabled={!preguntaBorrador.trim() || validandoPropia}
+                  style={{ ...btnPrimario(colors.gradient, !preguntaBorrador.trim() || validandoPropia), marginTop: 10 }}>
+                  {validandoPropia ? `⏳ ${t.ownQuestionChecking}` : "✅ Confirmar pregunta"}
                 </button>
                 {preguntasDisponibles.length > 0 && (
                   <button
-                    onClick={() => { setUsarPreguntaPropia(false); setPreguntaBorrador(""); }}
+                    onClick={() => { setUsarPreguntaPropia(false); setPreguntaBorrador(""); setErrorPropia(null); }}
                     style={{ marginTop: 8, background: "none", border: "none", color: "#64748b", fontSize: 12, textDecoration: "underline", cursor: "pointer", padding: 0 }}>
                     ← Elegir de la lista
                   </button>
@@ -1478,6 +1556,7 @@ export default function ArbitroJuegoPage() {
           const fn = httpsCallable(getFunctions(app, "us-central1"), "guardarInformeArbitro");
           await fn({
             sessionId,
+            partidaId,
             modo: "competitivo",
             equipos: [
               { nombre: nombreEquipo1, color: colorEquipo1, integrantes: integrantesEquipo1, puntos: puntosEquipo1,
@@ -1485,7 +1564,7 @@ export default function ArbitroJuegoPage() {
               { nombre: nombreEquipo2, color: colorEquipo2, integrantes: integrantesEquipo2, puntos: puntosEquipo2,
                 respuestas: { q1: meta1E2, q2: meta2E2, q3: meta3E2, q4: meta4E2 } },
             ],
-            registros,
+            registros: registros.map(({ consultaId: _c, registrada: _r, ...resto }) => resto),
           });
           // Solo confirmamos éxito si la llamada realmente terminó bien.
           setMetaEnviada(true);

@@ -163,9 +163,23 @@ function playCompoundSound(name: SoundName) {
 let soundEnabled = true;
 
 if (typeof window !== 'undefined') {
-  const saved = localStorage.getItem('tlg-sound-enabled');
-  if (saved !== null) {
-    soundEnabled = saved === 'true';
+  // localStorage puede estar bloqueado (modo privado, cookies deshabilitadas): si tira error, el sonido queda activado.
+  try {
+    const saved = localStorage.getItem('tlg-sound-enabled');
+    if (saved !== null) {
+      soundEnabled = saved === 'true';
+    }
+  } catch {
+    /* sin almacenamiento: se usa el valor por defecto */
+  }
+}
+
+// Guardar la preferencia puede fallar si localStorage está bloqueado o lleno: el sonido igual cambia en esta sesión.
+function guardarPreferenciaSonido() {
+  try {
+    localStorage.setItem('tlg-sound-enabled', String(soundEnabled));
+  } catch {
+    /* sin almacenamiento: la preferencia no se recuerda */
   }
 }
 
@@ -185,13 +199,13 @@ export function useSound() {
 
   const toggle = () => {
     soundEnabled = !soundEnabled;
-    localStorage.setItem('tlg-sound-enabled', String(soundEnabled));
+    guardarPreferenciaSonido();
     return soundEnabled;
   };
 
   const setEnabled = (enabled: boolean) => {
     soundEnabled = enabled;
-    localStorage.setItem('tlg-sound-enabled', String(enabled));
+    guardarPreferenciaSonido();
   };
 
   const isEnabled = () => soundEnabled;
@@ -214,7 +228,7 @@ export const playSound = (name: SoundName) => {
 
 export const toggleSound = () => {
   soundEnabled = !soundEnabled;
-  localStorage.setItem('tlg-sound-enabled', String(soundEnabled));
+  guardarPreferenciaSonido();
   return soundEnabled;
 };
 

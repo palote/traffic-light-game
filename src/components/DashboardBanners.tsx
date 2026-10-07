@@ -8,6 +8,7 @@ import { database } from "../firebase.config";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import { useAuth } from "../contexts/AuthContext";
+import { almacenSesion } from "../utils/almacenSeguro";
 
 interface ReferralConfig {
   active: boolean;
@@ -95,18 +96,18 @@ export function DashboardBanners() {
 
   // Recuperar dismissed de sessionStorage al montar
   useEffect(() => {
-    if (sessionStorage.getItem("webinar_dismissed") === "true") setWebinarDismissed(true);
-    if (sessionStorage.getItem("webinar2_dismissed") === "true") setWebinarDismissed2(true); // ✅ NUEVO
+    if (almacenSesion.getItem("webinar_dismissed") === "true") setWebinarDismissed(true);
+    if (almacenSesion.getItem("webinar2_dismissed") === "true") setWebinarDismissed2(true); // ✅ NUEVO
   }, []);
 
   const handleDismissWebinar = () => {
     setWebinarDismissed(true);
-    sessionStorage.setItem("webinar_dismissed", "true");
+    almacenSesion.setItem("webinar_dismissed", "true");
   };
 
   const handleDismissWebinar2 = () => { // ✅ NUEVO
     setWebinarDismissed2(true);
-    sessionStorage.setItem("webinar2_dismissed", "true");
+    almacenSesion.setItem("webinar2_dismissed", "true");
   };
 
   const formatWebinarDate = (dateString: string) => {

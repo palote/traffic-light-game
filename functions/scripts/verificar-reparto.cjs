@@ -27,7 +27,7 @@ console.log("OK: 6 repartos de la tabla + variantes válidas; valores fuera de l
 const SESION = { docenteUid: "u", materia: "Historia", nivel: "Secundaria", anio: "3", tema: "Egipto", textoFuente: "Texto base.", expiresAt: new Date(Date.now() + 3600e3).toISOString() };
 const vacio = { empty: true, docs: [], exists: false, data: () => ({}) };
 let consultas = [];
-const docRef = () => ({ get: async () => ({ exists: true, data: () => SESION }), update: async () => {}, collection: () => ({ add: async (d) => { consultas.push(d); }, get: async () => vacio }) });
+const docRef = () => ({ get: async () => ({ exists: true, data: () => SESION }), update: async () => {}, collection: () => ({ add: async (d) => { consultas.push(d); return { id: "c" + consultas.length }; }, get: async () => vacio }) });
 const fakeDb = { collection: () => ({ doc: docRef }) };
 const fakeAdmin = { apps: [{}], initializeApp() {}, firestore: Object.assign(() => fakeDb, { FieldValue: {}, Timestamp: {} }), auth: () => ({}), storage: () => ({}) };
 let respuestaGemini = ""; let ultimoPrompt = "";

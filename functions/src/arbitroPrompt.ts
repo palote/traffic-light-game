@@ -54,6 +54,48 @@ export function criterioDeArea(area: unknown): string {
   return k ? CRITERIO_COMPLETA_POR_AREA[k] : "";
 }
 
+// ── Criterio de pertinencia (compartido) ──────────────────────────────────────
+// Lo usan el árbitro (para decidir "fuera_de_tema") y la validación de preguntas propias
+// (validarPreguntaPropia): una pregunta escrita por un equipo se juzga con el MISMO criterio con el que
+// el árbitro rechazaría la pregunta. Con texto base el criterio es el texto; sin texto base, el área y el
+// tema, con margen amplio.
+export function reglaPertinencia(params: { materia: string; tema: string; hayTexto: boolean }): { criterio: string; ajena: string } {
+  const { materia, tema, hayTexto } = params;
+  if (hayTexto) {
+    return {
+      criterio: "Una pregunta es pertinente si puede responderse o evaluarse usando el TEXTO BASE de la sesión. No rechaces por comparación literal con el nombre del tema: usá el texto base como criterio de pertinencia.",
+      ajena: "la pregunta es claramente ajena al texto base y al tema, o no tiene ningún contenido",
+    };
+  }
+  return {
+    criterio: "Una pregunta es pertinente si corresponde razonablemente al área y al tema configurados, entendidos con criterio amplio: una materia incluye sus subtemas, sus períodos y temas vecinos, y también las preguntas sobre la disciplina misma (sus métodos, sus fuentes, sus ciencias auxiliares). Ante la duda, arbitrá: es mejor dar un veredicto que rechazar.",
+    ajena: `la pregunta es claramente ajena a ${materia} y al tema "${tema}", o no tiene ningún contenido`,
+  };
+}
+
+// Prompt corto para validar una pregunta propia ANTES de pasársela al otro equipo.
+export function buildPromptPreguntaPropia(params: {
+  materia: string; nivel: string; anio: string; tema: string; subtema?: string; textoFuente?: string; pregunta: string;
+}): string {
+  const { materia, nivel, anio, tema, subtema, textoFuente, pregunta } = params;
+  const regla = reglaPertinencia({ materia, tema, hayTexto: !!textoFuente });
+  const texto = textoFuente ? `\nTEXTO BASE DE LA SESIÓN:\n"""\n${textoFuente.substring(0, 8000)}\n"""\n` : "";
+  return `Sos un verificador de pertinencia para un juego de preguntas en clase de ${materia} (${nivel}, ${anio}° año).
+Tema: "${tema}"${subtema ? `\nSubtema: "${subtema}"` : ""}
+${texto}
+Un equipo escribió esta pregunta para hacérsela al otro equipo:
+"""
+${pregunta.replace(/"""/g, '"').slice(0, 500)}
+"""
+
+PERTINENCIA: juzgá SOLO si la pregunta corresponde a la sesión; no juzgues si está bien redactada ni si es fácil o difícil.
+${regla.criterio}
+Si ${regla.ajena}, la pregunta NO es pertinente.
+
+Respondé ÚNICAMENTE con JSON válido, sin backticks ni texto extra:
+{"pertinente": true, "motivo": "una frase corta"}   (usá false si no es pertinente)`;
+}
+
 // ── Prompt del árbitro ────────────────────────────────────────────────────────
 
 // Contexto opcional. VACÍO por defecto: con `contexto` omitido (o con los tres
@@ -109,25 +151,27 @@ export function buildArbitroPrompt(params: {
   // Lo carga el docente al crear la sesión y viaja en el documento de Firestore,
   // no desde el cliente. Se recorta a 8000 caracteres para acotar el prompt.
   const textoFuenteBlock = textoFuente
-    ? `\nTEXTO BASE DE LA SESIÓN:\n"""\n${textoFuente.substring(0, 8000)}\n"""\n\nFundamentá tu veredicto señalando qué parte del texto sostiene cada posición. Si el texto no alcanza para decidir entre las dos, decilo explícitamente en vez de inventar un fundamento.\n`
+    ? `\nTEXTO BASE DE LA SESIÓN:\n"""\n${textoFuente.substring(0, 8000)}\n"""\n\nFundamentá tu veredicto señalando qué parte del texto sostiene cada posición. Si el texto no alcanza para decidir entre las dos, decilo explícitamente en vez de inventar un fundamento. El texto sirve para verificar conceptos: no exijas que la respuesta repita sus palabras.\n`
     : "";
 
   // ── Formato de respuesta JSON (compartido) ────────────────────────────────
   const jsonFormat = `Respondé ÚNICAMENTE con JSON válido sin backticks ni texto extra:
 {
   "resultado": "A",
-  "elementosClave": "qué elementos específicos necesitaría una respuesta completa a ESTA pregunta puntual (uno solo, o varios si la pregunta lo requiere), y cuáles de esos mencionó el equipo de forma concreta y no genérica",
+  "elementosClave": "qué elementos específicos necesitaría una respuesta completa a ESTA pregunta puntual (uno solo, o varios si la pregunta lo requiere), y cuáles de esos mencionó el equipo de forma concreta y no genérica (aunque lo haya dicho con otras palabras)",
   "calificacionRecomendada": "completa",${esJuegoOral ? `
   "tieneRazon": "pregunta" | "responde" | "ambos" | "ninguno",
   "grado": "total" | "parcial",` : ""}
   "veredicto": "${esJuegoOral ? "una oración que dice quién tiene razón, nombrando al equipo, coherente con tieneRazon" : "una oración que resume quién tiene razón"}",
   "explicacion": "2-3 oraciones explicando el concepto de forma pedagógica",
-  "paraSeguirPensando": "una pregunta que invite al grupo a seguir reflexionando"
+  "paraSeguirPensando": "una pregunta que invite al grupo a seguir reflexionando sobre la comprensión del concepto (por qué, cómo, con qué se relaciona), nunca sobre la terminología literal"
 }
 
 El campo "elementosClave" es un paso de análisis obligatorio que tenés que resolver ANTES de decidir "calificacionRecomendada": pensá primero qué necesitaría decir una respuesta completa a esta pregunta puntual, y compará eso con lo que el equipo realmente dijo. No lo saltees — la categoría de abajo tiene que salir de esa comparación, no de una impresión general.
 
-REGLA DE COMPLETITUD: las partes que hacen completa una respuesta se sacan de lo que PIDE LA PREGUNTA, no de todo lo que se podría decir sobre el tema. Una respuesta es completa si da lo que la pregunta pide, aunque quede información relevante sin mencionar. Si la sesión tiene TEXTO BASE, usalo para verificar que lo que dijo el equipo es correcto; NO lo uses para exigir información que la pregunta no pidió. Ejemplos: si la pregunta pide «identificá el error», la respuesta es completa si identifica el error y lo corrige (no hace falta que además explique cómo o por qué se produjo); si pide «nombrá dos causas», es completa con dos causas correctas.${esJuegoOral ? `
+REGLA DE COMPLETITUD: las partes que hacen completa una respuesta se sacan de lo que PIDE LA PREGUNTA, no de todo lo que se podría decir sobre el tema. Una respuesta es completa si da lo que la pregunta pide, aunque quede información relevante sin mencionar. Si la sesión tiene TEXTO BASE, usalo para verificar que lo que dijo el equipo es correcto; NO lo uses para exigir información que la pregunta no pidió. Ejemplos: si la pregunta pide «identificá el error», la respuesta es completa si identifica el error y lo corrige (no hace falta que además explique cómo o por qué se produjo); si pide «nombrá dos causas», es completa con dos causas correctas.
+
+EVALUÁ EL CONCEPTO, NO LAS PALABRAS: una respuesta es correcta si expresa el concepto correcto, aunque lo diga con otras palabras que las del texto base o las de quien preguntó. Los sinónimos, las paráfrasis y los términos equivalentes valen igual: por ejemplo, «vestigios» o «restos arqueológicos» corresponden a «fuentes materiales». NUNCA marques una respuesta como incorrecta o incompleta solo porque no usó las palabras exactas del texto, y no le des peso a un argumento que se reduzca a «no dijo la palabra». Para cada elemento de "elementosClave" preguntate si el equipo lo expresó como concepto, con las palabras que fueran. En "paraSeguirPensando" apuntá a la comprensión del concepto (por qué, cómo, con qué se relaciona), nunca a recordar la palabra exacta del texto.${esJuegoOral ? `
 
 Los campos "tieneRazon" y "grado" dicen quién tiene razón en la disputa y en qué medida (se explican más abajo). Vos NO escribís puntajes: el sistema calcula el reparto del punto a partir de esos dos campos. "tieneRazon" debe ser exactamente uno de: "pregunta", "responde", "ambos", "ninguno". "grado" debe ser exactamente uno de: "total", "parcial".` : ""}
 
@@ -145,14 +189,10 @@ El campo "calificacionRecomendada" es INDEPENDIENTE de "resultado": indica qué 
   // texto base, el área y el tema, con margen amplio.
   const jsonFueraDeTema = `{"resultado":"fuera_de_tema","calificacionRecomendada":"no","veredicto":"Este desacuerdo no corresponde al tema de la sesión.","explicacion":"El árbitro solo puede intervenir en desacuerdos sobre ${materia} — tema: ${tema}. Como la pregunta no corresponde al tema, no corresponde puntaje por esta respuesta.","paraSeguirPensando":"¿La pregunta que querían plantear sí tiene que ver con ${tema}?"}`;
 
-  const validacionTema = textoFuente
-    ? `PERTINENCIA: juzgá la pertinencia SOLO por la pregunta que se hizo — no por la calidad de la respuesta ni de los argumentos. Una respuesta floja, vaga o casi vacía NO vuelve la pregunta "fuera de tema": eso se resuelve con la calificación, no rechazando el arbitraje.
-Una pregunta es pertinente si puede responderse o evaluarse usando el TEXTO BASE de la sesión. No rechaces por comparación literal con el nombre del tema: usá el texto base como criterio de pertinencia.
-Solo si la pregunta es claramente ajena al texto base y al tema, o no tiene ningún contenido, respondé exactamente:
-${jsonFueraDeTema}`
-    : `PERTINENCIA: juzgá la pertinencia SOLO por la pregunta que se hizo — no por la calidad de la respuesta ni de los argumentos. Una respuesta floja, vaga o casi vacía NO vuelve la pregunta "fuera de tema": eso se resuelve con la calificación, no rechazando el arbitraje.
-Una pregunta es pertinente si corresponde razonablemente al área y al tema configurados, entendidos con criterio amplio: una materia incluye sus subtemas, sus períodos y temas vecinos, y también las preguntas sobre la disciplina misma (sus métodos, sus fuentes, sus ciencias auxiliares). Ante la duda, arbitrá: es mejor dar un veredicto que rechazar.
-Solo si la pregunta es claramente ajena a ${materia} y al tema "${tema}", o no tiene ningún contenido, respondé exactamente:
+  const regla = reglaPertinencia({ materia, tema, hayTexto: !!textoFuente });
+  const validacionTema = `PERTINENCIA: juzgá la pertinencia SOLO por la pregunta que se hizo — no por la calidad de la respuesta ni de los argumentos. Una respuesta floja, vaga o casi vacía NO vuelve la pregunta "fuera de tema": eso se resuelve con la calificación, no rechazando el arbitraje.
+${regla.criterio}
+Solo si ${regla.ajena}, respondé exactamente:
 ${jsonFueraDeTema}`;
 
   // ── Contexto específico del juego oral competitivo (Árbitro de Aprendizaje) ─
@@ -168,6 +208,7 @@ Además de "calificacionRecomendada", tenés que decir quién tiene razón en la
 - "tieneRazon": "pregunta" si tiene razón el equipo que preguntó (la calificación que le puso a la respuesta se sostiene); "responde" si tiene razón el equipo que respondió (la calificación era injusta: su respuesta merecía más); "ambos" si los dos tienen parte de razón; "ninguno" si ninguna de las dos posiciones se sostiene con el texto o el tema.
 - "grado": "total" si quien tiene razón la tiene por completo; "parcial" si la tiene solo en parte. Con "ambos" o "ninguno" poné "parcial".
 El "veredicto" tiene que decir lo mismo que "tieneRazon": si es "pregunta", tiene razón ${nombrePregunta ? `"${nombrePregunta}"` : "el equipo que preguntó"}; si es "responde", tiene razón ${nombreResponde ? `"${nombreResponde}"` : "el equipo que respondió"}; si es "ambos" o "ninguno", el veredicto lo dice así. Nunca nombres a un equipo como ganador si "tieneRazon" apunta al otro.
+COHERENCIA CON "grado": el texto de "veredicto" y de "explicacion" tiene que decir lo mismo que "tieneRazon" y "grado". Si "grado" es "parcial", NO puede decir que la respuesta es incorrecta, errónea o está mal: tiene que decir qué parte es correcta y qué parte falta o es discutible. Reservá la palabra «incorrecta» para un error conceptual o factual real, y en ese caso corresponde "grado": "total" a favor de quien lo señala.
 
 Muy importante: evaluá el mérito real de cada argumento, no quién escribió más o con más convicción. Si el equipo que preguntó solo dijo "está incompleta" sin explicar qué falta, eso pesa poco frente a una respuesta bien fundamentada — en ese caso inclinate por "responde".
 ` : "";

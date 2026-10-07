@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import './PWAMiniBadge.css';
+import { almacenLocal } from "../utils/almacenSeguro";
 
 interface PWAMiniBadgeProps {
   onInstallClick?: () => void;  // Callback para disparar instalación
@@ -18,7 +19,7 @@ export const PWAMiniBadge = ({ onInstallClick }: PWAMiniBadgeProps) => {
     if (isInstalled) return;
 
     // Verificar si ya se cerró recientemente
-    const dismissed = localStorage.getItem('pwa-mini-badge-dismissed');
+    const dismissed = almacenLocal.getItem('pwa-mini-badge-dismissed');
     if (dismissed && Date.now() < parseInt(dismissed)) {
       return; // No mostrar si fue cerrado hace menos de 7 días
     }
@@ -48,7 +49,7 @@ export const PWAMiniBadge = ({ onInstallClick }: PWAMiniBadgeProps) => {
     
     // Recordar que se cerró (por 7 días)
     const hideUntil = Date.now() + (7 * 24 * 60 * 60 * 1000);
-    localStorage.setItem('pwa-mini-badge-dismissed', hideUntil.toString());
+    almacenLocal.setItem('pwa-mini-badge-dismissed', hideUntil.toString());
   };
 
   if (!show) return null;

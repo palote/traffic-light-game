@@ -8,6 +8,7 @@ import { pt } from './pt';
 import type { TranslationKeys } from './es';
 import { esRutaArbitro } from '../utils/arbitroRoutes';
 import { formatearPuntos, type IdiomaPuntos } from '../utils/formatoPuntos';
+import { almacenLocal } from "../utils/almacenSeguro";
 
 // ============================================
 // TIPOS
@@ -39,7 +40,7 @@ const translations: Record<Language, TranslationKeys> = {
 
 function getInitialLanguage(): Language {
   // 1. Verificar localStorage
-  const saved = localStorage.getItem('tlg_language');
+  const saved = almacenLocal.getItem('tlg_language');
   if (saved === 'es' || saved === 'en' || saved === 'pt') {
     return saved;
   }
@@ -88,7 +89,7 @@ export function I18nProvider({ children, defaultLanguage }: I18nProviderProps) {
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
-    localStorage.setItem('tlg_language', lang);
+    almacenLocal.setItem('tlg_language', lang);
   };
 
   // En las rutas del árbitro (/arbitro*, /sesion/*) el idioma del documento es

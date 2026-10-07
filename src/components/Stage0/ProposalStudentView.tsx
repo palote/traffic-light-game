@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { ref, onValue, off, push, get, update, set } from "firebase/database";
 import { database } from "../../firebase.config";
 import { useI18n } from "../../i18n";
+import { almacenSesion } from "../../utils/almacenSeguro";
 
 interface MaterialItem {
   id: string;
@@ -127,8 +128,8 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
   // ✅ NUEVO: Registrar conexión del equipo al montar
   useEffect(() => {
     const registerConnection = async () => {
-      const sessionId = sessionStorage.getItem('playerSessionId') || `player_${Date.now()}`;
-      sessionStorage.setItem('playerSessionId', sessionId);
+      const sessionId = almacenSesion.getItem('playerSessionId') || `player_${Date.now()}`;
+      almacenSesion.setItem('playerSessionId', sessionId);
 
       try {
         // Registrar el jugador en el equipo (usa nombre traducido)

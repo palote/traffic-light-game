@@ -28,6 +28,8 @@ export interface RegistroGuardado {
   fueAlArbitro: boolean;
   veredictoArbitro?: string;
   tiempoSegundos?: number;
+  consultaId?: string;
+  registrada?: boolean;
 }
 
 export interface VeredictoGuardado {
@@ -38,6 +40,7 @@ export interface VeredictoGuardado {
   veredicto: string;
   explicacion: string;
   paraSeguirPensando: string;
+  consultaId?: string;
 }
 
 export interface PartidaGuardada {
@@ -45,6 +48,8 @@ export interface PartidaGuardada {
   /** Vencimiento de la sesión (ISO) cuando se guardó: sirve para descartar guardados vencidos. */
   expiresAt: string;
   guardadoEn: number;
+  /** Id de la partida (une las rondas registradas en el servidor). Los guardados viejos no lo tienen. */
+  partidaId?: string;
   nombreEquipo1: string; nombreEquipo2: string;
   colorEquipo1: string; colorEquipo2: string;
   integrantesEquipo1: string; integrantesEquipo2: string;
@@ -84,13 +89,15 @@ function registroValido(r: any): r is RegistroGuardado {
   return !!r && esNum(r.ronda) && esStr(r.equipoPregunta) && esStr(r.equipoResponde) && esStr(r.pregunta)
     && esStr(r.respuesta) && CALIF_REGISTRO.includes(r.calificacion) && esNum(r.puntos) && esBool(r.fueAlArbitro)
     && (r.veredictoArbitro === undefined || esStr(r.veredictoArbitro))
-    && (r.tiempoSegundos === undefined || esNum(r.tiempoSegundos));
+    && (r.tiempoSegundos === undefined || esNum(r.tiempoSegundos))
+    && (r.consultaId === undefined || esStr(r.consultaId)) && (r.registrada === undefined || esBool(r.registrada));
 }
 
 function veredictoValido(v: any): v is VeredictoGuardado {
   return !!v && RESULTADOS.includes(v.resultado) && esStr(v.veredicto) && esStr(v.explicacion) && esStr(v.paraSeguirPensando)
     && (v.puntosResponde === undefined || esNum(v.puntosResponde))
-    && (v.puntosPregunta === undefined || esNum(v.puntosPregunta));
+    && (v.puntosPregunta === undefined || esNum(v.puntosPregunta))
+    && (v.consultaId === undefined || esStr(v.consultaId));
 }
 
 /** Valida un objeto leído de localStorage. Devuelve null si algo no cierra (datos viejos, corruptos o manipulados). */
@@ -111,6 +118,7 @@ export function validarPartida(raw: unknown): PartidaGuardada | null {
   if (![null, "completa", "incompleta", "no", "pasada"].includes(p.calificacionActual)) return null;
   if (!Array.isArray(p.registros) || !p.registros.every(registroValido)) return null;
   if (p.veredictoArbitro !== null && !veredictoValido(p.veredictoArbitro)) return null;
+  if (p.partidaId !== undefined && !esStr(p.partidaId)) return null;
   if (!Array.isArray(p.meta) || p.meta.length !== 8 || !p.meta.every(esStr)) return null;
   return p as PartidaGuardada;
 }

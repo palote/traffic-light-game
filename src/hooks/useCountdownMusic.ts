@@ -5,6 +5,8 @@
 //         cuando stopCountdownMusic() se llama y masterGain = null
 //         pero musicLoop sigue corriendo durante el fade out de 600ms.
 
+import { almacenLocal } from "../utils/almacenSeguro";
+
 let audioContext: AudioContext | null = null;
 let isPlaying = false;
 let animationFrameId: number | null = null;
@@ -439,7 +441,7 @@ let musicEnabled = true;
 
 // Cargar preferencia
 if (typeof window !== 'undefined') {
-  const saved = localStorage.getItem('tlg-music-enabled');
+  const saved = almacenLocal.getItem('tlg-music-enabled');
   if (saved !== null) {
     musicEnabled = saved === 'true';
   }
@@ -447,7 +449,7 @@ if (typeof window !== 'undefined') {
 
 export function toggleCountdownMusic(): boolean {
   musicEnabled = !musicEnabled;
-  localStorage.setItem('tlg-music-enabled', String(musicEnabled));
+  almacenLocal.setItem('tlg-music-enabled', String(musicEnabled));
   
   if (!musicEnabled && isPlaying) {
     stopCountdownMusic();
@@ -462,7 +464,7 @@ export function isCountdownMusicEnabled(): boolean {
 
 export function setCountdownMusicEnabled(enabled: boolean) {
   musicEnabled = enabled;
-  localStorage.setItem('tlg-music-enabled', String(enabled));
+  almacenLocal.setItem('tlg-music-enabled', String(enabled));
   
   if (!enabled && isPlaying) {
     stopCountdownMusic();

@@ -24,6 +24,7 @@ import { Stage0TeamView, Stage0TeacherPanel } from "./Stage0";
 import { useI18n } from "../i18n";
 
 import "./GameController.css";
+import { almacenLocal } from "../utils/almacenSeguro";
 
 /* =========================
    Helpers de normalización
@@ -108,12 +109,12 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
   const [showStage0TeacherPanel, setShowStage0TeacherPanel] = useState(false);
 
   const [devStage2ViewMode, setDevStage2ViewMode] = useState<DevStage2ViewMode>(() => {
-    const v = localStorage.getItem("devStage2ViewMode") as DevStage2ViewMode | null;
+    const v = almacenLocal.getItem("devStage2ViewMode") as DevStage2ViewMode | null;
     return v ?? "auto";
   });
 
   const [devStage2TeamId, setDevStage2TeamId] = useState<string>(() => {
-    return localStorage.getItem("devStage2TeamId") || teamId || "teamA";
+    return almacenLocal.getItem("devStage2TeamId") || teamId || "teamA";
   });
 
   const { language = "es" } = useI18n();
@@ -158,11 +159,11 @@ export function GameController({ gameId, teamId, isTeacher = false }: GameContro
   const driveLink = (game?.config as any)?.driveLink ?? null;
 
   useEffect(() => {
-    localStorage.setItem("devStage2ViewMode", devStage2ViewMode);
+    almacenLocal.setItem("devStage2ViewMode", devStage2ViewMode);
   }, [devStage2ViewMode]);
 
   useEffect(() => {
-    localStorage.setItem("devStage2TeamId", devStage2TeamId);
+    almacenLocal.setItem("devStage2TeamId", devStage2TeamId);
   }, [devStage2TeamId]);
 
   /* =========================

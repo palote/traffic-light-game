@@ -2,6 +2,7 @@
 // Contexto para manejar el modo de juego (Traffic Light vs Coopetition)
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { almacenLocal } from "../utils/almacenSeguro";
 
 // ============================================
 // TIPOS
@@ -141,7 +142,7 @@ function getInitialGameMode(): GameMode {
 
   // 3. localStorage
   try {
-    const saved = localStorage.getItem('tlg_gameMode');
+    const saved = almacenLocal.getItem('tlg_gameMode');
     if (saved === 'coopetition' || saved === 'traffic-light') {
       return saved as GameMode;
     }
@@ -167,7 +168,7 @@ export function GameModeProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<GameMode>(() => getInitialGameMode());
 
   useEffect(() => {
-    localStorage.setItem('tlg_gameMode', mode);
+    almacenLocal.setItem('tlg_gameMode', mode);
   }, [mode]);
 
   const setMode = (newMode: GameMode) => {
@@ -177,7 +178,7 @@ export function GameModeProvider({ children }: { children: ReactNode }) {
   // Obtener idioma del localStorage o default
   const getLanguage = (): string => {
     try {
-      return localStorage.getItem('tlg_language') || 'es';
+      return almacenLocal.getItem('tlg_language') || 'es';
     } catch {
       return 'es';
     }

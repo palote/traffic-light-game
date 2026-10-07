@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useI18n } from "../i18n";
 import { useGameMode } from "../contexts/GameModeContext";
+import { almacenLocal } from "../utils/almacenSeguro";
 
 const EQ_TYPES = [
   {
@@ -91,7 +92,7 @@ export default function EcuacionesGeneratorPage() {
   const [error, setError] = useState<string | null>(null);
   const [downloaded, setDownloaded] = useState(false);
 
-  const getUses = () => parseInt(localStorage.getItem(STORAGE_KEY) || "0", 10);
+  const getUses = () => parseInt(almacenLocal.getItem(STORAGE_KEY) || "0", 10);
   const canUse = () => user || getUses() < FREE_LIMIT;
   const usesLeft = FREE_LIMIT - getUses();
 
@@ -124,7 +125,7 @@ export default function EcuacionesGeneratorPage() {
       const a = document.createElement("a");
       a.href = url; a.download = filename; a.click();
       URL.revokeObjectURL(url);
-      if (!user) localStorage.setItem(STORAGE_KEY, String(getUses() + 1));
+      if (!user) almacenLocal.setItem(STORAGE_KEY, String(getUses() + 1));
       setDownloaded(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error al generar el archivo.");

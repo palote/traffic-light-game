@@ -24,7 +24,7 @@ const docRef = (id) => ({
   collection: (sub) => ({
     orderBy: () => ({ get: async () => ({ empty: false, docs: consultasDocs }) }),
     get: async () => sub === "consultas" ? { empty: false, docs: consultasDocs } : vacio,
-    add: async () => { consultasAgregadas++; },
+    add: async () => { consultasAgregadas++; return { id: "c1" }; },
   }),
 });
 const fakeDb = { collection: () => ({ doc: docRef, where: () => ({ get: async () => vacio, orderBy: () => ({ get: async () => vacio, limit: () => ({ get: async () => vacio }) }) }) }) };

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { useArbitroT, useFormatoPuntos } from "../i18n";
+import { useArbitroT, useFormatoPuntos, fillArbitro } from "../i18n";
 import { esIaNoDisponible } from "../utils/arbitroErrores";
 import { useNavigate } from "react-router-dom";
 import { app } from "../firebase.config";
@@ -22,6 +22,7 @@ interface SesionResumen {
   tieneInforme: boolean;
   partidasCount?: number;
   textoFuente?: string;
+  docenteUid?: string;
 }
 
 // Coincide EXACTAMENTE con el JSON que devuelve generarInformeSesion en
@@ -51,6 +52,7 @@ interface InformeMetacognicion {
     ensenanza: string;
   };
   creadoEn: string;
+  partidaId?: string; // une el informe con las rondas registradas (registrarRonda)
   // Detalle ronda por ronda de esta partida — lo guarda guardarInformeArbitro
   // a partir de lo jugado en ArbitroJuegoPage.tsx (modo competitivo).
   registros?: Array<{
@@ -66,6 +68,43 @@ interface InformeMetacognicion {
   }>;
 }
 
+// Ronda registrada por registrarRonda (sesiones_arbitro/{id}/rondas). Solo nombres de equipos.
+interface RepartoRonda { puntosPregunta: number; puntosResponde: number; tieneRazon: string | null; grado: string | null }
+interface RondaDoc {
+  id: string;
+  partidaId: string;
+  ronda: number;
+  equipoPregunta: string;
+  equipoResponde: string;
+  pregunta: string;
+  calificacion: "completa" | "incompleta" | "no" | "pasada" | "fuera_de_tema";
+  estado: string;
+  fueAlArbitro: boolean;
+  reparto: RepartoRonda;
+  disputa: null | {
+    planteo: string; posicionPregunta: string; posicionResponde: string; resultado: string;
+    veredicto: string; explicacion: string; paraSeguirPensando: string; repartoOriginal: RepartoRonda;
+  };
+  correccion: null | { repartoOriginal: RepartoRonda; repartoNuevo: RepartoRonda; fecha: string; docenteUid: string };
+}
+interface TotalPartida { partidaId: string; rondasCorregidas: number; equipos: Array<{ nombre: string; puntosAlumnos: number; puntosFinales: number }> }
+interface RondasData {
+  rondas: RondaDoc[];
+  totales: TotalPartida[];
+  resumen: { rondasConVeredicto: number; rondasCorregidas: number };
+  puedeCorregir: boolean;
+}
+
+// Los 6 repartos posibles (misma tabla que el servidor): [puntos de quien preguntó, puntos de quien respondió].
+const OPCIONES_REPARTO: Array<{ key: string; puntos: [number, number] }> = [
+  { key: "pregunta|total", puntos: [1, 0] },
+  { key: "pregunta|parcial", puntos: [0.75, 0.25] },
+  { key: "ambos|parcial", puntos: [0.5, 0.5] },
+  { key: "responde|parcial", puntos: [0.25, 0.75] },
+  { key: "responde|total", puntos: [0, 1] },
+  { key: "ninguno|parcial", puntos: [0, 0] },
+];
+
 interface InformeSesion {
   resumenEjecutivo: string;
   conceptosDebatidos: string[];
@@ -79,9 +118,13 @@ interface InformeSesion {
   // pueden terminar de jugar después de la primera vez que se generó).
   totalConsultas?: number;
   totalConsultasActual?: number;
+  // Cuándo se generó el informe con Gemini (ISO): se compara con la fecha de las correcciones del docente.
+  generadoEn?: string;
   // Rondas que los equipos pasaron sin responder: quedan fuera del análisis
   // pedagógico pero se listan aparte porque señalan dificultad.
   rondasPasadas?: Array<{ pregunta: string; equipoPregunta: string; tiempoSegundos?: number | null }>;
+  // Rondas que el docente corrigió y totales recalculados (se calculan en cada lectura).
+  correcciones?: { rondasConVeredicto: number; rondasCorregidas: number; totales: TotalPartida[] };
 }
 
 // Los colores por área viven en utils/arbitroPalette.ts (clave corta); las sesiones
@@ -113,6 +156,12 @@ export default function ArbitroPanelPage() {
   const [modoAdmin, setModoAdmin] = useState(false);
   const [todasSesiones, setTodasSesiones] = useState<SesionResumen[]>([]);
   const [loadingAdmin, setLoadingAdmin] = useState(false);
+  const [rondasData, setRondasData] = useState<RondasData | null>(null);
+  const [loadingRondas, setLoadingRondas] = useState(false);
+  const [errorRondas, setErrorRondas] = useState("");
+  const [seleccion, setSeleccion] = useState<Record<string, string>>({});
+  const [corrigiendo, setCorrigiendo] = useState<string | null>(null);
+  const [errorCorreccion, setErrorCorreccion] = useState<{ id: string; msg: string } | null>(null);
 
   useEffect(() => {
     if (authLoading) return; // esperar a que Firebase Auth termine de restaurar la sesión
@@ -125,11 +174,46 @@ export default function ArbitroPanelPage() {
       .catch((e: any) => { setError(e.message); setLoading(false); });
   }, [authLoading, user]);
 
+  const cargarRondas = (sessionId: string) => {
+    setRondasData(null);
+    setErrorRondas("");
+    setLoadingRondas(true);
+    const fn = httpsCallable(functions, "listarRondasSesion");
+    fn({ sessionId })
+      .then((res: any) => { setRondasData(res.data as RondasData); })
+      .catch((e: any) => { setErrorRondas(e?.message || ta.roundsError); })
+      .finally(() => setLoadingRondas(false));
+  };
+
+  // Corrección del docente: cambia el reparto de una ronda con veredicto. La verifica el servidor
+  // (solo el docente dueño de la sesión). No cambia el marcador que ya vieron los alumnos.
+  const corregirRonda = async (r: RondaDoc) => {
+    const elegida = seleccion[r.id];
+    if (!elegida || !sesionSeleccionada) return;
+    const [tieneRazon, grado] = elegida.split("|");
+    setCorrigiendo(r.id);
+    setErrorCorreccion(null);
+    try {
+      const fn = httpsCallable(functions, "corregirRonda");
+      await fn({ sessionId: sesionSeleccionada.id, rondaId: r.id, tieneRazon, grado });
+      const lista = httpsCallable(functions, "listarRondasSesion");
+      const res = await lista({ sessionId: sesionSeleccionada.id }) as any;
+      setRondasData(res.data as RondasData);
+      setSeleccion(prev => { const n = { ...prev }; delete n[r.id]; return n; });
+    } catch (e: any) {
+      setErrorCorreccion({ id: r.id, msg: String(e?.code || "").endsWith("permission-denied") ? ta.correctOnlyOwner : ta.correctError });
+    }
+    setCorrigiendo(null);
+  };
+
   const verInforme = async (sesion: SesionResumen, forceRegenerar = false) => {
     setSesionSeleccionada(sesion);
     setInforme(null);
     setErrorInforme("");
     setLoadingInforme(true);
+
+    // Rondas registradas (con veredicto y reparto) en paralelo
+    cargarRondas(sesion.id);
 
     // Cargar metacogniciones en paralelo
     setLoadingMeta(true);
@@ -171,6 +255,32 @@ export default function ArbitroPanelPage() {
     setLoadingAdmin(false);
   };
 
+  // ── Rondas: textos auxiliares ───────────────────────────────────────────
+  const repartoTxt = (r: RondaDoc, rep: { puntosPregunta: number; puntosResponde: number }) =>
+    `${r.equipoPregunta} ${fmt(rep.puntosPregunta)} · ${r.equipoResponde} ${fmt(rep.puntosResponde)}`;
+  const textoOpcion = (key: string, r: RondaDoc) => {
+    const quien = key.startsWith("pregunta") ? r.equipoPregunta : r.equipoResponde;
+    const base = key.endsWith("|total") ? fillArbitro(ta.optTotal, { team: quien })
+      : key === "ambos|parcial" ? ta.optBoth
+      : key === "ninguno|parcial" ? ta.optNone
+      : fillArbitro(ta.optPartial, { team: quien });
+    const o = OPCIONES_REPARTO.find(x => x.key === key)!;
+    return `${base} — ${r.equipoPregunta} ${fmt(o.puntos[0])} · ${r.equipoResponde} ${fmt(o.puntos[1])}`;
+  };
+  const badgeCalificacion = (c: RondaDoc["calificacion"]) =>
+    c === "completa" ? { icon: "✅", label: "Completa", color: "#166534", bg: "#dcfce7" }
+    : c === "incompleta" ? { icon: "⚡", label: "Incompleta", color: "#92400e", bg: "#fef3c7" }
+    : c === "pasada" ? { icon: "⏭️", label: ta.passedLabel, color: "#475569", bg: "#f1f5f9" }
+    : c === "fuera_de_tema" ? { icon: "🚫", label: ta.offTopicLabel, color: "#9a3412", bg: "#ffedd5" }
+    : { icon: "❌", label: "No", color: "#991b1b", bg: "#fee2e2" };
+  // Correcciones y totales: lo último que trajo el panel (rondasData) o, si no cargó, lo que trae el informe.
+  const correcciones = rondasData
+    ? { rondasConVeredicto: rondasData.resumen.rondasConVeredicto, rondasCorregidas: rondasData.resumen.rondasCorregidas, totales: rondasData.totales }
+    : informe?.correcciones;
+  // ¿Hay rondas corregidas con fecha posterior al informe de Gemini? (el texto narrativo no se reescribe con las correcciones)
+  const informeAntesDeCorrecciones = !!informe?.generadoEn && !!rondasData?.rondas.some(r => r.correccion?.fecha && new Date(r.correccion.fecha).getTime() > new Date(informe.generadoEn!).getTime());
+  const totalDePartida = (partidaId?: string) => (partidaId ? correcciones?.totales.find(t => t.partidaId === partidaId) : undefined);
+
   const colors = sesionSeleccionada
     ? coloresArea(sesionSeleccionada.area)
     : coloresArea(null);
@@ -190,7 +300,7 @@ export default function ArbitroPanelPage() {
         {/* Header */}
         <div data-noprint style={{ background: colors.gradient, padding: "20px 24px", color: "white" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
-            <button onClick={() => { setSesionSeleccionada(null); setInforme(null); setMetacogniciones([]); }}
+            <button onClick={() => { setSesionSeleccionada(null); setInforme(null); setMetacogniciones([]); setRondasData(null); setErrorRondas(""); setSeleccion({}); }}
               style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
               ← Volver al panel
             </button>
@@ -253,6 +363,21 @@ export default function ArbitroPanelPage() {
 
           {informe && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+              {/* Aviso: hay correcciones del docente posteriores al informe generado con Gemini */}
+              {informeAntesDeCorrecciones && (
+                <div role="status" data-testid="aviso-informe-antes-correcciones" style={{ backgroundColor: "#fffbeb", borderRadius: 12, padding: "12px 16px", border: "1px solid #fde68a", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 13, color: "#92400e", lineHeight: 1.5 }}>
+                    ✏️ {ta.reportBeforeCorrections}
+                  </div>
+                  <button
+                    onClick={() => sesionSeleccionada && verInforme(sesionSeleccionada, true)}
+                    disabled={loadingInforme}
+                    style={{ padding: "8px 14px", borderRadius: 8, border: "none", backgroundColor: PALETA.ambar, color: "white", fontWeight: 700, fontSize: 12, cursor: loadingInforme ? "default" : "pointer", whiteSpace: "nowrap" }}>
+                    🔄 Actualizar informe
+                  </button>
+                </div>
+              )}
 
               {/* Aviso de partidas nuevas desde que se generó este informe */}
               {informe.totalConsultasActual !== undefined &&
@@ -350,6 +475,30 @@ export default function ArbitroPanelPage() {
                 </Card>
               )}
 
+              {/* Rondas corregidas por el docente + totales recalculados */}
+              {correcciones && correcciones.totales.length > 0 && (
+                <Card title={`🛠️ ${ta.reportCorrectionsTitle}`}>
+                  <p style={{ margin: "0 0 10px", fontSize: 14, color: "#1e293b", lineHeight: 1.6 }} data-testid="informe-rondas-corregidas">
+                    <strong>{fillArbitro(ta.reportCorrectedRounds, { n: correcciones.rondasCorregidas, total: correcciones.rondasConVeredicto })}</strong>
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {correcciones.totales.map((tp, i) => (
+                      <div key={tp.partidaId} style={{ backgroundColor: "#f8fafc", borderRadius: 8, padding: "10px 14px", border: "1px solid #e2e8f0", fontSize: 13, color: "#1e293b", lineHeight: 1.6 }}>
+                        <strong>{fillArbitro(ta.gameN, { n: i + 1 })}</strong>
+                        {tp.equipos.map(e => (
+                          <div key={e.nombre}>
+                            {e.nombre}: {e.puntosFinales !== e.puntosAlumnos
+                              ? <>{fmt(e.puntosAlumnos)} → <strong>{fmt(e.puntosFinales)}</strong> {ta.pointsAbbrev}</>
+                              : <>{fmt(e.puntosFinales)} {ta.pointsAbbrev}</>}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 12, color: PALETA.gris, marginTop: 10, fontStyle: "italic" }}>{ta.correctionNote}</div>
+                </Card>
+              )}
+
               {/* Preguntas pasadas — fuera del análisis, pero visibles */}
               {informe.rondasPasadas && informe.rondasPasadas.length > 0 && (
                 <Card title="⏭️ Preguntas pasadas">
@@ -372,6 +521,108 @@ export default function ArbitroPanelPage() {
                 </Card>
               )}
 
+            </div>
+          )}
+
+          {/* Rondas de la sesión: datos de cada ronda + corrección del docente */}
+          {(loadingRondas || errorRondas || (rondasData && rondasData.rondas.length > 0)) && (
+            <div style={{ marginBottom: 16 }}>
+              <Card title={`🧾 ${ta.roundsTitle}`}>
+                {loadingRondas && <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>{ta.roundsLoading}</p>}
+                {errorRondas && <p style={{ margin: 0, fontSize: 13, color: "#dc2626" }}>⚠️ {errorRondas}</p>}
+                {rondasData && (() => {
+                  const partidas: string[] = [];
+                  rondasData.rondas.forEach(r => { if (!partidas.includes(r.partidaId)) partidas.push(r.partidaId); });
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      {!rondasData.puedeCorregir && (
+                        <div style={{ fontSize: 12, color: PALETA.gris }}>{ta.correctOnlyOwner}</div>
+                      )}
+                      {partidas.map((pid, pi) => {
+                        const tot = rondasData.totales.find(t => t.partidaId === pid);
+                        return (
+                          <div key={pid} style={{ border: "1px solid #e2e8f0", borderRadius: 12, padding: 14, backgroundColor: "#fafafa" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                              <span style={{ fontSize: 12, fontWeight: 800, color: "white", backgroundColor: "#3730a3", borderRadius: 20, padding: "2px 10px" }}>{fillArbitro(ta.gameN, { n: pi + 1 })}</span>
+                              {tot && (
+                                <span style={{ fontSize: 12, color: "#475569" }} data-testid="partida-totales">
+                                  {tot.equipos.map(e => e.puntosFinales !== e.puntosAlumnos
+                                    ? `${e.nombre} ${fmt(e.puntosAlumnos)} → ${fmt(e.puntosFinales)}`
+                                    : `${e.nombre} ${fmt(e.puntosFinales)}`).join(" · ")}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              {rondasData.rondas.filter(r => r.partidaId === pid).map(r => {
+                                const b = badgeCalificacion(r.calificacion);
+                                const actual = r.disputa ? `${r.reparto.tieneRazon}|${r.reparto.grado}` : "";
+                                const elegida = seleccion[r.id] ?? "";
+                                return (
+                                  <div key={r.id} data-testid={`ronda-${r.ronda}`} style={{ backgroundColor: "white", borderRadius: 10, padding: "10px 12px", border: `1px solid ${r.correccion ? "#fcd34d" : "#f1f5f9"}` }}>
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                                      <span style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{fillArbitro(ta.roundLabel, { n: r.ronda })}: {r.equipoPregunta} → {r.equipoResponde}</span>
+                                      <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                        <span style={{ fontSize: 12, fontWeight: 700, color: b.color, backgroundColor: b.bg, borderRadius: 20, padding: "2px 8px", whiteSpace: "nowrap" }}>{b.icon} {b.label}</span>
+                                        {r.correccion && (
+                                          <span data-testid="badge-corregido" style={{ fontSize: 12, fontWeight: 700, color: "#92400e", backgroundColor: "#fef3c7", borderRadius: 20, padding: "2px 8px", whiteSpace: "nowrap" }}>🛠️ {ta.correctedByTeacher}</span>
+                                        )}
+                                      </span>
+                                    </div>
+                                    <div style={{ marginTop: 6, fontSize: 13, color: "#1e293b", lineHeight: 1.5 }}>{r.pregunta}</div>
+                                    <div style={{ marginTop: 4, fontSize: 12, color: "#475569" }}>
+                                      <strong>{ta.splitLabel}:</strong> {repartoTxt(r, r.reparto)}
+                                    </div>
+                                    {r.correccion && (
+                                      <div style={{ marginTop: 4, fontSize: 12, color: "#92400e", lineHeight: 1.5 }}>
+                                        {fillArbitro(ta.correctedDetail, {
+                                          original: repartoTxt(r, r.correccion.repartoOriginal),
+                                          nuevo: repartoTxt(r, r.correccion.repartoNuevo),
+                                          fecha: new Date(r.correccion.fecha).toLocaleDateString("es-AR"),
+                                        })}
+                                      </div>
+                                    )}
+                                    {r.disputa && (
+                                      <div style={{ marginTop: 6, fontSize: 12, color: "#7c3aed", backgroundColor: "#f5f3ff", borderRadius: 6, padding: "6px 10px", lineHeight: 1.5 }}>
+                                        <strong>⚖️ {ta.verdictLabel}:</strong> {r.disputa.veredicto}
+                                        {r.disputa.explicacion && <div style={{ marginTop: 2 }}>{r.disputa.explicacion}</div>}
+                                        <details style={{ marginTop: 4 }}>
+                                          <summary style={{ cursor: "pointer", fontWeight: 700 }}>{ta.positionsLabel}</summary>
+                                          <div style={{ marginTop: 4 }}>{r.disputa.posicionPregunta}</div>
+                                          <div style={{ marginTop: 2 }}>{r.disputa.posicionResponde}</div>
+                                        </details>
+                                      </div>
+                                    )}
+                                    {r.disputa && rondasData.puedeCorregir && (
+                                      <div data-noprint style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                                        <div style={{ flex: "1 1 260px" }}>
+                                          <label htmlFor={`corregir-${r.id}`} style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 3 }}>{ta.correctSplit}</label>
+                                          <select id={`corregir-${r.id}`} value={elegida || actual} disabled={corrigiendo === r.id}
+                                            onChange={e => setSeleccion(prev => ({ ...prev, [r.id]: e.target.value === actual ? "" : e.target.value }))}
+                                            style={{ width: "100%", minHeight: 44, padding: "8px 10px", fontSize: 13, borderRadius: 8, border: "1.5px solid #cbd5e1", backgroundColor: "white" }}>
+                                            {OPCIONES_REPARTO.map(o => <option key={o.key} value={o.key}>{textoOpcion(o.key, r)}</option>)}
+                                          </select>
+                                        </div>
+                                        <button onClick={() => corregirRonda(r)} disabled={!elegida || corrigiendo === r.id}
+                                          style={{ minHeight: 44, padding: "8px 16px", borderRadius: 8, border: "none", backgroundColor: !elegida || corrigiendo === r.id ? "#94a3b8" : "#3730a3", color: "white", fontWeight: 700, fontSize: 13, cursor: !elegida || corrigiendo === r.id ? "default" : "pointer" }}>
+                                          {corrigiendo === r.id ? ta.correctSaving : ta.correctSave}
+                                        </button>
+                                      </div>
+                                    )}
+                                    {errorCorreccion?.id === r.id && (
+                                      <div role="alert" style={{ marginTop: 6, fontSize: 12, color: "#dc2626" }}>⚠️ {errorCorreccion.msg}</div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div style={{ fontSize: 12, color: PALETA.gris, fontStyle: "italic" }}>{ta.correctionNote}</div>
+                    </div>
+                  );
+                })()}
+              </Card>
             </div>
           )}
 
@@ -398,6 +649,15 @@ export default function ArbitroPanelPage() {
                             <span style={{ fontSize: 12, color: "#64748b" }}>
                               {meta.equipos.map(eq => `${eq.nombre} (${fmt(eq.puntos)})`).join(" vs ")}
                             </span>
+                            {(() => {
+                              const tp = totalDePartida(meta.partidaId);
+                              if (!tp || !tp.equipos.some(e => e.puntosFinales !== e.puntosAlumnos)) return null;
+                              return (
+                                <span style={{ fontSize: 12, fontWeight: 700, color: "#92400e", backgroundColor: "#fef3c7", borderRadius: 20, padding: "2px 8px" }}>
+                                  🛠️ {ta.totalCorrected}: {tp.equipos.map(e => `${e.nombre} ${fmt(e.puntosFinales)}`).join(" · ")}
+                                </span>
+                              );
+                            })()}
                           </div>
                           {meta.equipos.map((eq, i) => (
                             <div key={i} style={{ marginBottom: i < meta.equipos!.length - 1 ? 16 : 0, backgroundColor: "white", borderRadius: 10, padding: 12, border: "1px solid #f1f5f9" }}>

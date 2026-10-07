@@ -170,6 +170,7 @@ export default function ArbitroConfigPage() {
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
   const [errorSesion, setErrorSesion] = useState("");
   const [duracion, setDuracion] = useState<"clase" | "dia">("clase");
+  const [permitirPreguntasPropias, setPermitirPreguntasPropias] = useState(true); // «Permitir preguntas propias»: activada por defecto
   const [tiempoPregunta, setTiempoPregunta] = useState(0); // 0 = sin límite
   const [showMaterial, setShowMaterial] = useState(true);
 
@@ -410,7 +411,7 @@ export default function ArbitroConfigPage() {
 
     try {
       const fn = httpsCallable(getFunctions(app, "us-central1"), "crearSesionArbitro");
-      const res = await fn({ area: areaConfig?.key ?? area, materia, nivel, anio, tema: tema.trim(), subtema: "", ejercicio, duracion, tiempoPregunta, textoFuente }) as {
+      const res = await fn({ area: areaConfig?.key ?? area, materia, nivel, anio, tema: tema.trim(), subtema: "", ejercicio, duracion, tiempoPregunta, textoFuente, permitirPreguntasPropias }) as {
         data: { id: string; link: string; expiresAt: string };
       };
       setSesion(res.data);
@@ -770,6 +771,25 @@ export default function ArbitroConfigPage() {
                 <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>
                   Cuenta desde que el equipo elige la pregunta hasta que responden. Al vencerse pueden seguir igual o pasar la pregunta. El árbitro no tiene límite de tiempo.
                 </p>
+              </div>
+            )}
+
+            {/* ── Preguntas propias ── */}
+            {tema.trim() && (
+              <div>
+                <label htmlFor="config-preguntas-propias" style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", minHeight: 44 }}>
+                  <input
+                    id="config-preguntas-propias"
+                    type="checkbox"
+                    checked={permitirPreguntasPropias}
+                    onChange={e => setPermitirPreguntasPropias(e.target.checked)}
+                    style={{ width: 20, height: 20, marginTop: 2, accentColor, flexShrink: 0 }}
+                  />
+                  <span>
+                    <span style={{ display: "block", fontWeight: 700, fontSize: 14, color: "#1e293b" }}>{ta.allowOwnQuestions}</span>
+                    <span style={{ display: "block", fontSize: 12, color: PALETA.gris, lineHeight: 1.5, marginTop: 2 }}>{ta.allowOwnQuestionsHint}</span>
+                  </span>
+                </label>
               </div>
             )}
 

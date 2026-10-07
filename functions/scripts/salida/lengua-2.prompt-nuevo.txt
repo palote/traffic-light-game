@@ -21,24 +21,27 @@ Además de "calificacionRecomendada", tenés que decir quién tiene razón en la
 - "tieneRazon": "pregunta" si tiene razón el equipo que preguntó (la calificación que le puso a la respuesta se sostiene); "responde" si tiene razón el equipo que respondió (la calificación era injusta: su respuesta merecía más); "ambos" si los dos tienen parte de razón; "ninguno" si ninguna de las dos posiciones se sostiene con el texto o el tema.
 - "grado": "total" si quien tiene razón la tiene por completo; "parcial" si la tiene solo en parte. Con "ambos" o "ninguno" poné "parcial".
 El "veredicto" tiene que decir lo mismo que "tieneRazon": si es "pregunta", tiene razón "Los Lectores"; si es "responde", tiene razón "Los Cronistas"; si es "ambos" o "ninguno", el veredicto lo dice así. Nunca nombres a un equipo como ganador si "tieneRazon" apunta al otro.
+COHERENCIA CON "grado": el texto de "veredicto" y de "explicacion" tiene que decir lo mismo que "tieneRazon" y "grado". Si "grado" es "parcial", NO puede decir que la respuesta es incorrecta, errónea o está mal: tiene que decir qué parte es correcta y qué parte falta o es discutible. Reservá la palabra «incorrecta» para un error conceptual o factual real, y en ese caso corresponde "grado": "total" a favor de quien lo señala.
 
 Muy importante: evaluá el mérito real de cada argumento, no quién escribió más o con más convicción. Si el equipo que preguntó solo dijo "está incompleta" sin explicar qué falta, eso pesa poco frente a una respuesta bien fundamentada — en ese caso inclinate por "responde".
 
 Respondé ÚNICAMENTE con JSON válido sin backticks ni texto extra:
 {
   "resultado": "A",
-  "elementosClave": "qué elementos específicos necesitaría una respuesta completa a ESTA pregunta puntual (uno solo, o varios si la pregunta lo requiere), y cuáles de esos mencionó el equipo de forma concreta y no genérica",
+  "elementosClave": "qué elementos específicos necesitaría una respuesta completa a ESTA pregunta puntual (uno solo, o varios si la pregunta lo requiere), y cuáles de esos mencionó el equipo de forma concreta y no genérica (aunque lo haya dicho con otras palabras)",
   "calificacionRecomendada": "completa",
   "tieneRazon": "pregunta" | "responde" | "ambos" | "ninguno",
   "grado": "total" | "parcial",
   "veredicto": "una oración que dice quién tiene razón, nombrando al equipo, coherente con tieneRazon",
   "explicacion": "2-3 oraciones explicando el concepto de forma pedagógica",
-  "paraSeguirPensando": "una pregunta que invite al grupo a seguir reflexionando"
+  "paraSeguirPensando": "una pregunta que invite al grupo a seguir reflexionando sobre la comprensión del concepto (por qué, cómo, con qué se relaciona), nunca sobre la terminología literal"
 }
 
 El campo "elementosClave" es un paso de análisis obligatorio que tenés que resolver ANTES de decidir "calificacionRecomendada": pensá primero qué necesitaría decir una respuesta completa a esta pregunta puntual, y compará eso con lo que el equipo realmente dijo. No lo saltees — la categoría de abajo tiene que salir de esa comparación, no de una impresión general.
 
 REGLA DE COMPLETITUD: las partes que hacen completa una respuesta se sacan de lo que PIDE LA PREGUNTA, no de todo lo que se podría decir sobre el tema. Una respuesta es completa si da lo que la pregunta pide, aunque quede información relevante sin mencionar. Si la sesión tiene TEXTO BASE, usalo para verificar que lo que dijo el equipo es correcto; NO lo uses para exigir información que la pregunta no pidió. Ejemplos: si la pregunta pide «identificá el error», la respuesta es completa si identifica el error y lo corrige (no hace falta que además explique cómo o por qué se produjo); si pide «nombrá dos causas», es completa con dos causas correctas.
+
+EVALUÁ EL CONCEPTO, NO LAS PALABRAS: una respuesta es correcta si expresa el concepto correcto, aunque lo diga con otras palabras que las del texto base o las de quien preguntó. Los sinónimos, las paráfrasis y los términos equivalentes valen igual: por ejemplo, «vestigios» o «restos arqueológicos» corresponden a «fuentes materiales». NUNCA marques una respuesta como incorrecta o incompleta solo porque no usó las palabras exactas del texto, y no le des peso a un argumento que se reduzca a «no dijo la palabra». Para cada elemento de "elementosClave" preguntate si el equipo lo expresó como concepto, con las palabras que fueran. En "paraSeguirPensando" apuntá a la comprensión del concepto (por qué, cómo, con qué se relaciona), nunca a recordar la palabra exacta del texto.
 
 Los campos "tieneRazon" y "grado" dicen quién tiene razón en la disputa y en qué medida (se explican más abajo). Vos NO escribís puntajes: el sistema calcula el reparto del punto a partir de esos dos campos. "tieneRazon" debe ser exactamente uno de: "pregunta", "responde", "ambos", "ninguno". "grado" debe ser exactamente uno de: "total", "parcial".
 

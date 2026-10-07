@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useI18n } from "../i18n";
 import { useGameMode } from "../contexts/GameModeContext";
+import { almacenLocal } from "../utils/almacenSeguro";
 
 const STORAGE_KEY = "planificacion_uses";
 const FREE_LIMIT = 2;
@@ -47,8 +48,8 @@ export default function PlanificacionGeneratorPage() {
   const [error, setError] = useState<string | null>(null);
   const [downloaded, setDownloaded] = useState(false);
 
-  const getUses = () => parseInt(localStorage.getItem(STORAGE_KEY) || "0", 10);
-  const incrementUses = () => localStorage.setItem(STORAGE_KEY, String(getUses() + 1));
+  const getUses = () => parseInt(almacenLocal.getItem(STORAGE_KEY) || "0", 10);
+  const incrementUses = () => almacenLocal.setItem(STORAGE_KEY, String(getUses() + 1));
 
   const canUse = () => {
     if (user) return true;

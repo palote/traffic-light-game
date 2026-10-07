@@ -13,7 +13,8 @@ import type PptxGenJS from "pptxgenjs";
 import { generarTextoGemini } from "./gemini";
 import { repartirPunto, resultadoDesdeTieneRazon } from "./arbitroReparto";
 import * as admin from "firebase-admin";
-import { buildArbitroPrompt, normalizarAreaKey, AREA_LABEL_ES } from "./arbitroPrompt";
+import { buildArbitroPrompt, buildPromptPreguntaPropia, normalizarAreaKey, AREA_LABEL_ES } from "./arbitroPrompt";
+import { validarEntradaRonda, construirRonda, idDeRonda, aplicarCorreccion, calcularTotales, OPCIONES_REPARTO } from "./arbitroRondas";
 
 // Inicializar Firebase Admin UNA SOLA VEZ
 if (!admin.apps.length) {
@@ -1333,7 +1334,7 @@ export const crearSesionArbitro = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 60 },
   async (request) => {
     try {
-      const { area, materia, nivel, anio, tema, subtema, ejercicio, duracion = "clase", tiempoPregunta, textoFuente } = request.data;
+      const { area, materia, nivel, anio, tema, subtema, ejercicio, duracion = "clase", tiempoPregunta, textoFuente, permitirPreguntasPropias } = request.data;
       if (!materia || !nivel || !anio || !tema) {
         throw new HttpsError("invalid-argument", "Faltan campos obligatorios: materia, nivel, año y tema");
       }
@@ -1354,6 +1355,8 @@ export const crearSesionArbitro = onCall(
         duracion,
         tiempoPregunta: tiempoPregunta ?? 0,
         textoFuente: textoFuente || "",
+        // «Permitir preguntas propias»: activada por defecto (solo se desactiva con false explícito).
+        permitirPreguntasPropias: permitirPreguntasPropias !== false,
         docenteUid: request.auth?.uid ?? null,
         docenteEmail: request.auth?.token?.email ?? null,
       });
@@ -1390,6 +1393,7 @@ export const getSesionArbitro = onCall(
       ejercicio: data.ejercicio || "",
       tiempoPregunta: data.tiempoPregunta ?? 0,
       textoFuente: data.textoFuente || "",
+      permitirPreguntasPropias: data.permitirPreguntasPropias !== false, // las sesiones viejas no tienen el campo: permitido
       expiresAt: data.expiresAt,
       docenteEmail: data.docenteEmail || "",
     };
@@ -1482,15 +1486,27 @@ async function runArbitro(params: {
   }
 
   // Registrar consulta (incluye resultado fuera_de_tema para análisis)
-  await db.collection("sesiones_arbitro").doc(sessionId).collection("consultas").add({
+  // Se guarda también el veredicto y el reparto: registrarRonda los toma de acá (no de lo que diga el cliente).
+  const consultaRef = await db.collection("sesiones_arbitro").doc(sessionId).collection("consultas").add({
     desacuerdo, posicionA, posicionB,
     resultado: parsed.resultado,
     area: normalizarAreaKey(session.area),
     materia: session.materia,
     timestamp: new Date().toISOString(),
+    ...(esJuegoOral ? {
+      equipoPregunta: nombreEquipo(params.equipoPregunta),
+      equipoResponde: nombreEquipo(params.equipoResponde),
+      tieneRazon: parsed.tieneRazon ?? null,
+      grado: parsed.grado ?? null,
+      puntosPregunta: typeof parsed.puntosPregunta === "number" ? parsed.puntosPregunta : null,
+      puntosResponde: typeof parsed.puntosResponde === "number" ? parsed.puntosResponde : null,
+      veredicto: typeof parsed.veredicto === "string" ? parsed.veredicto : null,
+      explicacion: typeof parsed.explicacion === "string" ? parsed.explicacion : null,
+      paraSeguirPensando: typeof parsed.paraSeguirPensando === "string" ? parsed.paraSeguirPensando : null,
+    } : {}),
   });
 
-  return parsed;
+  return esJuegoOral ? { ...parsed, consultaId: consultaRef.id } : parsed;
 }
 
 // ── arbitrarDesacuerdo ────────────────────────────────────────────────────────
@@ -1759,6 +1775,18 @@ export const getMetricsGA4 = onRequest(
   }
 );
 
+// Rondas corregidas por el docente y totales recalculados: se calculan en cada lectura (no se guardan en el
+// informe generado con Gemini) para que siempre reflejen las correcciones más recientes.
+async function resumenCorrecciones(sessionId: string) {
+  try {
+    const { totales, resumen } = await leerRondasYTotales(sessionId);
+    return { ...resumen, totales };
+  } catch (e) {
+    console.error("resumenCorrecciones:", e);
+    return { rondasConVeredicto: 0, rondasCorregidas: 0, totales: [] };
+  }
+}
+
 // ── generarInformeSesion ──────────────────────────────────────────────────────
 // Genera un informe pedagógico de una sesión de árbitro usando Gemini.
 // Guarda el informe en sesiones_arbitro/{sessionId}/informe y lo devuelve.
@@ -1821,7 +1849,7 @@ export const generarInformeSesion = onCall(
     // que hay consultas nuevas desde la última generación y ofrecer el botón
     // de actualizar, sin gastar una llamada a Gemini de más por su cuenta.
     if (session.informe && !forceRegenerar) {
-      return { ...session.informe, totalConsultasActual: consultas.length, rondasPasadas: rondasPasadasPayload };
+      return { ...session.informe, totalConsultasActual: consultas.length, rondasPasadas: rondasPasadasPayload, correcciones: await resumenCorrecciones(sessionId) };
     }
 
     const apiKey = GEMINI_KEY.value();
@@ -1916,7 +1944,7 @@ Respondé ÚNICAMENTE con JSON válido sin backticks ni texto adicional:
     // Guardar en Firestore para no regenerar
     await db.collection("sesiones_arbitro").doc(sessionId).update({ informe });
 
-    return { ...informe, totalConsultasActual: totalConsultas, rondasPasadas: rondasPasadasPayload };
+    return { ...informe, totalConsultasActual: totalConsultas, rondasPasadas: rondasPasadasPayload, correcciones: await resumenCorrecciones(sessionId) };
   }
 );
 
@@ -1959,6 +1987,16 @@ export const listarSesionesDocente = onCall(
   }
 );
 
+// Igual que las demás funciones de alumnos: la sesión tiene que existir y no estar vencida.
+async function exigirSesionVigente(sessionId: unknown) {
+  if (typeof sessionId !== "string" || !/^[A-Za-z0-9_-]{2,60}$/.test(sessionId)) {
+    throw new HttpsError("invalid-argument", "sessionId inválido.");
+  }
+  const doc = await db.collection("sesiones_arbitro").doc(sessionId).get();
+  if (!doc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró.");
+  if (new Date(doc.data()!.expiresAt) < new Date()) throw new HttpsError("failed-precondition", "La sesión ha expirado.");
+}
+
 export const guardarInformeArbitro = onCall(
   { region: "us-central1", invoker: "public" },
   async (request) => {
@@ -1970,6 +2008,9 @@ export const guardarInformeArbitro = onCall(
       if (!sessionId || !equipos?.length) {
         throw new HttpsError("invalid-argument", "sessionId y equipos son requeridos para el modo competitivo");
       }
+      await exigirSesionVigente(sessionId);
+      // Id de la partida (lo genera el juego): une este informe con las rondas registradas por registrarRonda.
+      const partidaId = typeof data.partidaId === "string" && /^[A-Za-z0-9_-]{8,40}$/.test(data.partidaId) ? data.partidaId : null;
       const informeRef = db
         .collection("sesiones_arbitro")
         .doc(sessionId)
@@ -1979,6 +2020,7 @@ export const guardarInformeArbitro = onCall(
       await informeRef.set({
         modo: "competitivo",
         grupoNombre: equipos[0]?.nombre || "Grupo",
+        ...(partidaId ? { partidaId } : {}),
         equipos,
         registros: registros || [],
         creadoEn: new Date().toISOString(),
@@ -1991,6 +2033,7 @@ export const guardarInformeArbitro = onCall(
     if (!sessionId || !nombreAlumno) {
       throw new HttpsError("invalid-argument", "sessionId y nombreAlumno son requeridos");
     }
+    await exigirSesionVigente(sessionId);
     const informeRef = db
       .collection("sesiones_arbitro")
       .doc(sessionId)
@@ -2031,6 +2074,171 @@ export const getInformesMetacognicion = onCall(
     }));
 
     return { informes };
+  }
+);
+
+// ── Rondas del juego oral ──────────────────────────────────────────────────────
+// Cada ronda confirmada se registra en sesiones_arbitro/{sessionId}/rondas/{partidaId}_{ronda}.
+// El cliente no escribe en Firestore: lo hace registrarRonda. Si la ronda fue al árbitro, el veredicto y el
+// reparto se toman de la consulta que el servidor guardó (consultaId), no de lo que mande el cliente.
+// Solo se guardan los nombres de los equipos: ningún otro dato de los alumnos (no hay integrantes).
+
+export const registrarRonda = onCall(
+  { invoker: "public", timeoutSeconds: 30 },
+  async (request) => {
+    const sessionId = request.data?.sessionId;
+    if (typeof sessionId !== "string" || !/^[A-Za-z0-9_-]{2,40}$/.test(sessionId)) {
+      throw new HttpsError("invalid-argument", "sessionId requerido.");
+    }
+    const entrada = validarEntradaRonda(request.data);
+
+    // Misma validación que las demás funciones de alumnos: la sesión existe y no venció.
+    const sessionRef = db.collection("sesiones_arbitro").doc(sessionId);
+    const sessionDoc = await sessionRef.get();
+    if (!sessionDoc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró.");
+    if (new Date(sessionDoc.data()!.expiresAt) < new Date()) {
+      throw new HttpsError("failed-precondition", "La sesión ha expirado.");
+    }
+
+    let consulta: Record<string, any> | null = null;
+    if (entrada.consultaId) {
+      const c = await sessionRef.collection("consultas").doc(entrada.consultaId).get();
+      consulta = c.exists ? (c.data() as Record<string, any>) : null;
+    }
+    const doc = construirRonda(entrada, consulta, new Date().toISOString());
+
+    // Idempotente: reintentar la misma ronda de la misma partida no duplica ni pisa (ni borra una corrección del docente).
+    const id = idDeRonda(entrada.partidaId, entrada.ronda);
+    const ref = sessionRef.collection("rondas").doc(id);
+    const existente = await ref.get();
+    if (existente.exists) return { ok: true, id, yaRegistrada: true };
+    await ref.set(doc);
+    return { ok: true, id };
+  }
+);
+
+// Lee las rondas de una sesión + totales. Solo el docente dueño (o el admin).
+async function leerRondasYTotales(sessionId: string) {
+  const sessionRef = db.collection("sesiones_arbitro").doc(sessionId);
+  const [rondasSnap, informesSnap] = await Promise.all([sessionRef.collection("rondas").get(), sessionRef.collection("informes").get()]);
+  const rondas = rondasSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as Array<Record<string, any>>;
+  // Orden: las partidas en el orden en que empezaron, y dentro de cada una por número de ronda.
+  const primera = new Map<string, string>();
+  for (const r of rondas) if (!primera.has(r.partidaId) || r.creadoEn < primera.get(r.partidaId)!) primera.set(r.partidaId, r.creadoEn);
+  rondas.sort((a, b) => (primera.get(a.partidaId)! < primera.get(b.partidaId)! ? -1 : primera.get(a.partidaId)! > primera.get(b.partidaId)! ? 1 : a.partidaId < b.partidaId ? -1 : a.partidaId > b.partidaId ? 1 : a.ronda - b.ronda));
+  const informes = informesSnap.docs.map((d) => d.data());
+  const totales = calcularTotales(rondas, informes);
+  return {
+    rondas,
+    totales,
+    resumen: {
+      rondasConVeredicto: rondas.filter((r) => r.disputa).length,
+      rondasCorregidas: rondas.filter((r) => r.correccion).length,
+    },
+  };
+}
+
+export const listarRondasSesion = onCall(
+  { invoker: "public", timeoutSeconds: 30 },
+  async (request) => {
+    const sessionId = request.data?.sessionId;
+    if (typeof sessionId !== "string" || !sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.");
+    const session = await exigirDocenteDeSesion(request.auth, sessionId);
+    const datos = await leerRondasYTotales(sessionId);
+    return {
+      ...datos,
+      // Solo el docente dueño corrige; el admin puede mirar pero no cambiar repartos.
+      puedeCorregir: !!request.auth?.uid && request.auth.uid === session.docenteUid,
+      opciones: OPCIONES_REPARTO,
+    };
+  }
+);
+
+// Corrección del docente: cambia el reparto de una ronda con veredicto a una de las 6 opciones. No toca lo que
+// los alumnos ya vieron (el marcador de la partida y el informe de metacognición quedan como se enviaron).
+export const corregirRonda = onCall(
+  { invoker: "public", timeoutSeconds: 30 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Tenés que iniciar sesión para corregir una ronda.");
+    const { sessionId, rondaId, tieneRazon, grado } = (request.data || {}) as Record<string, unknown>;
+    if (typeof sessionId !== "string" || !sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.");
+    if (typeof rondaId !== "string" || !/^[A-Za-z0-9_-]{8,60}$/.test(rondaId)) throw new HttpsError("invalid-argument", "rondaId inválido.");
+
+    const sessionRef = db.collection("sesiones_arbitro").doc(sessionId);
+    const sessionDoc = await sessionRef.get();
+    if (!sessionDoc.exists) throw new HttpsError("not-found", "Sesión no encontrada.");
+    if (sessionDoc.data()!.docenteUid !== uid) {
+      throw new HttpsError("permission-denied", "Solo el docente dueño de la sesión puede corregir sus rondas.");
+    }
+    const ref = sessionRef.collection("rondas").doc(rondaId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError("not-found", "Ronda no encontrada.");
+
+    const ahora = new Date().toISOString();
+    const resultado = aplicarCorreccion(snap.data() as Record<string, any>, tieneRazon, grado, uid, ahora);
+    if (resultado.cambio !== "sin_cambios") await ref.update(resultado.patch);
+    const ronda = { id: rondaId, ...(snap.data() as Record<string, any>), ...resultado.patch };
+    return { ok: true, cambio: resultado.cambio, ronda };
+  }
+);
+
+// ── validarPreguntaPropia ───────────────────────────────────────────────────
+// Antes de pasarle al otro equipo la pregunta que escribió un equipo, se verifica con Gemini que corresponda
+// al texto base y al tema, con el mismo criterio de pertinencia que usa el árbitro (arbitroPrompt.reglaPertinencia).
+// Llamada corta; no gasta la ronda ni se guarda nada.
+
+// Máximo de validaciones de preguntas propias con Gemini por sesión.
+const TOPE_VALIDACIONES_PROPIAS = 30;
+
+export const validarPreguntaPropia = onCall(
+  { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 30, memory: "256MiB" },
+  async (request) => {
+    const sessionId = request.data?.sessionId;
+    const pregunta = typeof request.data?.pregunta === "string" ? request.data.pregunta.trim() : "";
+    if (typeof sessionId !== "string" || !sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.");
+    if (pregunta.length < 3 || pregunta.length > 500) throw new HttpsError("invalid-argument", "La pregunta tiene que tener entre 3 y 500 caracteres.");
+
+    const sessionDoc = await db.collection("sesiones_arbitro").doc(sessionId).get();
+    if (!sessionDoc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró.");
+    const session = sessionDoc.data()!;
+    if (new Date(session.expiresAt) < new Date()) throw new HttpsError("failed-precondition", "La sesión ha expirado.");
+    if (session.permitirPreguntasPropias === false) {
+      throw new HttpsError("failed-precondition", "En esta sesión no se permiten preguntas propias.");
+    }
+
+    // Tope de validaciones por sesión (cuenta en el documento de la sesión): esta función es pública y
+    // cada llamada gasta Gemini. Al superar el tope la pregunta pasa SIN llamar a Gemini y queda en el log.
+    const usadas = typeof session.validacionesPropias === "number" ? session.validacionesPropias : 0;
+    if (usadas >= TOPE_VALIDACIONES_PROPIAS) {
+      console.warn(JSON.stringify({ evento: "validarPreguntaPropia_tope_superado", sessionId, usadas, tope: TOPE_VALIDACIONES_PROPIAS }));
+      return { pertinente: true, motivo: "", sinValidar: true };
+    }
+    // El contador sube ANTES de llamar a Gemini (y cuenta también los intentos en que Gemini falla).
+    await sessionDoc.ref.update({ validacionesPropias: admin.firestore.FieldValue.increment(1) });
+
+    const apiKey = GEMINI_KEY.value();
+    if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada.");
+
+    const prompt = buildPromptPreguntaPropia({
+      materia: session.materia, nivel: session.nivel, anio: session.anio, tema: session.tema,
+      subtema: session.subtema || "", textoFuente: session.textoFuente || "", pregunta,
+    });
+    const crudo = await generarTextoGemini(apiKey, {
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0, maxOutputTokens: 200 },
+    });
+    let parsed: any;
+    try {
+      parsed = JSON.parse(crudo.trim().replace(/```json|```/g, "").trim());
+    } catch {
+      console.error("validarPreguntaPropia: Gemini devolvió algo que no es JSON:", crudo.slice(0, 300));
+      throw new HttpsError("unavailable", "No se pudo validar la pregunta.", { motivo: "respuesta_no_clara" });
+    }
+    if (typeof parsed?.pertinente !== "boolean") {
+      throw new HttpsError("unavailable", "No se pudo validar la pregunta.", { motivo: "respuesta_no_clara" });
+    }
+    return { pertinente: parsed.pertinente, motivo: typeof parsed.motivo === "string" ? parsed.motivo.slice(0, 200) : "" };
   }
 );
 

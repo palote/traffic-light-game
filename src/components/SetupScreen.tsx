@@ -27,6 +27,7 @@ import type { ParseResult, ParsedQuestion } from "../utils/csvParser";
 import { saveTeacherGame } from "../services/teacherLibraryService";
 import type { NewTeacherGame } from "../types/teacherLibrary";
 import { GameStartAnnouncementModal } from "./GameStartAnnouncementModal";
+import { almacenSesion } from "../utils/almacenSeguro";
 
 const TEAM_ANIMALS = [
   { emoji: "🦁", name: "Leones", nameEn: "Lions", namePt: "Leões" },
@@ -163,10 +164,10 @@ export function SetupScreen({ onGameCreated }: SetupScreenProps) {
     const state = location.state as any;
     const fromLibrary = state?.fromLibrary;
     if (fromLibrary) {
-      const csvContent = state?.csvContent || sessionStorage.getItem("library_csv_content");
-      const csvFilename = state?.csvFilename || sessionStorage.getItem("library_csv_filename");
-      const csvTitle = state?.csvTitle || sessionStorage.getItem("library_csv_title");
-      const csvSubject = state?.csvSubject || sessionStorage.getItem("library_csv_subject");
+      const csvContent = state?.csvContent || almacenSesion.getItem("library_csv_content");
+      const csvFilename = state?.csvFilename || almacenSesion.getItem("library_csv_filename");
+      const csvTitle = state?.csvTitle || almacenSesion.getItem("library_csv_title");
+      const csvSubject = state?.csvSubject || almacenSesion.getItem("library_csv_subject");
       const txtPath = state?.sourceTextPath || null;
       if (txtPath) setSourceTextPath(txtPath);
       if (csvTitle && !className) setClassName(csvTitle);

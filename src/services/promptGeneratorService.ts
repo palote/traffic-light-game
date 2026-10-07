@@ -19,6 +19,7 @@ import {
   BOOKS,
   MEDIA_CONTENT,
 } from '../types/promptGenerator';
+import { almacenLocal } from "../utils/almacenSeguro";
 
 // ============================================
 // OBTENER NOMBRE DEL CONTENIDO SELECCIONADO
@@ -883,7 +884,7 @@ const MAX_PRESETS = 5;
 
 export function getSavedPresets(): import('../types/promptGenerator').SavedPreset[] {
   try {
-    const data = localStorage.getItem(PRESETS_KEY);
+    const data = almacenLocal.getItem(PRESETS_KEY);
     return data ? JSON.parse(data) : [];
   } catch {
     return [];
@@ -907,7 +908,7 @@ export function savePreset(preset: Omit<import('../types/promptGenerator').Saved
     };
     
     presets.push(newPreset);
-    localStorage.setItem(PRESETS_KEY, JSON.stringify(presets));
+    almacenLocal.setItem(PRESETS_KEY, JSON.stringify(presets));
     return true;
   } catch {
     return false;
@@ -918,7 +919,7 @@ export function deletePreset(id: string): boolean {
   try {
     const presets = getSavedPresets();
     const filtered = presets.filter(p => p.id !== id);
-    localStorage.setItem(PRESETS_KEY, JSON.stringify(filtered));
+    almacenLocal.setItem(PRESETS_KEY, JSON.stringify(filtered));
     return true;
   } catch {
     return false;

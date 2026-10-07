@@ -3,7 +3,10 @@
 // CÓDIGO calcula el reparto), con las mismas disputas, 3 repeticiones por prompt, y verifica en cada
 // salida que el equipo con razón reciba la parte mayor del punto.
 //
-// Casos: los 2 casos reales (Egipto y Mesopotamia) + 4 disputas de Lengua e Historia de la comparación anterior.
+// Casos: los 2 casos reales (Egipto y Mesopotamia) + el caso de SINÓNIMOS «fuentes» (la respuesta dice «escritas, orales,
+// vestigios y arqueológicas» y el texto base tiene cuatro categorías: escritas, materiales, imágenes y orales) + 4 disputas de Lengua e Historia.
+// Para el caso de sinónimos se mide además: razón a quien preguntó, grado parcial (0,75 / 0,25), que el veredicto reconozca «vestigios»/«arqueológicas»
+// como fuentes materiales y que señale que faltan las imágenes (revisión por palabras clave: leé también el texto) y, en todos los casos del prompt nuevo, que el veredicto sea coherente con `grado` (si es parcial, no dice «incorrecta»).
 //
 // ⚠️ Los casos reales ("real-1", "real-2") están reconstruidos con lo que se sabe: las respuestas son
 // las que pasó Pablo; la PREGUNTA, el TEXTO BASE y los argumentos de cada equipo son una reconstrucción.
@@ -20,7 +23,7 @@
 //   Remove-Item Env:GEMINI_KEY        # borra la clave de la ventana al terminar
 //
 // Opcional: $env:MODELO = "otro-modelo"  (por defecto, el de producción: functions/src/config.ts)
-// Sin GEMINI_KEY solo escribe los prompts en scripts\salida\. Con clave hace 36 llamadas (6 casos × 2 prompts × 3).
+// Sin GEMINI_KEY solo escribe los prompts en scripts\salida\. Con clave hace 42 llamadas (7 casos × 2 prompts × 3).
 // Salida: scripts\salida\comparacion.md (lado a lado + tablas) y comparacion.json (salidas crudas).
 //
 // Qué se verifica en cada salida (columna «Mayor parte al que tiene razón»):
@@ -44,7 +47,12 @@ const dir = path.join(__dirname, "salida");
 // RECONSTRUIDO: reemplazar por el texto base real de la sesión.
 const TEXTO_EGIPTO_MESOPOTAMIA = "Las primeras civilizaciones surgieron junto a grandes ríos. En Egipto, el Nilo permitió sembrar y organizar la vida del reino; los egipcios usaron la escritura jeroglífica, grabada en piedra y escrita en papiro. En Mesopotamia, entre los ríos Tigris y Éufrates, los sumerios crearon hacia el 3300 a. C. la escritura cuneiforme, que se hacía con una caña sobre tablillas de arcilla húmeda; la escritura cuneiforme no se usó en Egipto. Los historiadores conocen estas civilizaciones a través de distintos tipos de fuentes: las fuentes escritas (papiros, tablillas, inscripciones), las fuentes materiales o arqueológicas (templos, tumbas, objetos, restos de ciudades) y las fuentes orales (relatos transmitidos de generación en generación, que muchas veces se pusieron por escrito mucho después).";
 
+// Texto base del caso de sinónimos — RECONSTRUIDO con las cuatro categorías (escritas, materiales, imágenes, orales): habla de «fuentes materiales»
+// y NO usa las palabras «vestigios» ni «arqueológicas». Reemplazarlo por el texto base real de la sesión.
+const TEXTO_FUENTES = "Los historiadores reconstruyen el pasado a partir de fuentes. Hay cuatro categorías de fuentes. Las fuentes escritas son los documentos: cartas, leyes, crónicas, papiros y tablillas. Las fuentes materiales son los objetos y construcciones que dejaron las sociedades: herramientas, tumbas, templos, monedas y restos de ciudades. Las fuentes de imágenes son las pinturas, grabados, mapas y fotografías que muestran cómo era una época. Las fuentes orales son los relatos y testimonios que las personas transmiten de palabra. Ninguna fuente alcanza por sí sola: los historiadores las comparan entre sí.";
+
 const sesiones = {
+  fuentes: { materia: "Historia", nivel: "Secundaria", anio: "3", tema: "Fuentes históricas", textoFuente: TEXTO_FUENTES },
   egipto: { materia: "Historia", nivel: "Secundaria", anio: "3", tema: "Egipto y Mesopotamia", textoFuente: TEXTO_EGIPTO_MESOPOTAMIA },
   lengua: { materia: "Lengua y Literatura", nivel: "Secundaria", anio: "3", tema: "Crónicas de Indias" },
   historia: { materia: "Historia", nivel: "Secundaria", anio: "3", tema: "Egipto antiguo" },
@@ -62,6 +70,14 @@ const casos = [
     desacuerdo: 'Pregunta: "Identificá el error en esta afirmación: «Los egipcios escribían con escritura cuneiforme sobre tablillas de arcilla.»"\n\nRespuesta de Rojos: "Identificamos que la escritura cuneiforme no es egipcia."',
     posicionA: "Azules (calificó como incompleta): faltó corregir el error: decir cuál era la escritura de los egipcios.",
     posicionB: "Rojos (no acepta la calificación): la consigna pedía identificar el error y dijimos cuál era: el cuneiforme no es egipcio." },
+  // ── Sinónimos: «vestigios» / «arqueológicas» ≙ «fuentes materiales» (el texto solo dice «materiales») ──
+  // La respuesta no nombra las IMÁGENES (la cuarta categoría). Lo esperado: razón a quien preguntó (Rojos), grado parcial
+  // (Rojos 0,75 / Azules 0,25); el veredicto NO dice «incorrecta», reconoce «vestigios»/«arqueológicas» como fuentes
+  // materiales y señala que faltan las imágenes.
+  { id: "fuentes-sinonimos", sesion: "fuentes", equipoPregunta: "Rojos", equipoResponde: "Azules", esperaRazon: "pregunta", esperaGrado: "parcial",
+    desacuerdo: 'Pregunta: "¿Qué tipos de fuentes usan los historiadores?"\n\nRespuesta de Azules: "escritas, orales, vestigios y arqueológicas"',
+    posicionA: "Rojos (calificó como incompleta): el texto habla de cuatro categorías (escritas, materiales, imágenes y orales) y faltó nombrar las imágenes; además, «vestigios» y «arqueológicas» no son las palabras del texto.",
+    posicionB: "Azules (no acepta la calificación): los vestigios y los restos arqueológicos son fuentes materiales; dijimos las categorías con otras palabras, así que la respuesta está completa." },
   // ── Disputas de la comparación anterior ──
   { id: "lengua-1", sesion: "lengua", equipoPregunta: "Los Lectores", equipoResponde: "Los Cronistas",
     desacuerdo: 'Pregunta: "¿Por qué Bartolomé de las Casas escribió la Brevísima relación de la destrucción de las Indias?"\n\nRespuesta de Los Cronistas: "Para denunciar los abusos de los conquistadores contra los indígenas."',
@@ -115,7 +131,13 @@ function evaluarNuevo(c, texto) {
   else if (razon === "responde") mayor = r.puntosResponde > r.puntosPregunta;
   else mayor = r.puntosPregunta === r.puntosResponde;
   const esperadoRes = { pregunta: "A", responde: "B", ambos: "ambas_correctas", ninguno: "ambas_incorrectas" }[razon];
-  return { valido: true, j, r, razon, mayor, resultadoOk: j.resultado === esperadoRes,
+  // Coherencia con `grado`: si es parcial, ni el veredicto ni la explicación pueden decir que la respuesta es incorrecta.
+  const gradoOk = String(j.grado ?? "").trim().toLowerCase() === "parcial" ? !/\b(incorrect[ao]s?|err[óo]ne[ao]s?|est[áa] mal)\b/i.test(`${j.veredicto} ${j.explicacion}`) : true;
+  return { valido: true, j, r, razon, mayor, gradoOk, razonOk: c.esperaRazon ? razon === c.esperaRazon : null,
+    gradoEsperadoOk: c.esperaGrado ? String(j.grado ?? "").trim().toLowerCase() === c.esperaGrado : null,
+    repartoEsperadoOk: c.esperaRazon && c.esperaGrado ? (() => { const e = repartirPunto(c.esperaRazon, c.esperaGrado); return !!e && r.puntosPregunta === e.puntosPregunta && r.puntosResponde === e.puntosResponde; })() : null,
+    sinonimoOk: c.id === "fuentes-sinonimos" ? /vestigios|arqueol[óo]gic/i.test(`${j.veredicto} ${j.explicacion}`) && /material/i.test(`${j.veredicto} ${j.explicacion}`) : null,
+    imagenesOk: c.id === "fuentes-sinonimos" ? /im[áa]genes|iconogr[áa]fic/i.test(`${j.veredicto} ${j.explicacion}`) : null, resultadoOk: j.resultado === esperadoRes,
     veredictoOk: razon === "pregunta" || razon === "responde" ? nombreMasTemprano(j.veredicto, c) === razon : null };
 }
 
@@ -158,19 +180,19 @@ async function gemini(prompt) {
   console.log("");
 
   let md = `# Comparación de prompts del árbitro: actual vs nuevo\n\n- Modelo: \`${MODELO}\` · ${REPETICIONES} repeticiones por prompt · temperatura 0.2 · juego oral.\n- **Actual:** el modelo escribe los puntajes. **Nuevo:** el modelo dice \`tieneRazon\` + \`grado\` y el código calcula el reparto; el prompt le dice quién preguntó y quién respondió; la completitud se mide contra la pregunta.\n- Los casos \`real-1\` y \`real-2\` usan una pregunta, un texto base y argumentos RECONSTRUIDOS (ver encabezado del script).\n- Generado: ${new Date().toISOString()}\n\n`;
-  md += `## Resumen\n\n| Caso | Mayor parte al que tiene razón: actual | …nuevo | Reparto actual (rep. 1-3) | Reparto nuevo (rep. 1-3) | Estable actual | Estable nuevo | Nuevo: resultado coherente | Nuevo: veredicto coherente | JSON válido actual | JSON válido nuevo |\n|---|---|---|---|---|---|---|---|---|---|---|\n`;
+  md += `## Resumen\n\n| Caso | Mayor parte al que tiene razón: actual | …nuevo | Reparto actual (rep. 1-3) | Reparto nuevo (rep. 1-3) | Estable actual | Estable nuevo | Nuevo: resultado coherente | Nuevo: veredicto coherente | Nuevo: coherente con grado | Nuevo: razón esperada (sinónimos) | Nuevo: grado parcial y reparto 0,75/0,25 (sinónimos) | Nuevo: acepta «vestigios/arqueológicas» como materiales (sinónimos) | Nuevo: señala que faltan las imágenes (sinónimos) | JSON válido actual | JSON válido nuevo |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n`;
   let totA = 0, okA = 0, totN = 0, okN = 0;
   for (const c of casos) {
     const { actual: A, nuevo: N } = res[c.id];
     const mA = A.filter((x) => x.valido), mN = N.filter((x) => x.valido);
     totA += mA.length; okA += mA.filter((x) => x.mayor).length; totN += mN.length; okN += mN.filter((x) => x.mayor).length;
-    md += `| ${c.id} | ${mA.filter((x) => x.mayor).length}/${mA.length} | ${mN.filter((x) => x.mayor).length}/${mN.length} | ${A.map((x) => repartoTxt(c, x.r)).join("<br>")} | ${N.map((x) => repartoTxt(c, x.r)).join("<br>")} | ${estab(A.map((x) => repartoTxt(c, x.r)))} | ${estab(N.map((x) => repartoTxt(c, x.r)))} | ${mN.filter((x) => x.resultadoOk).length}/${mN.length} | ${mN.filter((x) => x.veredictoOk === true).length}/${mN.filter((x) => x.veredictoOk !== null).length} | ${mA.length}/${REPETICIONES} | ${mN.length}/${REPETICIONES} |\n`;
+    md += `| ${c.id} | ${mA.filter((x) => x.mayor).length}/${mA.length} | ${mN.filter((x) => x.mayor).length}/${mN.length} | ${A.map((x) => repartoTxt(c, x.r)).join("<br>")} | ${N.map((x) => repartoTxt(c, x.r)).join("<br>")} | ${estab(A.map((x) => repartoTxt(c, x.r)))} | ${estab(N.map((x) => repartoTxt(c, x.r)))} | ${mN.filter((x) => x.resultadoOk).length}/${mN.length} | ${mN.filter((x) => x.veredictoOk === true).length}/${mN.filter((x) => x.veredictoOk !== null).length} | ${mN.filter((x) => x.gradoOk).length}/${mN.length} | ${c.esperaRazon ? `${mN.filter((x) => x.razonOk).length}/${mN.length} (${c.esperaRazon})` : "—"} | ${c.esperaGrado ? `${mN.filter((x) => x.gradoEsperadoOk && x.repartoEsperadoOk).length}/${mN.length}` : "—"} | ${c.id === "fuentes-sinonimos" ? `${mN.filter((x) => x.sinonimoOk).length}/${mN.length}` : "—"} | ${c.id === "fuentes-sinonimos" ? `${mN.filter((x) => x.imagenesOk).length}/${mN.length}` : "—"} | ${mA.length}/${REPETICIONES} | ${mN.length}/${REPETICIONES} |\n`;
   }
   md += `\n**Total «el equipo con razón recibe la parte mayor»:** actual ${okA}/${totA} · nuevo ${okN}/${totN} (solo salidas con JSON válido).\n\n`;
   for (const c of casos) {
     md += `## ${c.id} — ${sesiones[c.sesion].materia} · ${sesiones[c.sesion].tema}\n\nPreguntó **${c.equipoPregunta}**, respondió **${c.equipoResponde}**.\n\n${c.desacuerdo}\n\n- A: ${c.posicionA}\n- B: ${c.posicionB}\n\n| Rep. | Prompt ACTUAL | Prompt NUEVO |\n|---|---|---|\n`;
     const celdaA = (x) => x.error ? `⚠️ ${x.error}` : !x.valido ? `❌ inválido: ${corto(x.texto, 160)}` : `resultado **${x.j.resultado}** · ${repartoTxt(c, x.r)} · mayor parte al que tiene razón ${marca(x.mayor)}<br>${corto(x.j.veredicto)}`;
-    const celdaN = (x) => x.error ? `⚠️ ${x.error}` : !x.valido ? `❌ inválido: ${corto(x.texto, 160)}` : `**${x.j.tieneRazon}** / ${x.j.grado} → ${repartoTxt(c, x.r)} · resultado coherente ${marca(x.resultadoOk)} · veredicto coherente ${marca(x.veredictoOk)}<br>${corto(x.j.veredicto)}`;
+    const celdaN = (x) => x.error ? `⚠️ ${x.error}` : !x.valido ? `❌ inválido: ${corto(x.texto, 160)}` : `**${x.j.tieneRazon}** / ${x.j.grado} → ${repartoTxt(c, x.r)} · resultado coherente ${marca(x.resultadoOk)} · veredicto coherente ${marca(x.veredictoOk)} · coherente con grado ${marca(x.gradoOk)}${c.esperaRazon ? ` · razón esperada (${c.esperaRazon}) ${marca(x.razonOk)}` : ""}${c.esperaGrado ? ` · grado/reparto esperado (${c.esperaGrado}) ${marca(x.gradoEsperadoOk && x.repartoEsperadoOk)}` : ""}${c.id === "fuentes-sinonimos" ? ` · acepta sinónimos ${marca(x.sinonimoOk)} · señala imágenes ${marca(x.imagenesOk)}` : ""}<br>${corto(x.j.paraSeguirPensando, 160)}<br>${corto(x.j.veredicto)}`;
     for (let i = 0; i < REPETICIONES; i++) md += `| ${i + 1} | ${celdaA(res[c.id].actual[i])} | ${celdaN(res[c.id].nuevo[i])} |\n`;
     md += "\n";
   }

@@ -19,6 +19,7 @@ import { auth, database } from "../firebase.config";
 import { ref, get, update } from "firebase/database";
 
 import { startTeacherSession, endTeacherSession } from "../services/metricsService";
+import { almacenSesion } from "../utils/almacenSeguro";
 
 export type AuthContextValue = {
   user: User | null;
@@ -152,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSessionId(sid);
           sessionIdRef.current = sid;
           
-          sessionStorage.setItem(`session_loginAt_${sid}`, loginAt.toString());
+          almacenSesion.setItem(`session_loginAt_${sid}`, loginAt.toString());
         } catch (e) {
           console.warn("⚠️ metrics startTeacherSession failed:", e);
           setSessionId(null);
@@ -185,7 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         let loginAt = loginAtRef.current;
         if (!loginAt) {
-          const loginAtStr = sessionStorage.getItem(`session_loginAt_${sid}`);
+          const loginAtStr = almacenSesion.getItem(`session_loginAt_${sid}`);
           loginAt = loginAtStr ? parseInt(loginAtStr, 10) : null;
         }
         
@@ -204,7 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (document.visibilityState === "hidden") {
         const sid = sessionIdRef.current;
         if (sid) {
-          sessionStorage.setItem(`session_lastVisible_${sid}`, Date.now().toString());
+          almacenSesion.setItem(`session_lastVisible_${sid}`, Date.now().toString());
         }
       }
     };
@@ -293,8 +294,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn("⚠️ metrics endTeacherSession failed:", e);
       }
 
-      sessionStorage.removeItem(`session_loginAt_${currentSessionId}`);
-      sessionStorage.removeItem(`session_lastVisible_${currentSessionId}`);
+      almacenSesion.removeItem(`session_loginAt_${currentSessionId}`);
+      almacenSesion.removeItem(`session_lastVisible_${currentSessionId}`);
     }
 
     sessionIdRef.current = null;

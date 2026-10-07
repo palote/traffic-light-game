@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import './PWAInstallBanner.css';
+import { almacenLocal } from "../utils/almacenSeguro";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -36,7 +37,7 @@ export const PWAInstallBanner = () => {
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       
       // Verificar si el usuario ya cerró el banner
-      const dismissed = localStorage.getItem('pwa-banner-dismissed');
+      const dismissed = almacenLocal.getItem('pwa-banner-dismissed');
       if (dismissed && Date.now() < parseInt(dismissed)) {
         console.log('⏭️ Banner fue cerrado recientemente');
         return;
@@ -50,7 +51,7 @@ export const PWAInstallBanner = () => {
 
     // Para iOS: Mostrar banner después de 3 segundos
     if (iOS && !standalone) {
-      const dismissed = localStorage.getItem('pwa-ios-banner-dismissed');
+      const dismissed = almacenLocal.getItem('pwa-ios-banner-dismissed');
       if (!dismissed || Date.now() > parseInt(dismissed)) {
         const timer = setTimeout(() => {
           setShowBanner(true);
@@ -85,10 +86,10 @@ export const PWAInstallBanner = () => {
     
     // Guardar que se instaló/rechazó
     if (outcome === 'accepted') {
-      localStorage.setItem('pwa-banner-dismissed', 'installed');
+      almacenLocal.setItem('pwa-banner-dismissed', 'installed');
     } else {
       const hideUntil = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 días
-      localStorage.setItem('pwa-banner-dismissed', hideUntil.toString());
+      almacenLocal.setItem('pwa-banner-dismissed', hideUntil.toString());
     }
   };
 
@@ -99,9 +100,9 @@ export const PWAInstallBanner = () => {
     const dismissedUntil = Date.now() + (7 * 24 * 60 * 60 * 1000);
     
     if (isIOS) {
-      localStorage.setItem('pwa-ios-banner-dismissed', dismissedUntil.toString());
+      almacenLocal.setItem('pwa-ios-banner-dismissed', dismissedUntil.toString());
     } else {
-      localStorage.setItem('pwa-banner-dismissed', dismissedUntil.toString());
+      almacenLocal.setItem('pwa-banner-dismissed', dismissedUntil.toString());
     }
   };
 

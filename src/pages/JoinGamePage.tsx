@@ -13,6 +13,7 @@ import {
   formatCodeForDisplay,
 } from "../services/roomCodeService";
 import { useI18n } from "../i18n";
+import { almacenLocal } from "../utils/almacenSeguro";
 
 // ✅ NUEVO: Claves para localStorage
 const STORAGE_KEYS = {
@@ -34,20 +35,20 @@ interface SavedSession {
 
 // ✅ NUEVO: Guardar sesión en localStorage
 function saveSession(session: SavedSession) {
-  localStorage.setItem(STORAGE_KEYS.GAME_ID, session.gameId);
-  localStorage.setItem(STORAGE_KEYS.TEAM_ID, session.teamId);
-  localStorage.setItem(STORAGE_KEYS.TEAM_NAME, session.teamName);
-  localStorage.setItem(STORAGE_KEYS.ROOM_CODE, session.roomCode);
-  localStorage.setItem(STORAGE_KEYS.JOINED_AT, session.joinedAt.toString());
+  almacenLocal.setItem(STORAGE_KEYS.GAME_ID, session.gameId);
+  almacenLocal.setItem(STORAGE_KEYS.TEAM_ID, session.teamId);
+  almacenLocal.setItem(STORAGE_KEYS.TEAM_NAME, session.teamName);
+  almacenLocal.setItem(STORAGE_KEYS.ROOM_CODE, session.roomCode);
+  almacenLocal.setItem(STORAGE_KEYS.JOINED_AT, session.joinedAt.toString());
 }
 
 // ✅ NUEVO: Obtener sesión de localStorage
 function getSavedSession(): SavedSession | null {
-  const gameId = localStorage.getItem(STORAGE_KEYS.GAME_ID);
-  const teamId = localStorage.getItem(STORAGE_KEYS.TEAM_ID);
-  const teamName = localStorage.getItem(STORAGE_KEYS.TEAM_NAME);
-  const roomCode = localStorage.getItem(STORAGE_KEYS.ROOM_CODE);
-  const joinedAt = localStorage.getItem(STORAGE_KEYS.JOINED_AT);
+  const gameId = almacenLocal.getItem(STORAGE_KEYS.GAME_ID);
+  const teamId = almacenLocal.getItem(STORAGE_KEYS.TEAM_ID);
+  const teamName = almacenLocal.getItem(STORAGE_KEYS.TEAM_NAME);
+  const roomCode = almacenLocal.getItem(STORAGE_KEYS.ROOM_CODE);
+  const joinedAt = almacenLocal.getItem(STORAGE_KEYS.JOINED_AT);
 
   if (gameId && teamId && teamName && roomCode) {
     return {
@@ -63,11 +64,11 @@ function getSavedSession(): SavedSession | null {
 
 // ✅ NUEVO: Limpiar sesión de localStorage
 function clearSession() {
-  localStorage.removeItem(STORAGE_KEYS.GAME_ID);
-  localStorage.removeItem(STORAGE_KEYS.TEAM_ID);
-  localStorage.removeItem(STORAGE_KEYS.TEAM_NAME);
-  localStorage.removeItem(STORAGE_KEYS.ROOM_CODE);
-  localStorage.removeItem(STORAGE_KEYS.JOINED_AT);
+  almacenLocal.removeItem(STORAGE_KEYS.GAME_ID);
+  almacenLocal.removeItem(STORAGE_KEYS.TEAM_ID);
+  almacenLocal.removeItem(STORAGE_KEYS.TEAM_NAME);
+  almacenLocal.removeItem(STORAGE_KEYS.ROOM_CODE);
+  almacenLocal.removeItem(STORAGE_KEYS.JOINED_AT);
 }
 
 // ✅ NUEVO: Verificar si el juego sigue activo
