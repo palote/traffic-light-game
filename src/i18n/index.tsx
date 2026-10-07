@@ -7,6 +7,7 @@ import { en } from './en';
 import { pt } from './pt';
 import type { TranslationKeys } from './es';
 import { esRutaArbitro } from '../utils/arbitroRoutes';
+import { formatearPuntos, type IdiomaPuntos } from '../utils/formatoPuntos';
 
 // ============================================
 // TIPOS
@@ -128,6 +129,14 @@ export function useI18n() {
 export function useArbitroT(): TranslationKeys['arbitro'] {
   const { t } = useI18n();
   return esRutaArbitro(window.location.pathname) ? es.arbitro : t.arbitro;
+}
+
+// Formatea un puntaje para mostrarlo: hasta 2 decimales y coma/punto según el idioma
+// ("0,25" en español, "0.25" en inglés). En /arbitro* y /sesion/* siempre en español.
+export function useFormatoPuntos(): (valor: number) => string {
+  const { language } = useI18n();
+  const idioma = (esRutaArbitro(window.location.pathname) ? 'es' : language) as IdiomaPuntos;
+  return (valor: number) => formatearPuntos(valor, idioma);
 }
 
 // Reemplaza {nombre} en un texto con los valores indicados.

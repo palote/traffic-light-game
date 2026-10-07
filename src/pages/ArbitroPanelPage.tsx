@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { useArbitroT, useFormatoPuntos } from "../i18n";
+import { esIaNoDisponible } from "../utils/arbitroErrores";
 import { useNavigate } from "react-router-dom";
 import { app } from "../firebase.config";
 import { useAuth } from "../contexts/AuthContext";
@@ -57,7 +59,7 @@ interface InformeMetacognicion {
     equipoResponde: string;
     pregunta: string;
     respuesta: string;
-    calificacion: "completa" | "incompleta" | "no" | "pasada";
+    calificacion: "completa" | "incompleta" | "no" | "pasada" | "fuera_de_tema";
     puntos: number;
     fueAlArbitro: boolean;
     veredictoArbitro?: string;
@@ -92,6 +94,8 @@ const NIVEL_BADGE: Record<string, { label: string; color: string; bg: string }> 
 };
 
 export default function ArbitroPanelPage() {
+  const ta = useArbitroT();
+  const fmt = useFormatoPuntos();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const functions = getFunctions(app, "us-central1");
@@ -140,7 +144,8 @@ export default function ArbitroPanelPage() {
       const res = await fn({ sessionId: sesion.id, forceRegenerar }) as any;
       setInforme(res.data);
     } catch (e: any) {
-      setErrorInforme(e.message);
+      // Gemini caído: texto propio según el código. El resto (login, permisos, sin consultas) como hoy.
+      setErrorInforme(esIaNoDisponible(e) ? ta.aiUnavailable : e.message);
     }
     setLoadingInforme(false);
   };
@@ -391,7 +396,7 @@ export default function ArbitroPanelPage() {
                               Partida {idx + 1}
                             </span>
                             <span style={{ fontSize: 12, color: "#64748b" }}>
-                              {meta.equipos.map(eq => `${eq.nombre} (${eq.puntos})`).join(" vs ")}
+                              {meta.equipos.map(eq => `${eq.nombre} (${fmt(eq.puntos)})`).join(" vs ")}
                             </span>
                           </div>
                           {meta.equipos.map((eq, i) => (
@@ -400,7 +405,7 @@ export default function ArbitroPanelPage() {
                                 <div style={{ width: 12, height: 12, borderRadius: "50%", backgroundColor: eq.color }} />
                                 <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{eq.nombre}</span>
                                 <span style={{ fontSize: 12, color: PALETA.gris }}>{eq.integrantes}</span>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginLeft: "auto" }}>{eq.puntos} pts</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginLeft: "auto" }}>{fmt(eq.puntos)} pts</span>
                               </div>
                               {[
                                 { label: "¿Qué aprendieron?", val: eq.respuestas?.q1 },
@@ -430,6 +435,8 @@ export default function ArbitroPanelPage() {
                                     ? { icon: "⚡", label: "Incompleta", color: "#92400e", bg: "#fef3c7" }
                                     : r.calificacion === "pasada"
                                     ? { icon: "⏭️", label: "Pasada", color: "#475569", bg: "#f1f5f9" }
+                                    : r.calificacion === "fuera_de_tema"
+                                    ? { icon: "🚫", label: ta.offTopicLabel, color: "#9a3412", bg: "#ffedd5" }
                                     : { icon: "❌", label: "No", color: "#991b1b", bg: "#fee2e2" };
                                   return (
                                     <div key={k} style={{ backgroundColor: "white", borderRadius: 8, padding: "8px 12px", border: "1px solid #f1f5f9" }}>
@@ -438,7 +445,7 @@ export default function ArbitroPanelPage() {
                                           Ronda {r.ronda}: {r.equipoPregunta} → {r.equipoResponde}
                                         </span>
                                         <span style={{ fontSize: 12, fontWeight: 700, color: calBadge.color, backgroundColor: calBadge.bg, borderRadius: 20, padding: "2px 8px", whiteSpace: "nowrap" }}>
-                                          {calBadge.icon} {calBadge.label} ({r.puntos} pts)
+                                          {calBadge.icon} {calBadge.label} ({fmt(r.puntos)} pts)
                                         </span>
                                       </div>
                                       {r.fueAlArbitro ? (

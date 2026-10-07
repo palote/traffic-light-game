@@ -6,6 +6,7 @@ import { useArbitroT } from "../i18n";
 import { useGameMode } from "../contexts/GameModeContext";
 import { app } from "../firebase.config";
 import { PALETA, AREA_COLORS } from "../utils/arbitroPalette";
+import { esIaNoDisponible } from "../utils/arbitroErrores";
 import { getCourses, createCourseWork, type ClassroomCourse } from "../services/classroomService";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -279,6 +280,8 @@ export default function ArbitroConfigPage() {
     } catch (err: any) {
       if (err?.code === "functions/unauthenticated") {
         setFaltaLoginPreguntas(true); // la sesión venció entre medio
+      } else if (esIaNoDisponible(err)) {
+        setErrorGenerarPreguntas(ta.aiUnavailable);
       } else {
         setErrorGenerarPreguntas(`No se pudieron generar las preguntas: ${err.message}`);
       }

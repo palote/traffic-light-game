@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { useArbitroT } from "../i18n";
+import { esIaNoDisponible, esRespuestaNoClara } from "../utils/arbitroErrores";
 import { useParams } from "react-router-dom";
 import { app } from "../firebase.config";
 import { PALETA } from "../utils/arbitroPalette";
@@ -43,6 +45,7 @@ const veredictoLabel: Record<string, string> = {
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function ArbitroSesionPage() {
+  const ta = useArbitroT();
   const { sessionId } = useParams<{ sessionId: string }>();
 
   const [sesion,        setSesion]        = useState<SesionData | null>(null);
@@ -98,7 +101,10 @@ export default function ArbitroSesionPage() {
       // Guardar en historial
       setInteracciones(prev => [...prev, { conflicto, posicionA, posicionB, veredicto: res.data }]);
     } catch (err: any) {
-      setErrorV(`Error al consultar al árbitro: ${err.message}`);
+      // El texto sale del código del error, no del mensaje del servidor.
+      if (esIaNoDisponible(err)) setErrorV(ta.aiUnavailable);
+      else if (esRespuestaNoClara(err)) setErrorV(ta.errorNoClearAnswer);
+      else setErrorV(`Error al consultar al árbitro: ${err.message}`);
     } finally {
       setLoadingV(false);
     }

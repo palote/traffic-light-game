@@ -80,9 +80,15 @@ export function buildArbitroPrompt(params: {
   posicionA: string;
   posicionB: string;
   esJuegoOral?: boolean;
+  // Juego oral: nombres de los equipos. El modelo recibe explícitamente cuál preguntó y cuál respondió.
+  equipoPregunta?: string;
+  equipoResponde?: string;
   contexto?: ContextoArbitroOpcional;
 }): string {
   const { materia, nivel, anio, tema, subtema, ejercicio, textoFuente, desacuerdo, posicionA, posicionB, esJuegoOral, contexto } = params;
+  const limpiarNombre = (n?: string) => (n || "").replace(/["\r\n]+/g, " ").trim().slice(0, 60);
+  const nombrePregunta = limpiarNombre(params.equipoPregunta);
+  const nombreResponde = limpiarNombre(params.equipoResponde);
 
   // ── Instrucción de nivel de idioma (R02) ──────────────────────────────────
   const anioNum = parseInt(anio, 10);
@@ -112,22 +118,24 @@ export function buildArbitroPrompt(params: {
   "resultado": "A",
   "elementosClave": "qué elementos específicos necesitaría una respuesta completa a ESTA pregunta puntual (uno solo, o varios si la pregunta lo requiere), y cuáles de esos mencionó el equipo de forma concreta y no genérica",
   "calificacionRecomendada": "completa",${esJuegoOral ? `
-  "puntosResponde": <número entre 0 y 1, en pasos de 0.25>,
-  "puntosPregunta": <número entre 0 y 1, en pasos de 0.25>,` : ""}
-  "veredicto": "una oración que resume quién tiene razón",
+  "tieneRazon": "pregunta" | "responde" | "ambos" | "ninguno",
+  "grado": "total" | "parcial",` : ""}
+  "veredicto": "${esJuegoOral ? "una oración que dice quién tiene razón, nombrando al equipo, coherente con tieneRazon" : "una oración que resume quién tiene razón"}",
   "explicacion": "2-3 oraciones explicando el concepto de forma pedagógica",
   "paraSeguirPensando": "una pregunta que invite al grupo a seguir reflexionando"
 }
 
-El campo "elementosClave" es un paso de análisis obligatorio que tenés que resolver ANTES de decidir "calificacionRecomendada": pensá primero qué necesitaría decir una respuesta completa a esta pregunta puntual, y compará eso con lo que el equipo realmente dijo. No lo saltees — la categoría de abajo tiene que salir de esa comparación, no de una impresión general.${esJuegoOral ? `
+El campo "elementosClave" es un paso de análisis obligatorio que tenés que resolver ANTES de decidir "calificacionRecomendada": pensá primero qué necesitaría decir una respuesta completa a esta pregunta puntual, y compará eso con lo que el equipo realmente dijo. No lo saltees — la categoría de abajo tiene que salir de esa comparación, no de una impresión general.
 
-Los campos "puntosResponde" y "puntosPregunta" reparten 1 punto entre los dos equipos según el mérito real de cada posición en la disputa — no dependen de "calificacionRecomendada" ni tienen que sumar necesariamente 1 (pueden ser 0 y 0 si ninguna posición se sostiene). Usá pasos de 0.25: 0, 0.25, 0.5, 0.75 o 1.` : ""}
+REGLA DE COMPLETITUD: las partes que hacen completa una respuesta se sacan de lo que PIDE LA PREGUNTA, no de todo lo que se podría decir sobre el tema. Una respuesta es completa si da lo que la pregunta pide, aunque quede información relevante sin mencionar. Si la sesión tiene TEXTO BASE, usalo para verificar que lo que dijo el equipo es correcto; NO lo uses para exigir información que la pregunta no pidió. Ejemplos: si la pregunta pide «identificá el error», la respuesta es completa si identifica el error y lo corrige (no hace falta que además explique cómo o por qué se produjo); si pide «nombrá dos causas», es completa con dos causas correctas.${esJuegoOral ? `
 
-El campo "resultado" debe ser exactamente uno de: "A", "B", "ambas_correctas", "ambas_incorrectas".
+Los campos "tieneRazon" y "grado" dicen quién tiene razón en la disputa y en qué medida (se explican más abajo). Vos NO escribís puntajes: el sistema calcula el reparto del punto a partir de esos dos campos. "tieneRazon" debe ser exactamente uno de: "pregunta", "responde", "ambos", "ninguno". "grado" debe ser exactamente uno de: "total", "parcial".` : ""}
+
+El campo "resultado" debe ser exactamente uno de: "A", "B", "ambas_correctas", "ambas_incorrectas".${esJuegoOral ? ` En esta ronda, "resultado" tiene que ser coherente con "tieneRazon": "A" si tiene razón quien preguntó, "B" si tiene razón quien respondió, "ambas_correctas" si "ambos", "ambas_incorrectas" si "ninguno".` : ""}
 
 El campo "calificacionRecomendada" es INDEPENDIENTE de "resultado": indica qué puntaje merece la respuesta del equipo EN SÍ MISMA, evaluada por vos con tu propio conocimiento de la materia — no solo comparando qué posición del desacuerdo "ganó". Debe ser exactamente uno de:
 - "completa": la respuesta es correcta y cubre los elementos específicos que hacían falta para esta pregunta puntual.
-- "incompleta": la respuesta ES CORRECTA en todo lo que afirma Y menciona al menos un dato, nombre o idea ESPECÍFICA y CONCRETA sobre el tema — no genérica ni obvia, algo que demuestre que el equipo sabe algo puntual — pero le falta desarrollo, justificación, precisión o ejemplos. Si la respuesta completa requiere varios elementos (varias causas, varios nombres, varios pasos de un proceso), usá "incompleta" cuando el equipo mencione ALGUNOS de esos elementos de forma específica y correcta, aunque falten otros.
+- "incompleta": la respuesta ES CORRECTA en todo lo que afirma Y menciona al menos un dato, nombre o idea ESPECÍFICA y CONCRETA sobre el tema — no genérica ni obvia, algo que demuestre que el equipo sabe algo puntual — pero le falta alguna de las partes que la pregunta pedía, o precisión en alguna de ellas. No cuentan como faltantes el desarrollo, la justificación ni los ejemplos que la pregunta no pidió. Si la respuesta completa requiere varios elementos (varias causas, varios nombres, varios pasos de un proceso), usá "incompleta" cuando el equipo mencione ALGUNOS de esos elementos de forma específica y correcta, aunque falten otros.
 - "no": la respuesta tiene un error conceptual o factual — un nombre, dato, concepto o relación que está mal — sin importar qué tan convincente sea el argumento de quien la defiende, ni qué tan cerca esté del tema correcto. Confundir un personaje, una fecha o un dato por otro NUNCA es "incompleta" ni "un poco vaga": es un error, y va como "no". TAMBIÉN es "no" una respuesta vacía, evasiva o tan genérica que no menciona ningún dato específico y verificable del tema — que serviría como respuesta a casi cualquier pregunta del mismo tema sin demostrar comprensión real (ejemplo: si preguntan quiénes son los protagonistas y responden solo "la familia" sin nombrar a nadie ni dar ningún detalle). Y TAMBIÉN es "no" cuando la respuesta completa requería varios elementos y el equipo solo dio uno o dos, y esos pocos son genéricos u obvios en vez de específicos — ahí tampoco alcanza para "incompleta", aunque no haya ningún dato objetivamente erróneo. Sé estricto, no condescendiente — no le subas la categoría a una respuesta vacía o casi vacía solo para no ser duro. Chequeo de consistencia obligatorio: si en "explicacion" vos mismo decís que algo "es incorrecto", "está mal" o "confunde X con Y", entonces "calificacionRecomendada" tiene que ser "no" — nunca "incompleta". Esos dos campos no pueden contradecirse. Usá "no" incluso si el equipo que calificó originalmente había puesto "incompleta" — si vos detectás que en realidad está mal o es demasiado vacía, corregilo a "no".`;
 
   // ── Pertinencia (R05) ─────────────────────────────────────────────────────
@@ -154,15 +162,14 @@ Actuá como un árbitro deportivo: firme y justo, que reconoce lo que está bien
 Muy importante: "calificacionRecomendada" tiene que reflejar el mérito real de la respuesta oral que dieron, no premiar al equipo que argumentó con más convicción en la disputa — si la respuesta tiene un error de fondo, es "no" aunque ese equipo defienda su postura con seguridad. No suavices el puntaje por compasión: confundir un nombre, un dato o un concepto por otro no es "responder vago", es un error, y corresponde "no" — sé un árbitro estricto y justo, no uno condescendiente. Lo mismo vale para una respuesta vacía, evasiva o demasiado genérica sin ningún dato concreto: no tener errores no alcanza para "incompleta" si tampoco hay nada específico — en ese caso también corresponde "no".
 La pregunta de "paraSeguirPensando" tiene que servir para los DOS equipos por igual, porque se lee en voz alta para toda la clase.
 
-Además de "calificacionRecomendada", tenés que repartir 1 punto entre los dos equipos en "puntosResponde" y "puntosPregunta" según el mérito real de cada posición — no es "quién gana", es cuánto se lleva cada uno:
-- Si la respuesta fue realmente completa y la objeción no se sostiene: puntosResponde 1, puntosPregunta 0
-- Si la respuesta fue casi completa y la objeción señala algo menor pero real: puntosResponde 0.75, puntosPregunta 0.25
-- Si los dos tienen parte de razón: puntosResponde 0.5, puntosPregunta 0.5
-- Si la objeción es acertada y bien fundamentada: puntosResponde 0.25, puntosPregunta 0.75
-- Si la respuesta era incorrecta y la objeción se sostiene: puntosResponde 0, puntosPregunta 1
-- Si NINGUNA de las dos posiciones se sostiene con el texto o el tema: puntosResponde 0, puntosPregunta 0
+QUIÉN ES QUIÉN: ${nombrePregunta && nombreResponde ? `el equipo que PREGUNTÓ es "${nombrePregunta}" (es la Posición A) y el equipo que RESPONDIÓ es "${nombreResponde}" (es la Posición B).` : "el equipo que PREGUNTÓ es el de la Posición A y el equipo que RESPONDIÓ es el de la Posición B."}
 
-Muy importante: evaluá el mérito real de cada argumento, no quién escribió más o con más convicción. Si el equipo que preguntó solo dijo "está incompleta" sin explicar qué falta, eso pesa poco frente a una respuesta bien fundamentada — inclinate hacia puntosResponde alto en ese caso.
+Además de "calificacionRecomendada", tenés que decir quién tiene razón en la disputa con dos campos, "tieneRazon" y "grado". El punto de la ronda lo reparte el sistema a partir de ellos; vos no escribas puntajes en ningún campo.
+- "tieneRazon": "pregunta" si tiene razón el equipo que preguntó (la calificación que le puso a la respuesta se sostiene); "responde" si tiene razón el equipo que respondió (la calificación era injusta: su respuesta merecía más); "ambos" si los dos tienen parte de razón; "ninguno" si ninguna de las dos posiciones se sostiene con el texto o el tema.
+- "grado": "total" si quien tiene razón la tiene por completo; "parcial" si la tiene solo en parte. Con "ambos" o "ninguno" poné "parcial".
+El "veredicto" tiene que decir lo mismo que "tieneRazon": si es "pregunta", tiene razón ${nombrePregunta ? `"${nombrePregunta}"` : "el equipo que preguntó"}; si es "responde", tiene razón ${nombreResponde ? `"${nombreResponde}"` : "el equipo que respondió"}; si es "ambos" o "ninguno", el veredicto lo dice así. Nunca nombres a un equipo como ganador si "tieneRazon" apunta al otro.
+
+Muy importante: evaluá el mérito real de cada argumento, no quién escribió más o con más convicción. Si el equipo que preguntó solo dijo "está incompleta" sin explicar qué falta, eso pesa poco frente a una respuesta bien fundamentada — en ese caso inclinate por "responde".
 ` : "";
 
   // ── Prompt único ──────────────────────────────────────────────────────────

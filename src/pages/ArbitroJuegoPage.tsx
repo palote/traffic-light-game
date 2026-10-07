@@ -2,9 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useParams } from "react-router-dom";
 import { app } from "../firebase.config";
-import { useArbitroT, fillArbitro } from "../i18n";
+import { useArbitroT, fillArbitro, useFormatoPuntos } from "../i18n";
+import { esIaNoDisponible, esRespuestaNoClara } from "../utils/arbitroErrores";
 import { PALETA, EQUIPO_COLORES, EQUIPO_COLOR_1, EQUIPO_COLOR_2 } from "../utils/arbitroPalette";
 import { coloresArea } from "../utils/arbitroAreas";
+import {
+  leerPartida, guardarPartida, borrarPartida, purgarPartidasVencidas, sesionVencida,
+  type PartidaGuardada,
+} from "../utils/arbitroPartida";
 
 interface SesionData {
   area?: string;
@@ -36,7 +41,7 @@ interface RegistroRonda {
   equipoResponde: string;
   pregunta: string;
   respuesta: string;
-  calificacion: "completa" | "incompleta" | "no" | "pasada";
+  calificacion: "completa" | "incompleta" | "no" | "pasada" | "fuera_de_tema";
   puntos: number;
   fueAlArbitro: boolean;
   veredictoArbitro?: string;
@@ -63,6 +68,7 @@ type Pantalla =
 export default function ArbitroJuegoPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const t = useArbitroT();
+  const fmt = useFormatoPuntos(); // solo para mostrar; lo guardado y sumado es el valor exacto
 
   // ── Sesión ────────────────────────────────────────────────────────────────
   const [sesion, setSesion] = useState<SesionData | null>(null);
@@ -180,14 +186,104 @@ export default function ArbitroJuegoPage() {
   const [metaError, setMetaError] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
 
+  // ── Reconexión ────────────────────────────────────────────────────────────
+  // La partida se guarda en localStorage (una clave por id de sesión) en cada cambio de estado.
+  // Al cargar, si hay una partida guardada en curso se pregunta si continuar o empezar de nuevo.
+  // "resuelta" queda en false mientras haya una decisión pendiente: hasta entonces NO se guarda
+  // nada, para que el estado inicial vacío no pise la partida guardada.
+  const [rec, setRec] = useState<{ guardada: PartidaGuardada | null; resuelta: boolean }>(() => {
+    const g = leerPartida(sessionId);
+    return { guardada: g, resuelta: !g };
+  });
+
+  const aplicarPartida = (g: PartidaGuardada) => {
+    setNombreEquipo1(g.nombreEquipo1); setNombreEquipo2(g.nombreEquipo2);
+    setColorEquipo1(g.colorEquipo1); setColorEquipo2(g.colorEquipo2);
+    setIntegrantesEquipo1(g.integrantesEquipo1); setIntegrantesEquipo2(g.integrantesEquipo2);
+    setVueltasTotales(g.vueltasTotales);
+    setPreguntaNumero(g.preguntaNumero); setEquipoPreguntaIdx(g.equipoPreguntaIdx);
+    setPuntosEquipo1(g.puntosEquipo1); setPuntosEquipo2(g.puntosEquipo2);
+    setRegistros(g.registros);
+    setPreguntaActual(g.preguntaActual); setUsarPreguntaPropia(g.usarPreguntaPropia); setPreguntaBorrador(g.preguntaBorrador);
+    setRespuestaActual(g.respuestaActual); setCalificacionActual(g.calificacionActual); setJustificacionCalificacion(g.justificacionCalificacion);
+    setDisputaPregunta(g.disputaPregunta); setDisputaRespuesta(g.disputaRespuesta);
+    setDisputaArgEquipoPregunta(g.disputaArgEquipoPregunta); setDisputaArgEquipoRespuesta(g.disputaArgEquipoRespuesta);
+    setVeredictoArbitro(g.veredictoArbitro);
+    setSegundos(g.segundos); setTiempoVencido(g.tiempoVencido); setCorriendo(g.corriendo); setSonidoActivo(g.sonidoActivo);
+    setMetaEquipoActual(g.metaEquipoActual);
+    setMeta1E1(g.meta[0]); setMeta2E1(g.meta[1]); setMeta3E1(g.meta[2]); setMeta4E1(g.meta[3]);
+    setMeta1E2(g.meta[4]); setMeta2E2(g.meta[5]); setMeta3E2(g.meta[6]); setMeta4E2(g.meta[7]);
+    // Una consulta al árbitro en vuelo no sobrevive a la recarga: sin veredicto se vuelve a la disputa.
+    setPantalla(g.pantalla === "arbitro" && !g.veredictoArbitro ? "disputa" : g.pantalla);
+    setErrorArbitro(null);
+    setRec({ guardada: null, resuelta: true });
+  };
+
+  const continuarPartida = () => { if (rec.guardada) aplicarPartida(rec.guardada); };
+  const empezarDeNuevo = () => {
+    if (sessionId) borrarPartida(sessionId);
+    setRec({ guardada: null, resuelta: true });
+  };
+
+  // Un guardado que quedó en la pantalla de armado de equipos no es "una partida en curso":
+  // se restaura sin preguntar (son solo los nombres que ya habían escrito).
+  useEffect(() => {
+    purgarPartidasVencidas();
+    if (rec.guardada && rec.guardada.pantalla === "setup") aplicarPartida(rec.guardada);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Cargar sesión ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!sessionId) return;
     const fn = httpsCallable(getFunctions(app), "getSesionArbitro");
     fn({ sessionId })
-      .then((res: any) => { setSesion(res.data); setLoadingSesion(false); })
-      .catch((err) => { setSesionError(err.message); setLoadingSesion(false); });
+      .then((res: any) => {
+        if (sesionVencida(res.data?.expiresAt)) {
+          borrarPartida(sessionId);
+          setRec({ guardada: null, resuelta: true });
+        }
+        setSesion(res.data); setLoadingSesion(false);
+      })
+      .catch((err) => {
+        // Sesión vencida o inexistente: el guardado ya no sirve. Un error de red NO lo borra:
+        // se puede reintentar y retomar la partida.
+        const code = String(err?.code || "");
+        if (code.endsWith("deadline-exceeded") || code.endsWith("not-found")) {
+          borrarPartida(sessionId);
+          setRec({ guardada: null, resuelta: true });
+        }
+        setSesionError(err.message); setLoadingSesion(false);
+      });
   }, [sessionId]);
+
+  // Autoguardado: en cada cambio de estado de la partida.
+  useEffect(() => {
+    if (!sessionId || !sesion || !rec.resuelta) return;
+    // Partida terminada (informe enviado) o sesión vencida: no queda nada guardado.
+    if (metaEnviada || sesionVencida(sesion.expiresAt)) { borrarPartida(sessionId); return; }
+    const sinDatos = pantalla === "setup" && !nombreEquipo1 && !nombreEquipo2 && !integrantesEquipo1 && !integrantesEquipo2;
+    if (sinDatos) { borrarPartida(sessionId); return; }
+    guardarPartida(sessionId, {
+      v: 1, expiresAt: sesion.expiresAt, guardadoEn: Date.now(),
+      nombreEquipo1, nombreEquipo2, colorEquipo1, colorEquipo2, integrantesEquipo1, integrantesEquipo2,
+      vueltasTotales,
+      pantalla: pantalla === "arbitro" && !veredictoArbitro ? "disputa" : pantalla,
+      preguntaNumero, equipoPreguntaIdx, puntosEquipo1, puntosEquipo2, registros,
+      preguntaActual, usarPreguntaPropia, preguntaBorrador, respuestaActual, calificacionActual, justificacionCalificacion,
+      disputaPregunta, disputaRespuesta, disputaArgEquipoPregunta, disputaArgEquipoRespuesta,
+      veredictoArbitro, segundos, tiempoVencido, corriendo, sonidoActivo, metaEquipoActual,
+      meta: [meta1E1, meta2E1, meta3E1, meta4E1, meta1E2, meta2E2, meta3E2, meta4E2],
+    });
+  }, [
+    sessionId, sesion, rec.resuelta, metaEnviada,
+    nombreEquipo1, nombreEquipo2, colorEquipo1, colorEquipo2, integrantesEquipo1, integrantesEquipo2, vueltasTotales,
+    pantalla, preguntaNumero, equipoPreguntaIdx, puntosEquipo1, puntosEquipo2, registros,
+    preguntaActual, usarPreguntaPropia, preguntaBorrador, respuestaActual, calificacionActual, justificacionCalificacion,
+    disputaPregunta, disputaRespuesta, disputaArgEquipoPregunta, disputaArgEquipoRespuesta,
+    veredictoArbitro, segundos, tiempoVencido, corriendo, sonidoActivo, metaEquipoActual,
+    meta1E1, meta2E1, meta3E1, meta4E1, meta1E2, meta2E2, meta3E2, meta4E2,
+  ]);
 
   // ── Temporizador ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -253,8 +349,10 @@ export default function ArbitroJuegoPage() {
   const equipoRespuesta = equipos[equipoPreguntaIdx === 0 ? 1 : 0];
 
   const addPuntos = (equipoIdx: number, pts: number) => {
-    if (equipoIdx === 0) setPuntosEquipo1(p => Math.round((p + pts) * 10) / 10);
-    else setPuntosEquipo2(p => Math.round((p + pts) * 10) / 10);
+    // Suma exacta: los puntos son múltiplos de 0,25, que se representan sin error en binario.
+    // (Antes se redondeaba a un decimal y 0,25 pasaba a 0,3.) El formato se aplica al mostrar.
+    if (equipoIdx === 0) setPuntosEquipo1(p => p + pts);
+    else setPuntosEquipo2(p => p + pts);
   };
 
   const puntosCalificacion = (c: "completa" | "incompleta" | "no" | "pasada") =>
@@ -297,7 +395,7 @@ export default function ArbitroJuegoPage() {
     equipos.forEach(eq => {
       lineas.push(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       lineas.push(`Equipo: ${eq.nombre} (${eq.integrantes})`);
-      lineas.push(`Puntaje final: ${eq.puntos} puntos`);
+      lineas.push(`Puntaje final: ${fmt(eq.puntos)} puntos`);
       lineas.push("");
     });
 
@@ -386,6 +484,8 @@ export default function ArbitroJuegoPage() {
         conflicto: `Pregunta: "${disputaPregunta}"\n\nRespuesta de ${equipoRespuesta.nombre}: "${disputaRespuesta}"`,
         posicionA: `${equipoPregunta.nombre} (calificó como ${calificacionActual}): ${disputaArgEquipoPregunta}`,
         posicionB: `${equipoRespuesta.nombre} (no acepta la calificación): ${disputaArgEquipoRespuesta}`,
+        equipoPregunta: equipoPregunta.nombre,
+        equipoResponde: equipoRespuesta.nombre,
       }) as { data: Veredicto };
       clearTimeout(timeoutId);
       setErrorArbitro(null); // por si la respuesta llegó tarde, después de que el timeout ya haya marcado error
@@ -393,10 +493,13 @@ export default function ArbitroJuegoPage() {
     } catch (err: any) {
       clearTimeout(timeoutId);
       console.error(err);
-      // "unavailable": el servidor recibió algo de Gemini que no se pudo usar
-      // (JSON inválido). No se aplica ningún punto: se muestra el error con
-      // «Reintentar», igual que cualquier otro fallo de la consulta.
-      if (err?.code === "functions/unavailable") {
+      // El texto sale del código del error, no del mensaje del servidor.
+      // - Gemini no disponible (saldo, cuota, modelo, red): aiUnavailable.
+      // - Gemini respondió algo inutilizable (JSON inválido): errorNoClearAnswer.
+      // En ningún caso se aplica un punto: se muestra el error con «Reintentar».
+      if (esIaNoDisponible(err)) {
+        setErrorArbitro(t.aiUnavailable);
+      } else if (esRespuestaNoClara(err)) {
         setErrorArbitro(t.errorNoClearAnswer);
       } else {
         setErrorArbitro(t.errorConsultFailed);
@@ -450,6 +553,40 @@ export default function ArbitroJuegoPage() {
     setPantalla("resultado_ronda");
   };
 
+  // Pregunta fuera del texto/tema (el árbitro respondió fuera_de_tema): no se suman puntos, la ronda
+  // queda registrada como "fuera_de_tema" para el informe y NO se consume: el mismo equipo vuelve a
+  // elegir otra pregunta (la rechazada queda marcada como usada en la lista).
+  const registrarFueraDeTema = () => {
+    setRegistros(prev => [...prev, {
+      ronda: prev.length + 1,
+      equipoPregunta: equipoPregunta.nombre,
+      equipoResponde: equipoRespuesta.nombre,
+      pregunta: preguntaActual,
+      respuesta: disputaRespuesta,
+      calificacion: "fuera_de_tema",
+      puntos: 0,
+      fueAlArbitro: true,
+      veredictoArbitro: veredictoArbitro?.veredicto,
+      tiempoSegundos: segundos,
+    }]);
+    detenerTimer();
+    setPreguntaActual("");
+    setUsarPreguntaPropia(false);
+    setPreguntaBorrador("");
+    setSegundos(0);
+    setTiempoVencido(false);
+    setRespuestaActual("");
+    setCalificacionActual(null);
+    setJustificacionCalificacion("");
+    setVeredictoArbitro(null);
+    setErrorArbitro(null);
+    setDisputaPregunta("");
+    setDisputaRespuesta("");
+    setDisputaArgEquipoPregunta("");
+    setDisputaArgEquipoRespuesta("");
+    setPantalla("turno_pregunta");
+  };
+
   // Salida legítima: el equipo pasa la pregunta sin puntos. La ronda queda
   // registrada como "pasada" para que el docente vea qué preguntas costaron.
   const pasarPregunta = () => {
@@ -499,6 +636,36 @@ export default function ArbitroJuegoPage() {
       </div>
     </FullPage>
   );
+
+  // Hay una partida guardada en curso: se pregunta antes de mostrar nada del juego.
+  if (!rec.resuelta && rec.guardada) {
+    const g = rec.guardada;
+    return (
+      <FullPage gradient={colors.gradient}>
+        <div style={cardWhite} role="alertdialog" aria-labelledby="resume-q">
+          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} />
+          <div style={{ padding: "28px 24px", textAlign: "center" }}>
+            <div style={{ fontSize: 44, marginBottom: 10 }} aria-hidden="true">⏸️</div>
+            <div id="resume-q" style={{ fontSize: 18, fontWeight: 800, color: PALETA.texto, marginBottom: 10, lineHeight: 1.35 }}>{t.resumeQuestion}</div>
+            <div style={{ fontSize: 14, color: PALETA.grisOscuro, marginBottom: 22, lineHeight: 1.5 }} data-testid="resume-summary">
+              {fillArbitro(t.resumeSummary, {
+                team1: g.nombreEquipo1, points1: fmt(g.puntosEquipo1),
+                team2: g.nombreEquipo2, points2: fmt(g.puntosEquipo2),
+                round: g.preguntaNumero, total: g.vueltasTotales,
+              })}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <button onClick={continuarPartida} style={btnPrimario(colors.gradient, false)}>{t.resumeContinue}</button>
+              <button onClick={empezarDeNuevo}
+                style={{ width: "100%", minHeight: 44, padding: "13px", fontSize: 14, fontWeight: 700, borderRadius: 12, border: `2px solid ${PALETA.gris}`, background: "white", color: PALETA.texto, cursor: "pointer" }}>
+                {t.resumeRestart}
+              </button>
+            </div>
+          </div>
+        </div>
+      </FullPage>
+    );
+  }
 
   // Preguntas que el docente cargó en la consigna, separadas una por línea
   // (soporta numeración "1.", "1)" y viñetas "-"/"•"). Si la consigna vino
@@ -607,7 +774,7 @@ export default function ArbitroJuegoPage() {
             <TeamName color={eq.color}>{eq.nombre}</TeamName>
           </div>
           <div style={{ fontSize: 12, color: "#475569", marginBottom: 4 }}>{eq.integrantes}</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: PALETA.texto }}>{eq.puntos}</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: PALETA.texto }}>{fmt(eq.puntos)}</div>
           <div style={{ fontSize: 12, color: "#475569" }}>puntos</div>
         </div>
       ))}
@@ -1100,6 +1267,17 @@ export default function ArbitroJuegoPage() {
                 <div style={{ fontSize: 15, fontWeight: 700, color: "#1e293b" }}>El árbitro está analizando…</div>
                 <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>Un momento</div>
               </div>
+            ) : veredictoArbitro && veredictoArbitro.resultado === "fuera_de_tema" ? (
+              <div>
+                <div role="alert" style={{ backgroundColor: "#fff7ed", borderRadius: 14, padding: "16px 18px", border: "2px solid #fdba74", marginBottom: 16 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: PALETA.naranjaOscuro, marginBottom: 6 }}>⚠️ {t.offTopicQuestion}</div>
+                  {veredictoArbitro.explicacion && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>{veredictoArbitro.explicacion}</div>}
+                </div>
+                <div style={{ fontSize: 12, color: PALETA.grisOscuro, textAlign: "center", marginBottom: 16 }}>{t.offTopicNoPoints}</div>
+                <button onClick={registrarFueraDeTema} style={btnPrimario(colors.gradient, false)}>
+                  {t.offTopicChooseAnother}
+                </button>
+              </div>
             ) : veredictoArbitro ? (() => {
               const { puntosResponde, puntosPregunta } = puntosReparto(veredictoArbitro);
               const equipoRespondeIdx = equipoPreguntaIdx === 0 ? 1 : 0;
@@ -1129,19 +1307,19 @@ export default function ArbitroJuegoPage() {
                     flex: puntosPregunta || 0.001, backgroundColor: `${equipoPregunta.color}20`,
                     padding: "14px 10px", textAlign: "center", borderRight: "2px solid white",
                   }}>
-                    <div style={{ fontSize: 20, fontWeight: 900, color: PALETA.texto }}>{puntosPregunta}</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: PALETA.texto }}>{fmt(puntosPregunta)}</div>
                     <div style={{ fontSize: 12, fontWeight: 700, display: "flex", justifyContent: "center" }}><TeamName color={equipoPregunta.color}>{equipoPregunta.nombre}</TeamName></div>
                   </div>
                   <div style={{
                     flex: puntosResponde || 0.001, backgroundColor: `${equipoRespuesta.color}20`,
                     padding: "14px 10px", textAlign: "center",
                   }}>
-                    <div style={{ fontSize: 20, fontWeight: 900, color: PALETA.texto }}>{puntosResponde}</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: PALETA.texto }}>{fmt(puntosResponde)}</div>
                     <div style={{ fontSize: 12, fontWeight: 700, display: "flex", justifyContent: "center" }}><TeamName color={equipoRespuesta.color}>{equipoRespuesta.nombre}</TeamName></div>
                   </div>
                 </div>
                 <div style={{ fontSize: 12, color: PALETA.gris, textAlign: "center", marginBottom: 20 }}>
-                  Suma: {(puntosResponde + puntosPregunta).toFixed(2)} punto{(puntosResponde + puntosPregunta) !== 1 ? "s" : ""} de 1 en juego
+                  Suma: {fmt(puntosResponde + puntosPregunta)} punto{(puntosResponde + puntosPregunta) !== 1 ? "s" : ""} de 1 en juego
                 </div>
 
                 <button
@@ -1196,7 +1374,7 @@ export default function ArbitroJuegoPage() {
                       <strong>{ultimoRegistro.equipoResponde}</strong> respondió "{ultimoRegistro.respuesta.substring(0, 80)}{ultimoRegistro.respuesta.length > 80 ? "..." : ""}"
                     </div>
                     <div style={{ fontSize: 12, color: "#64748b" }}>
-                      Calificación: <strong>{ultimoRegistro.calificacion}</strong> · {ultimoRegistro.puntos} punto{ultimoRegistro.puntos !== 1 ? "s" : ""}
+                      Calificación: <strong>{ultimoRegistro.calificacion}</strong> · {fmt(ultimoRegistro.puntos)} punto{ultimoRegistro.puntos !== 1 ? "s" : ""}
                       {ultimoRegistro.fueAlArbitro ? " · ⚖️ Validado por árbitro" : ""}
                     </div>
                   </>
@@ -1251,7 +1429,7 @@ export default function ArbitroJuegoPage() {
               <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 8 }}>Resumen de rondas</div>
               {registros.map((r, i) => (
                 <div key={i} style={{ fontSize: 12, color: "#1e293b", marginBottom: 4, paddingBottom: 4, borderBottom: "1px solid #f1f5f9" }}>
-                  Ronda {i + 1}: {r.equipoPregunta} → {r.equipoResponde} · {r.calificacion} · {r.puntos}pts {r.fueAlArbitro ? "⚖️" : ""}
+                  Ronda {i + 1}: {r.equipoPregunta} → {r.equipoResponde} · {r.calificacion === "fuera_de_tema" ? t.offTopicLabel : r.calificacion} · {fmt(r.puntos)}pts {r.fueAlArbitro ? "⚖️" : ""}
                 </div>
               ))}
             </div>
@@ -1341,7 +1519,7 @@ export default function ArbitroJuegoPage() {
                   <div key={i} style={{ flex: 1, borderRadius: 14, padding: "14px 10px", backgroundColor: `${eq.color}15`, border: `2px solid ${eq.color}` }}>
                     <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", marginBottom: 4, display: "flex", justifyContent: "center" }}><TeamName color={eq.color}>{eq.nombre}</TeamName></div>
                     <div style={{ fontSize: 12, color: PALETA.grisOscuro, marginBottom: 6 }}>{eq.integrantes}</div>
-                    <div style={{ fontSize: 30, fontWeight: 900, color: PALETA.texto }}>{eq.puntos}</div>
+                    <div style={{ fontSize: 30, fontWeight: 900, color: PALETA.texto }}>{fmt(eq.puntos)}</div>
                     <div style={{ fontSize: 12, color: PALETA.grisOscuro }}>puntos</div>
                   </div>
                 ))}

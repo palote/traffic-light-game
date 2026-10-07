@@ -10,7 +10,8 @@ import fetch from "node-fetch";
 // las carga en el momento con `await import(...)`.
 import type ExcelJS from "exceljs";
 import type PptxGenJS from "pptxgenjs";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { generarTextoGemini } from "./gemini";
+import { repartirPunto, resultadoDesdeTieneRazon } from "./arbitroReparto";
 import * as admin from "firebase-admin";
 import { buildArbitroPrompt, normalizarAreaKey, AREA_LABEL_ES } from "./arbitroPrompt";
 
@@ -880,10 +881,8 @@ async function getAIAnalysis(entityData: EntityData[], req: ComparadorRequest): 
   }).join("\n\n");
   const prompt = `Sos docente especialista en geografía. Analizá comparativamente para uso educativo:\n\n${dataSummary}\n\nRespondé ÚNICAMENTE con JSON válido sin backticks:\n{\n  ${enabledDims.filter(d => d !== "geografica").map(d => `"${d}": "análisis de 2 párrafos sobre dimensión ${d}"`).join(",\n  ")},\n  "conclusion": "síntesis de diferencias y similitudes",\n  "para_el_aula": "sugerencia para trabajar en clase"\n}`;
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    // Si Gemini falla, el helper lo registra y acá se cae al texto de respaldo: el Excel se genera igual.
+    const text = await generarTextoGemini(apiKey, prompt);
     return JSON.parse(text.replace(/```json|```/g, "").trim());
   } catch {
     return { conclusion: "Análisis no disponible.", para_el_aula: "Usar datos de la hoja Comparativa." };
@@ -981,10 +980,7 @@ export const generatePlanificacion = onCall(
       : 'El cronograma debe tener 6-8 filas. El campo "periodo" debe decir "Semana 1", "Semana 2", etc.';
     const prompt = `Sos un especialista en didáctica y planificación docente. Generá una planificación completa.\n\nDATOS: Materia: ${data.materia} | Nivel: ${data.nivel} | Año/Grado: ${data.anio || "no especificado"} | Duración: ${data.duracion} | Eje: ${data.eje} | Modalidad: ${data.modalidad} | Enfoque: ${isCapacidades ? "capacidades" : "objetivos clásicos"}\n\nRespondé ÚNICAMENTE con JSON válido sin backticks:\n{\n  "fundamentacion": "párrafo de 3-4 oraciones",\n  "objetivos_generales": ["objetivo 1", "objetivo 2", "objetivo 3"],\n  "objetivos_especificos": ["específico 1", "específico 2", "específico 3", "específico 4"],\n  "expectativas_logro": ["expectativa 1", "expectativa 2", "expectativa 3"],\n  "contenidos_conceptuales": ["contenido 1", "contenido 2", "contenido 3"],\n  "contenidos_procedimentales": ["contenido 1", "contenido 2", "contenido 3"],\n  "contenidos_actitudinales": ["contenido 1", "contenido 2"],\n  "estrategias": ["estrategia 1", "estrategia 2", "estrategia 3"],\n  "evaluacion": "párrafo de 2-3 oraciones",\n  "bibliografia": ["Apellido, A. (año). Título. Editorial.", "Apellido, B. (año). Título. Editorial."],\n  "cronograma": [{"periodo": "Período 1", "eje": "nombre del eje", "contenidos": "contenidos", "objetivos_capacidades": "${objetivosLabel}", "estrategias": "estrategias", "evaluacion": "tipo de evaluación"}]\n}\n\nINSTRUCCIONES: ${capacidadesNota} ${cronogramaEstructura} Todo en español.`;
     const apiKey = GEMINI_KEY.value();
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
-    const result = await model.generateContent(prompt);
-    const rawText: string = result.response.text();
+    const rawText: string = await generarTextoGemini(apiKey, prompt);
     let content: PlanContent;
     try {
       content = JSON.parse(rawText.replace(/```json|```/g, "").trim());
@@ -1410,8 +1406,11 @@ async function runArbitro(params: {
   posicionA: string;
   posicionB: string;
   esJuegoOral?: boolean;
+  equipoPregunta?: string;
+  equipoResponde?: string;
 }): Promise<object> {
   const { sessionId, desacuerdo, posicionA, posicionB, esJuegoOral } = params;
+  const nombreEquipo = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 60) : "");
 
   const sessionDoc = await db.collection("sesiones_arbitro").doc(sessionId).get();
   if (!sessionDoc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró.");
@@ -1422,9 +1421,6 @@ async function runArbitro(params: {
 
   const apiKey = GEMINI_KEY.value();
   if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada.");
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
 
   // Sin `contexto`: el prompt de producción no lleva línea de área/materia/criterio.
   // Para activarlas: contexto: { area: AREA_LABEL_ES[k], materia, criterio: criterioDeArea(session.area) }.
@@ -1440,14 +1436,16 @@ async function runArbitro(params: {
     posicionA,
     posicionB,
     esJuegoOral,
+    equipoPregunta: esJuegoOral ? nombreEquipo(params.equipoPregunta) : "",
+    equipoResponde: esJuegoOral ? nombreEquipo(params.equipoResponde) : "",
   });
 
-  const result = await model.generateContent({
+  const textoGemini = await generarTextoGemini(apiKey, {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0.2, maxOutputTokens: 700 },
   });
 
-  const raw = result.response.text().trim().replace(/```json|```/g, "").trim();
+  const raw = textoGemini.trim().replace(/```json|```/g, "").trim();
 
   // Si Gemini no devuelve JSON válido (o, en el juego oral, no trae el reparto
   // del punto), NO inventamos un veredicto: un respaldo sin puntos cerraba la
@@ -1458,11 +1456,29 @@ async function runArbitro(params: {
     parsed = JSON.parse(raw);
   } catch {
     console.error("runArbitro: Gemini devolvió algo que no es JSON:", raw.slice(0, 500));
-    throw new HttpsError("unavailable", "El árbitro no pudo dar una respuesta clara. Probá de nuevo.");
+    throw new HttpsError("unavailable", "El árbitro no pudo dar una respuesta clara. Probá de nuevo.", { motivo: "respuesta_no_clara" });
   }
-  if (esJuegoOral && (typeof parsed?.puntosResponde !== "number" || typeof parsed?.puntosPregunta !== "number")) {
-    console.error("runArbitro: falta el reparto del punto en la respuesta:", raw.slice(0, 500));
-    throw new HttpsError("unavailable", "El árbitro no pudo dar una respuesta clara. Probá de nuevo.");
+  if (esJuegoOral && parsed?.resultado === "fuera_de_tema") {
+    // Pregunta fuera del texto/tema: no hay disputa que repartir. Reparto 0/0, sin «Reintentar»;
+    // el juego avisa que elijan otra pregunta. La consulta igual se registra (resultado fuera_de_tema).
+    parsed.tieneRazon = "ninguno";
+    parsed.grado = "parcial";
+    parsed.puntosPregunta = 0;
+    parsed.puntosResponde = 0;
+  } else if (esJuegoOral) {
+    // El reparto lo calcula el código a partir de tieneRazon + grado; el modelo no escribe puntajes.
+    // Si faltan o traen valores fuera de las opciones, camino de «Reintentar» (no se suma nada).
+    const reparto = repartirPunto(parsed?.tieneRazon, parsed?.grado);
+    if (!reparto) {
+      console.error("runArbitro: tieneRazon/grado ausentes o fuera de las opciones:", JSON.stringify({ tieneRazon: parsed?.tieneRazon, grado: parsed?.grado }));
+      throw new HttpsError("unavailable", "El árbitro no pudo dar una respuesta clara. Probá de nuevo.", { motivo: "respuesta_no_clara" });
+    }
+    parsed.tieneRazon = String(parsed.tieneRazon).trim().toLowerCase();
+    if (parsed.grado !== undefined && parsed.grado !== null && parsed.grado !== "") parsed.grado = String(parsed.grado).trim().toLowerCase();
+    parsed.puntosPregunta = reparto.puntosPregunta;
+    parsed.puntosResponde = reparto.puntosResponde;
+    // "resultado" siempre coherente con tieneRazon (salvo fuera_de_tema, que se respeta).
+    if (parsed.resultado !== "fuera_de_tema") parsed.resultado = resultadoDesdeTieneRazon(parsed.tieneRazon) ?? parsed.resultado;
   }
 
   // Registrar consulta (incluye resultado fuera_de_tema para análisis)
@@ -1495,12 +1511,12 @@ export const arbitrarDesacuerdo = onCall(
 export const requestVeredicto = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 90, memory: "256MiB" },
   async (request) => {
-    const { sessionId, conflicto, desacuerdo, posicionA, posicionB, modo } = request.data;
+    const { sessionId, conflicto, desacuerdo, posicionA, posicionB, modo, equipoPregunta, equipoResponde } = request.data;
     const texto = conflicto || desacuerdo;
     if (!sessionId || !texto || !posicionA || !posicionB) {
       throw new HttpsError("invalid-argument", "Faltan campos: sessionId, conflicto, posicionA, posicionB.");
     }
-    return runArbitro({ sessionId, desacuerdo: texto, posicionA, posicionB, esJuegoOral: modo === "juego_oral" });
+    return runArbitro({ sessionId, desacuerdo: texto, posicionA, posicionB, esJuegoOral: modo === "juego_oral", equipoPregunta, equipoResponde });
   }
 );
 
@@ -1527,8 +1543,6 @@ export const generarConsignasArbitro = onCall(
     const tipo = tipoPreguntas === "memoristica" || tipoPreguntas === "capacidades" ? tipoPreguntas : "mixta";
     const apiKey = GEMINI_KEY.value();
     if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada");
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
 
     // Operaciones de pensamiento que buscan desarrollar capacidades (pensamiento
     // crítico, argumentación) en vez de pura memoria — versión curada para preguntas
@@ -1569,8 +1583,7 @@ completa, incompleta o incorrecta. Por eso cada pregunta debe:
 ${bloqueTipo}
 
 Numerá las preguntas del 1 al ${n}. Respondé SOLO con las preguntas numeradas, sin introducción ni cierre.`;
-    const result = await model.generateContent(prompt);
-    return { consignas: result.response.text().trim() };
+    return { consignas: (await generarTextoGemini(apiKey, prompt)).trim() };
   }
 );
 
@@ -1593,12 +1606,9 @@ export const requestConsigna = onCall(
     const { materia, nivel, anio, tema, subtema } = session;
     const apiKey = GEMINI_KEY.value();
     if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada");
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
     const prompt = `Generá UNA SOLA pregunta de debate para alumnos de ${materia}, ${nivel} ${anio}, tema: "${tema}"${subtema ? ` (${subtema})` : ""}.
 No debe ser de sí/no. Máximo 2 líneas. Respondé SOLO con la pregunta.`;
-    const result = await model.generateContent(prompt);
-    return { consigna: result.response.text().trim() };
+    return { consigna: (await generarTextoGemini(apiKey, prompt)).trim() };
   }
 );
 
@@ -1817,9 +1827,6 @@ export const generarInformeSesion = onCall(
     const apiKey = GEMINI_KEY.value();
     if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada.");
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
-
     // Construir resumen de consultas para el prompt
     const resumenConsultas = consultas.map((c, i) => {
       const resultadoLabel: Record<string, string> = {
@@ -1878,12 +1885,12 @@ Respondé ÚNICAMENTE con JSON válido sin backticks ni texto adicional:
   "nivelDebate": "superficial" | "adecuado" | "profundo"
 }${rondasPasadasSection}`;
 
-    const result = await model.generateContent({
+    const textoGemini = await generarTextoGemini(apiKey, {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.3, maxOutputTokens: 1200 },
     });
 
-    const raw = result.response.text().trim().replace(/```json|```/g, "").trim();
+    const raw = textoGemini.trim().replace(/```json|```/g, "").trim();
 
     let informe: any;
     try {
