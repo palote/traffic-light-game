@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useParams } from "react-router-dom";
 import { app } from "../firebase.config";
+import { useArbitroT, fillArbitro } from "../i18n";
+import { PALETA, EQUIPO_COLORES, EQUIPO_COLOR_1, EQUIPO_COLOR_2 } from "../utils/arbitroPalette";
+import { coloresArea } from "../utils/arbitroAreas";
 
 interface SesionData {
   area?: string;
@@ -18,8 +21,10 @@ interface SesionData {
 }
 
 interface Veredicto {
-  resultado: "A" | "B" | "ambas_correctas" | "ambas_incorrectas";
+  resultado: "A" | "B" | "ambas_correctas" | "ambas_incorrectas" | "fuera_de_tema";
   calificacionRecomendada?: "completa" | "incompleta" | "no";
+  puntosResponde?: number;
+  puntosPregunta?: number;
   veredicto: string;
   explicacion: string;
   paraSeguirPensando: string;
@@ -38,13 +43,9 @@ interface RegistroRonda {
   tiempoSegundos?: number;
 }
 
-const AREA_COLORS: Record<string, { gradient: string; light: string; border: string; primary: string }> = {
-  "Ciencias Exactas y Naturales":    { gradient: "linear-gradient(135deg, #0ea5e9 0%, #0d9488 100%)", light: "#f0f9ff", border: "#bae6fd", primary: "#0ea5e9" },
-  "Ciencias Sociales y Humanidades": { gradient: "linear-gradient(135deg, #f97316 0%, #b45309 100%)", light: "#fff7ed", border: "#fed7aa", primary: "#f97316" },
-  "Comunicación y Lenguajes":        { gradient: "linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)", light: "#faf5ff", border: "#e9d5ff", primary: "#8b5cf6" },
-  "Arte y Expresión":                { gradient: "linear-gradient(135deg, #f43f5e 0%, #f97316 100%)", light: "#fff1f2", border: "#fecdd3", primary: "#f43f5e" },
-};
-const DEFAULT_COLORS = { gradient: "linear-gradient(135deg, #1e3a5f 0%, #3730a3 100%)", light: "#f0f7ff", border: "#bfdbfe", primary: "#3730a3" };
+// Los colores por área (AREA_COLORS) viven en utils/arbitroPalette.ts, indexados por
+// la clave corta del área; coloresArea() acepta también el nombre completo de las
+// sesiones viejas.
 
 // ── Tipos de pantalla del flujo ──────────────────────────────────────────────
 type Pantalla =
@@ -61,6 +62,7 @@ type Pantalla =
 
 export default function ArbitroJuegoPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const t = useArbitroT();
 
   // ── Sesión ────────────────────────────────────────────────────────────────
   const [sesion, setSesion] = useState<SesionData | null>(null);
@@ -70,8 +72,8 @@ export default function ArbitroJuegoPage() {
   // ── Setup de equipos ──────────────────────────────────────────────────────
   const [nombreEquipo1, setNombreEquipo1] = useState("");
   const [nombreEquipo2, setNombreEquipo2] = useState("");
-  const [colorEquipo1, setColorEquipo1] = useState("#ef4444"); // rojo por defecto
-  const [colorEquipo2, setColorEquipo2] = useState("#3b82f6"); // azul por defecto
+  const [colorEquipo1, setColorEquipo1] = useState<string>(EQUIPO_COLOR_1); // rojo por defecto
+  const [colorEquipo2, setColorEquipo2] = useState<string>(EQUIPO_COLOR_2); // azul por defecto
   const [integrantesEquipo1, setIntegrantesEquipo1] = useState("");
   const [integrantesEquipo2, setIntegrantesEquipo2] = useState("");
   const [vueltasTotales, setVueltasTotales] = useState(10);
@@ -90,6 +92,7 @@ export default function ArbitroJuegoPage() {
   const [preguntaBorrador, setPreguntaBorrador] = useState(""); // texto en el textarea de pregunta propia, antes de confirmarla
   const [respuestaActual, setRespuestaActual] = useState("");
   const [calificacionActual, setCalificacionActual] = useState<"completa" | "incompleta" | "no" | "pasada" | null>(null);
+  const [justificacionCalificacion, setJustificacionCalificacion] = useState("");
 
   // ── Disputa / consulta al árbitro ────────────────────────────────────────
   const [disputaPregunta, setDisputaPregunta] = useState("");
@@ -100,12 +103,16 @@ export default function ArbitroJuegoPage() {
   // ── Árbitro ────────────────────────────────────────────────────────────────
   const [loadingArbitro, setLoadingArbitro] = useState(false);
   const [veredictoArbitro, setVeredictoArbitro] = useState<Veredicto | null>(null);
+  const [errorArbitro, setErrorArbitro] = useState<string | null>(null);
 
   // ── Temporizador ──────────────────────────────────────────────────────────
   const [segundos, setSegundos] = useState(0);
   const [corriendo, setCorriendo] = useState(false);
   const [tiempoVencido, setTiempoVencido] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Texto que lee el lector de pantalla (región aria-live): solo avisa a los 15 s
+  // y al terminar, no cada segundo.
+  const [anuncioTimer, setAnuncioTimer] = useState("");
 
   // ── Sonido del temporizador ───────────────────────────────────────────────
   // Web Audio nativa, sin archivos ni dependencias. El ref espeja el estado
@@ -137,10 +144,10 @@ export default function ArbitroJuegoPage() {
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.35, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
       osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.08);
+      osc.stop(ctx.currentTime + 0.15);
     } catch {}
   };
 
@@ -210,11 +217,20 @@ export default function ArbitroJuegoPage() {
     if (!corriendo || limite <= 0) return;
     const restante = limite - segundos;
     if (restante <= 5 && restante > 0) playTick();
+    if (restante === 15) setAnuncioTimer(t.timerAnnounce15);
   }, [segundos, corriendo, sesion?.tiempoPregunta]);
 
   useEffect(() => {
-    if (tiempoVencido) playFin();
+    if (tiempoVencido) {
+      playFin();
+      setAnuncioTimer(t.timerAnnounceUp);
+    }
   }, [tiempoVencido]);
+
+  // Fuera de la pantalla del turno no queda ningún aviso pendiente.
+  useEffect(() => {
+    if (pantalla !== "turno_pregunta") setAnuncioTimer("");
+  }, [pantalla]);
 
   const iniciarTimer = () => {
     // El contexto de audio solo se desbloquea dentro de un gesto del usuario,
@@ -222,6 +238,7 @@ export default function ArbitroJuegoPage() {
     getAudioCtx();
     setSegundos(0);
     setTiempoVencido(false);
+    setAnuncioTimer("");
     setCorriendo(true);
   };
   const detenerTimer = () => setCorriendo(false);
@@ -243,12 +260,17 @@ export default function ArbitroJuegoPage() {
   const puntosCalificacion = (c: "completa" | "incompleta" | "no" | "pasada") =>
     c === "completa" ? 1 : c === "incompleta" ? 0.5 : 0;
 
+  const puntosReparto = (v: Veredicto): { puntosResponde: number; puntosPregunta: number } => ({
+    puntosResponde: typeof v.puntosResponde === "number" ? v.puntosResponde : 0,
+    puntosPregunta: typeof v.puntosPregunta === "number" ? v.puntosPregunta : 0,
+  });
+
   // El árbitro devuelve A/B/ambas_correctas/ambas_incorrectas, no un puntaje.
   // Lo traducimos a una calificación recomendada para mostrarla resaltada.
   const CALIFICACION_INFO: Record<"completa" | "incompleta" | "no", { label: string; color: string }> = {
-    completa: { label: "Completa — 1 punto", color: "#16a34a" },
-    incompleta: { label: "Incompleta — 0.5 puntos", color: "#d97706" },
-    no: { label: "Incorrecta — 0 puntos", color: "#dc2626" },
+    completa: { label: "Completa — 1 punto", color: PALETA.verde },
+    incompleta: { label: "Incompleta — 0.5 puntos", color: PALETA.ambar },
+    no: { label: "Incorrecta — 0 puntos", color: PALETA.rojo },
   };
   const recomendacionArbitro = (v: Veredicto): "completa" | "incompleta" | "no" => {
     // El árbitro ahora recomienda el puntaje directamente (evaluando la
@@ -258,7 +280,7 @@ export default function ArbitroJuegoPage() {
     if (v.calificacionRecomendada === "completa" || v.calificacionRecomendada === "incompleta" || v.calificacionRecomendada === "no") {
       return v.calificacionRecomendada;
     }
-    if (v.resultado === "A") return calificacionActual ?? "incompleta"; // confirma la calificación original
+    if (v.resultado === "A") return calificacionActual && calificacionActual !== "pasada" ? calificacionActual : "incompleta"; // confirma la calificación original
     if (v.resultado === "B") return "completa"; // el equipo que respondió tenía razón: merece el punto completo
     if (v.resultado === "fuera_de_tema") return "no"; // el desacuerdo ni siquiera era válido para arbitrar: no corresponde puntaje
     return "incompleta"; // ambas_correctas / ambas_incorrectas: término medio
@@ -350,6 +372,12 @@ export default function ArbitroJuegoPage() {
   // ── Árbitro ────────────────────────────────────────────────────────────────
   const consultarArbitro = async () => {
     setLoadingArbitro(true);
+    setErrorArbitro(null);
+    const timeoutId = setTimeout(() => {
+      setLoadingArbitro(false);
+      setErrorArbitro("El árbitro está tardando más de lo normal. Puede ser la conexión a internet. Probá de nuevo.");
+    }, 20000); // 20 segundos
+
     try {
       const fn = httpsCallable(getFunctions(app, "us-central1"), "requestVeredicto");
       const res = await fn({
@@ -359,17 +387,35 @@ export default function ArbitroJuegoPage() {
         posicionA: `${equipoPregunta.nombre} (calificó como ${calificacionActual}): ${disputaArgEquipoPregunta}`,
         posicionB: `${equipoRespuesta.nombre} (no acepta la calificación): ${disputaArgEquipoRespuesta}`,
       }) as { data: Veredicto };
+      clearTimeout(timeoutId);
+      setErrorArbitro(null); // por si la respuesta llegó tarde, después de que el timeout ya haya marcado error
       setVeredictoArbitro(res.data);
     } catch (err: any) {
+      clearTimeout(timeoutId);
       console.error(err);
+      // "unavailable": el servidor recibió algo de Gemini que no se pudo usar
+      // (JSON inválido). No se aplica ningún punto: se muestra el error con
+      // «Reintentar», igual que cualquier otro fallo de la consulta.
+      if (err?.code === "functions/unavailable") {
+        setErrorArbitro(t.errorNoClearAnswer);
+      } else {
+        setErrorArbitro(t.errorConsultFailed);
+      }
     }
+    clearTimeout(timeoutId);
     setLoadingArbitro(false);
   };
 
   // ── Avanzar ronda ─────────────────────────────────────────────────────────
-  const cerrarRonda = (ptsAsignados: number, fueAlArbitro: boolean, veredicto?: string) => {
+  // saltarSumaPuntos: cuando el reparto ya se sumó a mano con addPuntos() para
+  // los dos equipos (caso del árbitro con puntosResponde/puntosPregunta),
+  // ptsAsignados solo sirve para dejar registrado el punto real del equipo que
+  // respondió — no hay que volver a sumarlo acá.
+  const cerrarRonda = (ptsAsignados: number, fueAlArbitro: boolean, veredicto?: string, saltarSumaPuntos = false) => {
     const equipoRespondeIdx = equipoPreguntaIdx === 0 ? 1 : 0;
-    addPuntos(equipoRespondeIdx, ptsAsignados);
+    if (!saltarSumaPuntos) {
+      addPuntos(equipoRespondeIdx, ptsAsignados);
+    }
     setRegistros(prev => [...prev, {
       ronda: registros.length + 1,
       equipoPregunta: equipoPregunta.nombre,
@@ -395,6 +441,7 @@ export default function ArbitroJuegoPage() {
     setTiempoVencido(false);
     setRespuestaActual("");
     setCalificacionActual(null);
+    setJustificacionCalificacion("");
     setVeredictoArbitro(null);
     setDisputaPregunta("");
     setDisputaRespuesta("");
@@ -439,7 +486,7 @@ export default function ArbitroJuegoPage() {
     setPantalla("turno_pregunta");
   };
 
-  const colors = sesion ? (AREA_COLORS[sesion.area || ""] || DEFAULT_COLORS) : DEFAULT_COLORS;
+  const colors = coloresArea(sesion?.area);
 
   // ── Loading / error ───────────────────────────────────────────────────────
   if (loadingSesion) return <FullPage><div style={{ color: "white", fontSize: 18, fontWeight: 600 }}>⏳ Cargando sesión…</div></FullPage>;
@@ -472,7 +519,6 @@ export default function ArbitroJuegoPage() {
 
   // ── SETUP ─────────────────────────────────────────────────────────────────
   if (pantalla === "setup") {
-    const COLORES = ["#ef4444","#3b82f6","#22c55e","#f59e0b","#8b5cf6","#ec4899","#14b8a6","#f97316"];
     const puedeEmpezar = nombreEquipo1.trim() && nombreEquipo2.trim() && integrantesEquipo1.trim() && integrantesEquipo2.trim();
     return (
       <FullPage gradient={colors.gradient}>
@@ -492,26 +538,34 @@ export default function ArbitroJuegoPage() {
                   Equipo {idx + 1}
                 </div>
                 <div style={{ marginBottom: 10 }}>
-                  <label style={lbl}>Nombre del equipo *</label>
-                  <input type="text" value={idx === 0 ? nombreEquipo1 : nombreEquipo2}
+                  <label htmlFor={`equipo-${idx + 1}-nombre`} style={lbl}>Nombre del equipo *</label>
+                  <input id={`equipo-${idx + 1}-nombre`} type="text" value={idx === 0 ? nombreEquipo1 : nombreEquipo2}
                     onChange={e => idx === 0 ? setNombreEquipo1(e.target.value) : setNombreEquipo2(e.target.value)}
                     placeholder="Ej: Los Narradores, Equipo A..."
                     style={inp} />
                 </div>
                 <div style={{ marginBottom: 10 }}>
-                  <label style={lbl}>Integrantes *</label>
-                  <input type="text" value={idx === 0 ? integrantesEquipo1 : integrantesEquipo2}
+                  <label htmlFor={`equipo-${idx + 1}-integrantes`} style={lbl}>Integrantes *</label>
+                  <input id={`equipo-${idx + 1}-integrantes`} type="text" value={idx === 0 ? integrantesEquipo1 : integrantesEquipo2}
                     onChange={e => idx === 0 ? setIntegrantesEquipo1(e.target.value) : setIntegrantesEquipo2(e.target.value)}
                     placeholder="Ej: Juan, María, Pedro"
                     style={inp} />
                 </div>
-                <div>
-                  <label style={lbl}>Color del equipo</label>
+                <div role="group" aria-label={fillArbitro(t.teamColorGroup, { team: (idx === 0 ? nombreEquipo1 : nombreEquipo2).trim() || fillArbitro(t.teamColorNumber, { n: idx + 1 }) })}>
+                  <div style={lbl}>Color del equipo</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {COLORES.map(c => (
-                      <button key={c} onClick={() => idx === 0 ? setColorEquipo1(c) : setColorEquipo2(c)}
-                        style={{ width: 32, height: 32, borderRadius: "50%", backgroundColor: c, border: (idx === 0 ? colorEquipo1 : colorEquipo2) === c ? "3px solid #1e293b" : "3px solid transparent", cursor: "pointer" }} />
-                    ))}
+                    {EQUIPO_COLORES.map(c => {
+                      const elegido = (idx === 0 ? colorEquipo1 : colorEquipo2) === c.hex;
+                      const nombreColor = t.teamColors[c.id];
+                      return (
+                        <button key={c.id} type="button"
+                          onClick={() => idx === 0 ? setColorEquipo1(c.hex) : setColorEquipo2(c.hex)}
+                          aria-label={nombreColor} title={nombreColor} aria-pressed={elegido}
+                          style={{ width: 44, height: 44, padding: 0, borderRadius: "50%", backgroundColor: c.hex, border: elegido ? `3px solid ${PALETA.texto}` : "3px solid transparent", boxShadow: elegido ? "inset 0 0 0 2px white" : "none", color: "white", fontSize: 20, fontWeight: 900, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span aria-hidden="true">{elegido ? "✓" : ""}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -519,23 +573,23 @@ export default function ArbitroJuegoPage() {
             })}
 
             <div>
-              <label style={lbl}>¿Cuántas preguntas van a jugar en total?</label>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div id="vueltas-label" style={lbl}>¿Cuántas preguntas van a jugar en total?</div>
+              <div role="group" aria-labelledby="vueltas-label" style={{ display: "flex", gap: 8 }}>
                 {[5, 10, 15, 20, 25].map(v => (
-                  <button key={v} onClick={() => setVueltasTotales(v)}
-                    style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: `2px solid ${vueltasTotales === v ? colors.primary : "#e2e8f0"}`, backgroundColor: vueltasTotales === v ? `${colors.primary}15` : "white", fontWeight: 700, fontSize: 13, color: vueltasTotales === v ? colors.primary : "#64748b", cursor: "pointer" }}>
+                  <button key={v} onClick={() => setVueltasTotales(v)} aria-pressed={vueltasTotales === v}
+                    style={{ flex: 1, minHeight: 44, padding: "10px 0", borderRadius: 10, border: `2px solid ${vueltasTotales === v ? colors.primary : "#e2e8f0"}`, backgroundColor: vueltasTotales === v ? `${colors.primary}15` : "white", fontWeight: 700, fontSize: 13, color: vueltasTotales === v ? colors.primary : PALETA.gris, cursor: "pointer" }}>
                     {v}
                   </button>
                 ))}
               </div>
-              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: PALETA.gris, marginTop: 4 }}>
                 Cantidad de preguntas en total · Podés agregar más al terminar
               </div>
             </div>
 
             <button onClick={() => setPantalla("turno_pregunta")}
               disabled={!puedeEmpezar}
-              style={{ padding: "14px", fontSize: 15, fontWeight: 800, borderRadius: 12, border: "none", background: puedeEmpezar ? colors.gradient : "#94a3b8", color: "white", cursor: puedeEmpezar ? "pointer" : "not-allowed" }}>
+              style={{ padding: "14px", fontSize: 15, fontWeight: 800, borderRadius: 12, border: "none", background: puedeEmpezar ? colors.gradient : PALETA.gris, color: "white", cursor: puedeEmpezar ? "pointer" : "not-allowed" }}>
               ⚔️ ¡Empezar el juego!
             </button>
           </div>
@@ -549,17 +603,20 @@ export default function ArbitroJuegoPage() {
     <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
       {equipos.map((eq, i) => (
         <div key={i} style={{ flex: 1, borderRadius: 14, padding: "12px 16px", backgroundColor: `${eq.color}15`, border: `2px solid ${eq.color}`, textAlign: "center" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: eq.color, textTransform: "uppercase", letterSpacing: "0.5px" }}>{eq.nombre}</div>
-          <div style={{ fontSize: 10, color: "#64748b", marginBottom: 4 }}>{eq.integrantes}</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: eq.color }}>{eq.puntos}</div>
-          <div style={{ fontSize: 10, color: "#94a3b8" }}>puntos</div>
+          <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", justifyContent: "center" }}>
+            <TeamName color={eq.color}>{eq.nombre}</TeamName>
+          </div>
+          <div style={{ fontSize: 12, color: "#475569", marginBottom: 4 }}>{eq.integrantes}</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: PALETA.texto }}>{eq.puntos}</div>
+          <div style={{ fontSize: 12, color: "#475569" }}>puntos</div>
         </div>
       ))}
     </div>
   );
 
+  // Texto gris oscuro sobre la tarjeta blanca (antes: blanco al 70 % sobre blanco).
   const InfoRonda = () => (
-    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", textAlign: "center", marginBottom: 8 }}>
+    <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", textAlign: "center", marginBottom: 8 }}>
       Pregunta {preguntaNumero} de {vueltasTotales}
     </div>
   );
@@ -597,22 +654,26 @@ export default function ArbitroJuegoPage() {
             {/* Quién pregunta a quién */}
             <div style={{ borderRadius: 16, overflow: "hidden", marginBottom: 16, border: "1.5px solid #e2e8f0" }}>
               <div style={{ backgroundColor: `${equipoPregunta.color}15`, padding: "14px 18px", borderBottom: `2px solid ${equipoPregunta.color}30` }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 3 }}>Pregunta</div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: equipoPregunta.color }}>{equipoPregunta.nombre}</div>
-                <div style={{ fontSize: 11, color: "#94a3b8" }}>{equipoPregunta.integrantes}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: PALETA.grisOscuro, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 3 }}>Pregunta</div>
+                <div style={{ fontSize: 18, fontWeight: 900 }}><TeamName color={equipoPregunta.color}>{equipoPregunta.nombre}</TeamName></div>
+                <div style={{ fontSize: 12, color: PALETA.grisOscuro }}>{equipoPregunta.integrantes}</div>
               </div>
               <div style={{ backgroundColor: "#f8fafc", padding: "6px 18px", textAlign: "center" }}>
-                <div style={{ fontSize: 16, color: "#94a3b8" }}>↓</div>
+                <div aria-hidden="true" style={{ fontSize: 16, color: PALETA.gris }}>↓</div>
               </div>
               <div style={{ backgroundColor: `${equipoRespuesta.color}15`, padding: "14px 18px", borderTop: `2px solid ${equipoRespuesta.color}30` }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 3 }}>Responde</div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: equipoRespuesta.color }}>{equipoRespuesta.nombre}</div>
-                <div style={{ fontSize: 11, color: "#94a3b8" }}>{equipoRespuesta.integrantes}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: PALETA.grisOscuro, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 3 }}>Responde</div>
+                <div style={{ fontSize: 18, fontWeight: 900 }}><TeamName color={equipoRespuesta.color}>{equipoRespuesta.nombre}</TeamName></div>
+                <div style={{ fontSize: 12, color: PALETA.grisOscuro }}>{equipoRespuesta.integrantes}</div>
               </div>
             </div>
 
+            {/* Aviso para lectores de pantalla: solo a los 15 s y al terminar. */}
+            <div role="status" aria-live="polite" aria-atomic="true" style={srOnly}>{anuncioTimer}</div>
+
             {/* Timer — solo una vez que la pregunta está elegida y el reloj corre.
-                Con límite configurado cuenta hacia atrás; sin límite, hacia adelante. */}
+                Con límite configurado cuenta hacia atrás; sin límite, hacia adelante.
+                En los últimos 15 s cambia también el texto, no solo el color. */}
             {preguntaActual && (() => {
               const limite = sesion.tiempoPregunta ?? 0;
               const restante = limite > 0 ? Math.max(0, limite - segundos) : 0;
@@ -624,27 +685,30 @@ export default function ArbitroJuegoPage() {
                   border: `1px solid ${tiempoVencido ? "#fca5a5" : alerta ? "#fdba74" : "#fde68a"}`,
                   marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between",
                 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: tiempoVencido ? "#dc2626" : "#92400e" }}>
-                    {limite > 0 ? (tiempoVencido ? "⏰ Tiempo cumplido" : "⏱️ Tiempo restante") : "⏱️ Tiempo transcurrido"}
+                  <div style={{ fontSize: 12, fontWeight: 700, color: tiempoVencido ? "#b91c1c" : alerta ? PALETA.naranjaOscuro : "#92400e" }}>
+                    {limite > 0
+                      ? (tiempoVencido ? `⏰ ${t.timerAnnounceUp}` : alerta ? t.timerLastSeconds : "⏱️ Tiempo restante")
+                      : "⏱️ Tiempo transcurrido"}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{
+                    <div role="timer" aria-label={t.timerName} style={{
                       fontSize: 24, fontWeight: 900,
-                      color: tiempoVencido ? "#dc2626" : alerta ? "#ea580c" : "#b45309",
+                      color: tiempoVencido ? "#b91c1c" : alerta ? PALETA.naranja : PALETA.ambar,
                       fontVariantNumeric: "tabular-nums",
                     }}>
                       {limite > 0 ? formatTimer(restante) : formatTimer(segundos)}
                     </div>
                     <button
                       onClick={() => { getAudioCtx(); setSonidoActivo(s => !s); }}
-                      title={sonidoActivo ? "Silenciar" : "Activar sonido"}
+                      aria-label={sonidoActivo ? t.soundOff : t.soundOn}
+                      title={sonidoActivo ? t.soundOff : t.soundOn}
                       style={{
                         background: "none", border: "none",
                         fontSize: 18, cursor: "pointer",
-                        opacity: sonidoActivo ? 1 : 0.4,
-                        padding: "0 4px",
+                        opacity: sonidoActivo ? 1 : 0.6,
+                        minWidth: 44, minHeight: 44, padding: 0,
                       }}>
-                      {sonidoActivo ? "🔊" : "🔇"}
+                      <span aria-hidden="true">{sonidoActivo ? "🔊" : "🔇"}</span>
                     </button>
                   </div>
                 </div>
@@ -667,11 +731,12 @@ export default function ArbitroJuegoPage() {
                         disabled={usada}
                         style={{
                           textAlign: "left" as const,
+                          minHeight: 44,
                           padding: "10px 14px",
                           borderRadius: 10,
                           border: `1.5px solid ${usada ? "#e2e8f0" : "#bae6fd"}`,
                           backgroundColor: usada ? "#f8fafc" : "white",
-                          color: usada ? "#94a3b8" : "#0c4a6e",
+                          color: usada ? PALETA.gris : "#0c4a6e",
                           fontSize: 13,
                           fontWeight: usada ? 400 : 600,
                           cursor: usada ? "not-allowed" : "pointer",
@@ -690,7 +755,7 @@ export default function ArbitroJuegoPage() {
                 </div>
                 <button
                   onClick={() => { setUsarPreguntaPropia(true); setPreguntaBorrador(""); }}
-                  style={{ marginTop: 10, background: "none", border: "none", color: "#0369a1", fontSize: 12, fontWeight: 600, textDecoration: "underline", cursor: "pointer", padding: 0 }}>
+                  style={{ marginTop: 10, background: "none", border: "none", color: "#0369a1", fontSize: 12, fontWeight: 600, textDecoration: "underline", cursor: "pointer", padding: 0, minHeight: 44 }}>
                   ✏️ Escribir mi propia pregunta
                 </button>
               </div>
@@ -699,10 +764,11 @@ export default function ArbitroJuegoPage() {
             {/* ── Sin pregunta elegida: escribir la propia ── */}
             {!preguntaActual && escribiendoPropia && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>
+                <label htmlFor="pregunta-propia" style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>
                   ✏️ {equipoPregunta.nombre} — escribí la pregunta que le van a hacer
-                </div>
+                </label>
                 <textarea
+                  id="pregunta-propia"
                   value={preguntaBorrador}
                   onChange={e => setPreguntaBorrador(e.target.value)}
                   rows={3}
@@ -729,7 +795,7 @@ export default function ArbitroJuegoPage() {
             {preguntaActual && (
               <>
                 <div style={{ backgroundColor: "#f0f9ff", borderRadius: 12, padding: "14px 16px", border: "1.5px solid #0ea5e9", marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
                     📋 Pregunta elegida — leerla en voz alta
                   </div>
                   <div style={{ fontSize: 14, color: "#0c4a6e", lineHeight: 1.6, fontWeight: 600, marginBottom: 8 }}>
@@ -737,7 +803,7 @@ export default function ArbitroJuegoPage() {
                   </div>
                   <button
                     onClick={volverAElegir}
-                    style={{ fontSize: 11, color: "#0369a1", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>
+                    style={{ fontSize: 12, color: "#0369a1", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: "0", minHeight: 44 }}>
                     ← Elegir otra pregunta
                   </button>
                 </div>
@@ -759,7 +825,7 @@ export default function ArbitroJuegoPage() {
               <button
                 onClick={pasarPregunta}
                 style={{
-                  width: "100%", marginTop: 10, padding: "11px",
+                  width: "100%", marginTop: 10, minHeight: 44, padding: "11px",
                   fontSize: 13, fontWeight: 700, borderRadius: 12,
                   border: "2px solid #e2e8f0", backgroundColor: "white",
                   color: "#64748b", cursor: "pointer",
@@ -785,11 +851,11 @@ export default function ArbitroJuegoPage() {
             <Tablero />
 
             <div style={{ backgroundColor: "#f8fafc", borderRadius: 12, padding: "14px 16px", border: "1px solid #e2e8f0", marginBottom: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginBottom: 4, textTransform: "uppercase" }}>Pregunta</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 4, textTransform: "uppercase" }}>Pregunta</div>
               <div style={{ fontSize: 13, color: "#1e293b", lineHeight: 1.5 }}>{preguntaActual}</div>
             </div>
             <div style={{ backgroundColor: "#f0fdf4", borderRadius: 12, padding: "14px 16px", border: "1px solid #86efac", marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#166534", marginBottom: 4, textTransform: "uppercase" }}>Respuesta de {equipoRespuesta.nombre}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#166534", marginBottom: 4, textTransform: "uppercase" }}>Respuesta de {equipoRespuesta.nombre}</div>
               <div style={{ fontSize: 13, color: "#14532d", lineHeight: 1.5 }}>{respuestaActual}</div>
             </div>
 
@@ -799,11 +865,11 @@ export default function ArbitroJuegoPage() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
               {([
-                { val: "completa" as const, label: "✅ Completa", desc: "1 punto", color: "#16a34a", bg: "#f0fdf4", border: "#86efac" },
-                { val: "incompleta" as const, label: "⚡ Incompleta", desc: "0.5 puntos", color: "#d97706", bg: "#fffbeb", border: "#fde68a" },
-                { val: "no" as const, label: "❌ Incorrecta", desc: "0 puntos", color: "#dc2626", bg: "#fef2f2", border: "#fecaca" },
+                { val: "completa" as const, label: "✅ Completa", desc: "1 punto", color: PALETA.verde, bg: "#f0fdf4", border: "#86efac" },
+                { val: "incompleta" as const, label: "⚡ Incompleta", desc: "0.5 puntos", color: PALETA.ambar, bg: "#fffbeb", border: "#fde68a" },
+                { val: "no" as const, label: "❌ Incorrecta", desc: "0 puntos", color: PALETA.rojo, bg: "#fef2f2", border: "#fecaca" },
               ]).map(op => (
-                <button key={op.val} onClick={() => setCalificacionActual(op.val)}
+                <button key={op.val} onClick={() => setCalificacionActual(op.val)} aria-pressed={calificacionActual === op.val}
                   style={{ padding: "14px 18px", borderRadius: 12, border: `2px solid ${calificacionActual === op.val ? op.color : op.border}`, backgroundColor: calificacionActual === op.val ? op.bg : "white", textAlign: "left" as const, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 15, fontWeight: 700, color: op.color }}>{op.label}</span>
                   <span style={{ fontSize: 13, color: op.color, fontWeight: 600 }}>{op.desc}</span>
@@ -811,9 +877,25 @@ export default function ArbitroJuegoPage() {
               ))}
             </div>
 
+            {calificacionActual && calificacionActual !== "completa" && (
+              <div style={{ marginBottom: 16 }}>
+                <label htmlFor="justificacion-calificacion" style={{ ...lbl, color: PALETA.ambar }}>
+                  ✏️ {equipoPregunta.nombre} — ¿qué le faltó a la respuesta?
+                </label>
+                <textarea
+                  id="justificacion-calificacion"
+                  value={justificacionCalificacion}
+                  onChange={e => setJustificacionCalificacion(e.target.value)}
+                  rows={2}
+                  placeholder="Explicá qué faltó o qué estuvo mal, con el mayor detalle posible..."
+                  style={{ ...inp, resize: "none", fontFamily: "inherit", borderColor: "#fde68a" }}
+                />
+              </div>
+            )}
+
             <button onClick={() => setPantalla("aceptacion")}
-              disabled={!calificacionActual}
-              style={btnPrimario(colors.gradient, !calificacionActual)}>
+              disabled={!calificacionActual || (calificacionActual !== "completa" && !justificacionCalificacion.trim())}
+              style={btnPrimario(colors.gradient, !calificacionActual || (calificacionActual !== "completa" && !justificacionCalificacion.trim()))}>
               Continuar →
             </button>
           </div>
@@ -846,17 +928,30 @@ export default function ArbitroJuegoPage() {
               </div>
             </div>
 
+            {justificacionCalificacion.trim() && (
+              <div style={{ backgroundColor: "#fffbeb", borderRadius: 10, padding: "12px 16px", border: "1px solid #fde68a", marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 4, textTransform: "uppercase" }}>
+                  {equipoPregunta.nombre} dice que faltó:
+                </div>
+                <div style={{ fontSize: 13, color: "#78350f", lineHeight: 1.5 }}>{justificacionCalificacion}</div>
+              </div>
+            )}
+
             <div style={{ fontSize: 15, fontWeight: 800, color: "#1e293b", marginBottom: 14, textAlign: "center" }}>
               ¿{equipoRespuesta.nombre} acepta esta calificación?
             </div>
 
             <div style={{ display: "flex", gap: 12 }}>
               <button onClick={() => cerrarRonda(pts, false)}
-                style={{ flex: 1, padding: "14px", borderRadius: 12, border: "none", background: "linear-gradient(135deg, #22c55e, #16a34a)", color: "white", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "14px", borderRadius: 12, border: "none", background: PALETA.verde, color: "white", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
                 ✅ Sí, acepta
               </button>
-              <button onClick={() => { setDisputaPregunta(preguntaActual); setPantalla("disputa"); }}
-                style={{ flex: 1, padding: "14px", borderRadius: 12, border: "none", background: "linear-gradient(135deg, #f97316, #ea580c)", color: "white", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+              <button onClick={() => {
+                setDisputaPregunta(preguntaActual);
+                setDisputaArgEquipoPregunta(justificacionCalificacion);
+                setPantalla("disputa");
+              }}
+                style={{ flex: 1, padding: "14px", borderRadius: 12, border: "none", background: `linear-gradient(135deg, ${PALETA.naranja}, ${PALETA.naranjaOscuro})`, color: "white", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
                 ⚖️ Consultar al árbitro
               </button>
             </div>
@@ -890,10 +985,11 @@ export default function ArbitroJuegoPage() {
 
             {/* Pregunta */}
             <div style={{ marginBottom: 14 }}>
-              <label style={{ ...lbl, color: "#0369a1" }}>
+              <label htmlFor="disputa-pregunta" style={{ ...lbl, color: "#0369a1" }}>
                 📋 ¿Cuál fue la pregunta?
               </label>
               <textarea
+                id="disputa-pregunta"
                 value={disputaPregunta}
                 onChange={e => setDisputaPregunta(e.target.value)}
                 rows={2}
@@ -904,10 +1000,11 @@ export default function ArbitroJuegoPage() {
 
             {/* Respuesta */}
             <div style={{ marginBottom: 14 }}>
-              <label style={{ ...lbl, color: "#166534" }}>
-                💬 ¿Qué respondió <span style={{ color: equipoRespuesta.color }}>{equipoRespuesta.nombre}</span>?
+              <label htmlFor="disputa-respuesta" style={{ ...lbl, color: "#166534" }}>
+                💬 ¿Qué respondió <TeamName color={equipoRespuesta.color}>{equipoRespuesta.nombre}</TeamName>?
               </label>
               <textarea
+                id="disputa-respuesta"
                 value={disputaRespuesta}
                 onChange={e => setDisputaRespuesta(e.target.value)}
                 rows={2}
@@ -918,10 +1015,11 @@ export default function ArbitroJuegoPage() {
 
             {/* Argumento equipo que calificó */}
             <div style={{ marginBottom: 14 }}>
-              <label style={{ ...lbl, color: equipoPregunta.color }}>
-                🗣️ ¿Por qué <span style={{ color: equipoPregunta.color }}>{equipoPregunta.nombre}</span> calificó así?
+              <label htmlFor="disputa-arg-pregunta" style={lbl}>
+                🗣️ ¿Por qué <TeamName color={equipoPregunta.color}>{equipoPregunta.nombre}</TeamName> calificó así?
               </label>
               <textarea
+                id="disputa-arg-pregunta"
                 value={disputaArgEquipoPregunta}
                 onChange={e => setDisputaArgEquipoPregunta(e.target.value)}
                 rows={2}
@@ -932,10 +1030,11 @@ export default function ArbitroJuegoPage() {
 
             {/* Argumento equipo que respondió */}
             <div style={{ marginBottom: 20 }}>
-              <label style={{ ...lbl, color: equipoRespuesta.color }}>
-                🗣️ ¿Por qué <span style={{ color: equipoRespuesta.color }}>{equipoRespuesta.nombre}</span> no acepta esa calificación?
+              <label htmlFor="disputa-arg-respuesta" style={lbl}>
+                🗣️ ¿Por qué <TeamName color={equipoRespuesta.color}>{equipoRespuesta.nombre}</TeamName> no acepta esa calificación?
               </label>
               <textarea
+                id="disputa-arg-respuesta"
                 value={disputaArgEquipoRespuesta}
                 onChange={e => setDisputaArgEquipoRespuesta(e.target.value)}
                 rows={2}
@@ -973,75 +1072,91 @@ export default function ArbitroJuegoPage() {
             <InfoRonda />
             <Tablero />
 
-            {loadingArbitro ? (
+            {errorArbitro ? (
+              <div style={{ textAlign: "center", padding: "24px 0" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>
+                  {errorArbitro}
+                </div>
+                <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                  <button
+                    onClick={() => { setErrorArbitro(null); consultarArbitro(); }}
+                    style={{ flex: 1, padding: "12px", borderRadius: 10, border: "none", background: colors.gradient, color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    🔄 Reintentar
+                  </button>
+                  <button
+                    onClick={() => { setErrorArbitro(null); setPantalla("disputa"); }}
+                    style={{ flex: 1, padding: "12px", borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "white", color: "#64748b", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    ← Volver
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: PALETA.gris, marginTop: 16 }}>
+                  {t.errorRetryHint}
+                </div>
+              </div>
+            ) : loadingArbitro ? (
               <div style={{ textAlign: "center", padding: "32px 0" }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>⚖️</div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: "#1e293b" }}>El árbitro está analizando…</div>
                 <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>Un momento</div>
               </div>
             ) : veredictoArbitro ? (() => {
-              const recomendado = recomendacionArbitro(veredictoArbitro);
-              const info = CALIFICACION_INFO[recomendado];
+              const { puntosResponde, puntosPregunta } = puntosReparto(veredictoArbitro);
+              const equipoRespondeIdx = equipoPreguntaIdx === 0 ? 1 : 0;
               return (
               <div>
-                {/* Recomendación destacada */}
-                <div style={{ backgroundColor: `${info.color}12`, borderRadius: 14, padding: "16px 18px", border: `2px solid ${info.color}`, marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: info.color, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
-                    🏆 El árbitro recomienda
-                  </div>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: info.color, marginBottom: 8 }}>
-                    {info.label}
+                {/* Veredicto */}
+                <div style={{ backgroundColor: "#f0f9ff", borderRadius: 14, padding: "16px 18px", border: "2px solid #0ea5e9", marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
+                    ⚖️ Veredicto del árbitro
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 4 }}>{veredictoArbitro.veredicto}</div>
                   <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>{veredictoArbitro.explicacion}</div>
                 </div>
+
                 {veredictoArbitro.paraSeguirPensando && (
                   <div style={{ backgroundColor: "#fef9c3", borderRadius: 10, padding: "10px 14px", border: "1px solid #fde047", marginBottom: 16, fontSize: 12, color: "#713f12" }}>
                     <strong>💭 Para seguir pensando:</strong> {veredictoArbitro.paraSeguirPensando}
                   </div>
                 )}
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 10 }}>¿Cómo resolvemos los puntos?</div>
-                <style>{`
-                  @keyframes pulseRecomendado {
-                    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0,0,0,0.15); }
-                    50% { transform: scale(1.02); box-shadow: 0 0 0 6px rgba(0,0,0,0); }
-                  }
-                `}</style>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {([
-                    { val: "completa" as const, label: "✅ Completa — 1 punto", color: "#16a34a" },
-                    { val: "incompleta" as const, label: "⚡ Incompleta — 0.5 puntos", color: "#d97706" },
-                    { val: "no" as const, label: "❌ Incorrecta — 0 puntos", color: "#dc2626" },
-                  ]).map(op => (
-                    <button key={op.val}
-                      onClick={() => {
-                        if (op.val !== recomendado) {
-                          const ok = window.confirm(
-                            `El árbitro recomendó "${info.label}", pero estás por elegir "${op.label}". ¿Confirmás igual?`
-                          );
-                          if (!ok) return;
-                        }
-                        cerrarRonda(puntosCalificacion(op.val), true, veredictoArbitro.explicacion);
-                      }}
-                      style={{
-                        padding: "12px 16px",
-                        borderRadius: 10,
-                        border: op.val === recomendado ? `2px solid ${op.color}` : `2px solid ${op.color}20`,
-                        backgroundColor: op.val === recomendado ? `${op.color}20` : `${op.color}10`,
-                        color: op.color,
-                        fontWeight: 700,
-                        fontSize: 13,
-                        cursor: "pointer",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        animation: op.val === recomendado ? "pulseRecomendado 1.4s ease-in-out infinite" : "none",
-                      }}>
-                      <span>{op.label}</span>
-                      {op.val === recomendado && <span style={{ fontSize: 11, fontWeight: 800 }}>★ Recomendado</span>}
-                    </button>
-                  ))}
+
+                {/* Reparto visual del punto */}
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 10 }}>
+                  Así reparte el punto de esta ronda:
                 </div>
+                <div style={{ display: "flex", borderRadius: 14, overflow: "hidden", marginBottom: 8, border: "2px solid #e2e8f0" }}>
+                  <div style={{
+                    flex: puntosPregunta || 0.001, backgroundColor: `${equipoPregunta.color}20`,
+                    padding: "14px 10px", textAlign: "center", borderRight: "2px solid white",
+                  }}>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: PALETA.texto }}>{puntosPregunta}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, display: "flex", justifyContent: "center" }}><TeamName color={equipoPregunta.color}>{equipoPregunta.nombre}</TeamName></div>
+                  </div>
+                  <div style={{
+                    flex: puntosResponde || 0.001, backgroundColor: `${equipoRespuesta.color}20`,
+                    padding: "14px 10px", textAlign: "center",
+                  }}>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: PALETA.texto }}>{puntosResponde}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, display: "flex", justifyContent: "center" }}><TeamName color={equipoRespuesta.color}>{equipoRespuesta.nombre}</TeamName></div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: PALETA.gris, textAlign: "center", marginBottom: 20 }}>
+                  Suma: {(puntosResponde + puntosPregunta).toFixed(2)} punto{(puntosResponde + puntosPregunta) !== 1 ? "s" : ""} de 1 en juego
+                </div>
+
+                <button
+                  onClick={() => {
+                    addPuntos(equipoPreguntaIdx, puntosPregunta);
+                    addPuntos(equipoRespondeIdx, puntosResponde);
+                    // saltarSumaPuntos: true porque los dos addPuntos de arriba ya
+                    // repartieron el punto — ptsAsignados acá solo queda para que
+                    // el registro de la ronda guarde el puntaje real del equipo
+                    // que respondió, no para volver a sumarlo.
+                    cerrarRonda(puntosResponde, true, veredictoArbitro.explicacion, true);
+                  }}
+                  style={btnPrimario(colors.gradient, false)}>
+                  ✅ Confirmar y continuar
+                </button>
               </div>
               );
             })() : null}
@@ -1065,7 +1180,7 @@ export default function ArbitroJuegoPage() {
 
             {ultimoRegistro && (
               <div style={{ backgroundColor: "#f8fafc", borderRadius: 12, padding: "14px 16px", border: "1px solid #e2e8f0", marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginBottom: 8, textTransform: "uppercase" }}>Última ronda</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 8, textTransform: "uppercase" }}>Última ronda</div>
                 {ultimoRegistro.calificacion === "pasada" ? (
                   <>
                     <div style={{ fontSize: 12, color: "#1e293b", marginBottom: 4 }}>
@@ -1122,7 +1237,7 @@ export default function ArbitroJuegoPage() {
               <div style={{ fontSize: 40, marginBottom: 8 }}>🏆</div>
               {ganador ? (
                 <>
-                  <div style={{ fontSize: 22, fontWeight: 900, color: ganador.color }}>¡Ganó {ganador.nombre}!</div>
+                  <div style={{ fontSize: 22, fontWeight: 900, display: "flex", justifyContent: "center" }}><TeamName color={ganador.color}>¡Ganó {ganador.nombre}!</TeamName></div>
                   <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>{ganador.integrantes}</div>
                 </>
               ) : (
@@ -1135,7 +1250,7 @@ export default function ArbitroJuegoPage() {
             <div style={{ backgroundColor: "#f8fafc", borderRadius: 12, padding: "14px 16px", border: "1px solid #e2e8f0", marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 8 }}>Resumen de rondas</div>
               {registros.map((r, i) => (
-                <div key={i} style={{ fontSize: 11, color: "#1e293b", marginBottom: 4, paddingBottom: 4, borderBottom: "1px solid #f1f5f9" }}>
+                <div key={i} style={{ fontSize: 12, color: "#1e293b", marginBottom: 4, paddingBottom: 4, borderBottom: "1px solid #f1f5f9" }}>
                   Ronda {i + 1}: {r.equipoPregunta} → {r.equipoResponde} · {r.calificacion} · {r.puntos}pts {r.fueAlArbitro ? "⚖️" : ""}
                 </div>
               ))}
@@ -1224,10 +1339,10 @@ export default function ArbitroJuegoPage() {
               <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
                 {equipos.map((eq, i) => (
                   <div key={i} style={{ flex: 1, borderRadius: 14, padding: "14px 10px", backgroundColor: `${eq.color}15`, border: `2px solid ${eq.color}` }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: eq.color, textTransform: "uppercase", marginBottom: 4 }}>{eq.nombre}</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 6 }}>{eq.integrantes}</div>
-                    <div style={{ fontSize: 30, fontWeight: 900, color: eq.color }}>{eq.puntos}</div>
-                    <div style={{ fontSize: 10, color: "#94a3b8" }}>puntos</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", marginBottom: 4, display: "flex", justifyContent: "center" }}><TeamName color={eq.color}>{eq.nombre}</TeamName></div>
+                    <div style={{ fontSize: 12, color: PALETA.grisOscuro, marginBottom: 6 }}>{eq.integrantes}</div>
+                    <div style={{ fontSize: 30, fontWeight: 900, color: PALETA.texto }}>{eq.puntos}</div>
+                    <div style={{ fontSize: 12, color: PALETA.grisOscuro }}>puntos</div>
                   </div>
                 ))}
               </div>
@@ -1261,7 +1376,7 @@ export default function ArbitroJuegoPage() {
               <div style={{ backgroundColor: "#f8fafc", borderRadius: 10, padding: "12px 16px", border: "1px solid #e2e8f0" }}>
                 <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.6 }}>
                   📱 Podés cerrar esta pestaña.<br />
-                  <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                  <span style={{ fontSize: 12, color: PALETA.gris }}>
                     El docente verá el informe en su panel.
                   </span>
                 </div>
@@ -1269,7 +1384,7 @@ export default function ArbitroJuegoPage() {
 
               {/* Opciones secundarias de entrega */}
               <div style={{ marginTop: 20 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: PALETA.gris, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
                   También podés enviárselo al docente manualmente
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
@@ -1305,7 +1420,7 @@ export default function ArbitroJuegoPage() {
                     ⬇️ Descargar .txt
                   </button>
                 </div>
-                <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8, lineHeight: 1.5 }}>
+                <div style={{ fontSize: 12, color: PALETA.gris, marginTop: 8, lineHeight: 1.5 }}>
                   Copiá el texto y pegalo como comentario privado en la tarea de Classroom, o descargalo y mandáselo al docente.
                 </div>
               </div>
@@ -1322,16 +1437,16 @@ export default function ArbitroJuegoPage() {
           <Header colors={colors} materia={sesion.materia} tema={sesion.tema} />
           <div style={{ padding: "20px 24px" }}>
             <div style={{ backgroundColor: `${eq.color}15`, borderRadius: 12, padding: "12px 16px", border: `2px solid ${eq.color}`, marginBottom: 16, textAlign: "center" }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: eq.color }}>✍️ Informe de {eq.nombre}</div>
-              <div style={{ fontSize: 12, color: "#64748b" }}>{eq.integrantes}</div>
+              <div style={{ fontSize: 15, fontWeight: 800, display: "flex", justifyContent: "center" }}><TeamName color={eq.color}>✍️ Informe de {eq.nombre}</TeamName></div>
+              <div style={{ fontSize: 12, color: PALETA.grisOscuro }}>{eq.integrantes}</div>
             </div>
 
             {preguntas.map((q, i) => (
               <div key={i} style={{ marginBottom: 14 }}>
-                <label style={{ ...lbl, fontSize: 12 }}>
-                  {q.label} {q.required && <span style={{ color: "#ef4444" }}>*</span>}
+                <label htmlFor={`meta-equipo${metaEquipoActual + 1}-q${i + 1}`} style={{ ...lbl, fontSize: 12 }}>
+                  {q.label} {q.required && <span style={{ color: PALETA.rojo }}>*</span>}
                 </label>
-                <textarea value={values[i]} onChange={e => setters[i](e.target.value)} rows={2}
+                <textarea id={`meta-equipo${metaEquipoActual + 1}-q${i + 1}`} value={values[i]} onChange={e => setters[i](e.target.value)} rows={2}
                   style={{ ...inp, resize: "none", fontFamily: "inherit" }} />
               </div>
             ))}
@@ -1360,6 +1475,17 @@ export default function ArbitroJuegoPage() {
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
+// Nombre de equipo: texto oscuro con un punto del color del equipo (el color
+// identifica, no transmite el texto).
+function TeamName({ color, children }: { color: string; children: React.ReactNode }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: PALETA.texto }}>
+      <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: color, flexShrink: 0 }} />
+      <span>{children}</span>
+    </span>
+  );
+}
+
 function FullPage({ children, gradient }: { children: React.ReactNode; gradient?: string }) {
   return (
     <div style={{ minHeight: "100vh", background: gradient || "linear-gradient(135deg, #1e3a5f 0%, #3730a3 100%)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
@@ -1374,7 +1500,7 @@ function Header({ colors, materia, tema }: { colors: { gradient: string; primary
       <span style={{ fontSize: 22 }}>⚔️</span>
       <div style={{ color: "white" }}>
         <div style={{ fontSize: 14, fontWeight: 800 }}>⚖️ Árbitro de Aprendizaje</div>
-        <div style={{ fontSize: 11, opacity: 0.85 }}>{materia} · {tema}</div>
+        <div style={{ fontSize: 12, opacity: 0.95 }}>{materia} · {tema}</div>
       </div>
     </div>
   );
@@ -1382,10 +1508,12 @@ function Header({ colors, materia, tema }: { colors: { gradient: string; primary
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const cardWhite: React.CSSProperties = { backgroundColor: "white", borderRadius: 20, width: "100%", maxWidth: 520, boxShadow: "0 8px 32px rgba(0,0,0,0.25)", overflow: "hidden" };
+// Texto solo para lectores de pantalla (región aria-live del temporizador).
+const srOnly: React.CSSProperties = { position: "absolute", width: 1, height: 1, margin: -1, padding: 0, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 };
 const lbl: React.CSSProperties = { display: "block", marginBottom: 5, fontSize: 13, fontWeight: 700, color: "#374151" };
-const inp: React.CSSProperties = { width: "100%", padding: "10px 12px", fontSize: 13, borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "#f8fafc", outline: "none", boxSizing: "border-box" as const };
+const inp: React.CSSProperties = { width: "100%", padding: "10px 12px", fontSize: 13, borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "#f8fafc", boxSizing: "border-box" as const };
 const btnPrimario = (gradient: string, disabled: boolean): React.CSSProperties => ({
-  width: "100%", padding: "13px", fontSize: 14, fontWeight: 700, borderRadius: 12, border: "none",
-  background: disabled ? "#94a3b8" : gradient, color: "white",
+  width: "100%", minHeight: 44, padding: "13px", fontSize: 14, fontWeight: 700, borderRadius: 12, border: "none",
+  background: disabled ? PALETA.gris : gradient, color: "white",
   cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.7 : 1,
 });

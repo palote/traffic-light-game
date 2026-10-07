@@ -3,6 +3,8 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { useNavigate } from "react-router-dom";
 import { app } from "../firebase.config";
 import { useAuth } from "../contexts/AuthContext";
+import { PALETA } from "../utils/arbitroPalette";
+import { coloresArea } from "../utils/arbitroAreas";
 
 const ADMIN_UID = "P2lU12xoCxMkZ0AdZdMoGGksJ5o1";
 
@@ -80,13 +82,8 @@ interface InformeSesion {
   rondasPasadas?: Array<{ pregunta: string; equipoPregunta: string; tiempoSegundos?: number | null }>;
 }
 
-const AREA_COLORS: Record<string, { gradient: string; primary: string; light: string }> = {
-  "Ciencias Exactas y Naturales":    { gradient: "linear-gradient(135deg,#0ea5e9,#0d9488)", primary: "#0ea5e9", light: "#f0f9ff" },
-  "Ciencias Sociales y Humanidades": { gradient: "linear-gradient(135deg,#f97316,#b45309)", primary: "#f97316", light: "#fff7ed" },
-  "Comunicación y Lenguajes":        { gradient: "linear-gradient(135deg,#8b5cf6,#ec4899)", primary: "#8b5cf6", light: "#faf5ff" },
-  "Arte y Expresión":                { gradient: "linear-gradient(135deg,#f43f5e,#f97316)", primary: "#f43f5e", light: "#fff1f2" },
-};
-const DEFAULT_COLORS = { gradient: "linear-gradient(135deg,#1e3a5f,#3730a3)", primary: "#3730a3", light: "#f0f7ff" };
+// Los colores por área viven en utils/arbitroPalette.ts (clave corta); las sesiones
+// viejas guardaron el nombre completo y coloresArea() también lo acepta.
 
 const NIVEL_BADGE: Record<string, { label: string; color: string; bg: string }> = {
   superficial: { label: "Superficial", color: "#92400e", bg: "#fef3c7" },
@@ -118,7 +115,8 @@ export default function ArbitroPanelPage() {
     if (!user) { navigate("/login"); return; }
 
     const fn = httpsCallable(functions, "listarSesionesDocente");
-    fn({ uid: user.uid, limit: 50 })
+    // El servidor usa el uid de la sesión autenticada; no se envía uid desde acá.
+    fn({ limit: 50 })
       .then((res: any) => { setSesiones(res.data.sesiones || []); setLoading(false); })
       .catch((e: any) => { setError(e.message); setLoading(false); });
   }, [authLoading, user]);
@@ -147,6 +145,14 @@ export default function ArbitroPanelPage() {
     setLoadingInforme(false);
   };
 
+  // Abre el texto base en pantalla completa directamente desde la lista,
+  // sin pasar por generarInformeSesion — así funciona antes de que los
+  // alumnos jueguen, cuando todavía no hay consultas registradas.
+  const mostrarTextoDesdeLista = (sesion: SesionResumen) => {
+    setSesionSeleccionada(sesion);
+    setMostrarTexto(true);
+  };
+
   const cargarTodasSesiones = async () => {
     setLoadingAdmin(true);
     try {
@@ -161,8 +167,8 @@ export default function ArbitroPanelPage() {
   };
 
   const colors = sesionSeleccionada
-    ? (AREA_COLORS[sesionSeleccionada.area || ""] || DEFAULT_COLORS)
-    : DEFAULT_COLORS;
+    ? coloresArea(sesionSeleccionada.area)
+    : coloresArea(null);
 
   // ── Vista detalle de sesión ─────────────────────────────────────────────
   if (sesionSeleccionada) {
@@ -216,7 +222,7 @@ export default function ArbitroPanelPage() {
                 style={{ padding: "10px 20px", borderRadius: 10, border: `2px solid ${colors.primary}`, backgroundColor: `${colors.primary}12`, color: colors.primary, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                 📖 Mostrar texto a los alumnos
               </button>
-              <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 10 }}>
+              <span style={{ fontSize: 12, color: PALETA.gris, marginLeft: 10 }}>
                 Abre en pantalla completa para proyectar
               </span>
             </div>
@@ -254,7 +260,7 @@ export default function ArbitroPanelPage() {
                   <button
                     onClick={() => sesionSeleccionada && verInforme(sesionSeleccionada, true)}
                     disabled={loadingInforme}
-                    style={{ padding: "8px 14px", borderRadius: 8, border: "none", backgroundColor: "#d97706", color: "white", fontWeight: 700, fontSize: 12, cursor: loadingInforme ? "default" : "pointer", whiteSpace: "nowrap" }}>
+                    style={{ padding: "8px 14px", borderRadius: 8, border: "none", backgroundColor: PALETA.ambar, color: "white", fontWeight: 700, fontSize: 12, cursor: loadingInforme ? "default" : "pointer", whiteSpace: "nowrap" }}>
                     🔄 Actualizar informe
                   </button>
                 </div>
@@ -269,7 +275,7 @@ export default function ArbitroPanelPage() {
                       {informe.nivelDebate === "profundo" ? "🏆" : informe.nivelDebate === "adecuado" ? "✅" : "📊"}
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: nb.color, textTransform: "uppercase", letterSpacing: "0.5px" }}>Nivel de debate</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: nb.color, textTransform: "uppercase", letterSpacing: "0.5px" }}>Nivel de debate</div>
                       <div style={{ fontSize: 18, fontWeight: 900, color: nb.color }}>{nb.label}</div>
                     </div>
                   </div>
@@ -345,7 +351,7 @@ export default function ArbitroPanelPage() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {informe.rondasPasadas.map((r, i) => (
                       <div key={i} style={{ backgroundColor: "#f8fafc", borderRadius: 8, padding: "10px 14px", border: "1px solid #e2e8f0" }}>
-                        <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>
+                        <div style={{ fontSize: 12, color: PALETA.gris, marginBottom: 4 }}>
                           Pasada por {r.equipoPregunta || "un equipo"}
                           {typeof r.tiempoSegundos === "number"
                             ? ` · ${Math.floor(r.tiempoSegundos / 60)}:${String(r.tiempoSegundos % 60).padStart(2, "0")} min`
@@ -355,7 +361,7 @@ export default function ArbitroPanelPage() {
                       </div>
                     ))}
                   </div>
-                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 10, fontStyle: "italic" }}>
+                  <div style={{ fontSize: 12, color: PALETA.gris, marginTop: 10, fontStyle: "italic" }}>
                     Estas preguntas no se incluyeron en el análisis pedagógico.
                   </div>
                 </Card>
@@ -381,7 +387,7 @@ export default function ArbitroPanelPage() {
                       return (
                         <div key={meta.id} style={{ border: "1px solid #e2e8f0", borderRadius: 12, padding: 14, backgroundColor: "#fafafa" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                            <span style={{ fontSize: 11, fontWeight: 800, color: "white", backgroundColor: "#3730a3", borderRadius: 20, padding: "2px 10px" }}>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: "white", backgroundColor: "#3730a3", borderRadius: 20, padding: "2px 10px" }}>
                               Partida {idx + 1}
                             </span>
                             <span style={{ fontSize: 12, color: "#64748b" }}>
@@ -393,8 +399,8 @@ export default function ArbitroPanelPage() {
                               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                                 <div style={{ width: 12, height: 12, borderRadius: "50%", backgroundColor: eq.color }} />
                                 <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{eq.nombre}</span>
-                                <span style={{ fontSize: 11, color: "#94a3b8" }}>{eq.integrantes}</span>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginLeft: "auto" }}>{eq.puntos} pts</span>
+                                <span style={{ fontSize: 12, color: PALETA.gris }}>{eq.integrantes}</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginLeft: "auto" }}>{eq.puntos} pts</span>
                               </div>
                               {[
                                 { label: "¿Qué aprendieron?", val: eq.respuestas?.q1 },
@@ -403,7 +409,7 @@ export default function ArbitroPanelPage() {
                                 { label: "¿Qué le enseñarían a otro?", val: eq.respuestas?.q4 },
                               ].filter(r => r.val?.trim()).map((r, j) => (
                                 <div key={j} style={{ marginBottom: 8 }}>
-                                  <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 3 }}>{r.label}</div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 3 }}>{r.label}</div>
                                   <div style={{ fontSize: 13, color: "#1e293b", lineHeight: 1.6, backgroundColor: "#f8fafc", borderRadius: 8, padding: "8px 12px", border: "1px solid #e2e8f0" }}>{r.val}</div>
                                 </div>
                               ))}
@@ -413,7 +419,7 @@ export default function ArbitroPanelPage() {
                           {/* Detalle ronda por ronda: si fue al árbitro y en qué pregunta */}
                           {meta.registros && meta.registros.length > 0 && (
                             <div style={{ marginTop: 12 }}>
-                              <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 6 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 6 }}>
                                 Detalle de rondas ({meta.registros.length})
                               </div>
                               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -431,7 +437,7 @@ export default function ArbitroPanelPage() {
                                         <span style={{ fontSize: 12, fontWeight: 700, color: "#1e293b" }}>
                                           Ronda {r.ronda}: {r.equipoPregunta} → {r.equipoResponde}
                                         </span>
-                                        <span style={{ fontSize: 11, fontWeight: 700, color: calBadge.color, backgroundColor: calBadge.bg, borderRadius: 20, padding: "2px 8px", whiteSpace: "nowrap" }}>
+                                        <span style={{ fontSize: 12, fontWeight: 700, color: calBadge.color, backgroundColor: calBadge.bg, borderRadius: 20, padding: "2px 8px", whiteSpace: "nowrap" }}>
                                           {calBadge.icon} {calBadge.label} ({r.puntos} pts)
                                         </span>
                                       </div>
@@ -443,7 +449,7 @@ export default function ArbitroPanelPage() {
                                         </div>
                                       ) : (
                                         r.pregunta && (
-                                          <div style={{ marginTop: 4, fontSize: 12, color: "#94a3b8" }}>{r.pregunta}</div>
+                                          <div style={{ marginTop: 4, fontSize: 12, color: PALETA.gris }}>{r.pregunta}</div>
                                         )
                                       )}
                                     </div>
@@ -468,7 +474,7 @@ export default function ArbitroPanelPage() {
                     return (
                       <div key={meta.id} style={{ border: "1px solid #e2e8f0", borderRadius: 12, padding: 14, backgroundColor: "#fafafa" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                          <span style={{ fontSize: 11, fontWeight: 800, color: "white", backgroundColor: "#3730a3", borderRadius: 20, padding: "2px 10px" }}>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: "white", backgroundColor: "#3730a3", borderRadius: 20, padding: "2px 10px" }}>
                             #{idx + 1}
                           </span>
                           <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>
@@ -477,7 +483,7 @@ export default function ArbitroPanelPage() {
                         </div>
                         {pregsNormal.map((p, j) => (
                           <div key={j} style={{ marginBottom: 8 }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 3 }}>{p.label}</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 3 }}>{p.label}</div>
                             <div style={{ fontSize: 13, color: "#1e293b", lineHeight: 1.6, backgroundColor: "#f8fafc", borderRadius: 8, padding: "8px 12px", border: "1px solid #e2e8f0" }}>{p.val}</div>
                           </div>
                         ))}
@@ -508,7 +514,7 @@ export default function ArbitroPanelPage() {
               ✕ Cerrar
             </button>
             <div style={{ maxWidth: 800, margin: "0 auto" }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: PALETA.gris, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>
                 {sesionSeleccionada.materia} · {sesionSeleccionada.tema}
               </div>
               <div style={{ fontSize: 20, lineHeight: 1.9, color: "#1e293b", whiteSpace: "pre-wrap" }}>
@@ -554,7 +560,7 @@ export default function ArbitroPanelPage() {
               {loadingAdmin ? "⏳ Cargando..." : modoAdmin ? "👤 Ver solo mis sesiones" : "🔐 Ver todas las sesiones (Admin)"}
             </button>
             {modoAdmin && (
-              <div style={{ fontSize: 11, color: "#7c3aed", textAlign: "center", marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: "#7c3aed", textAlign: "center", marginTop: 4 }}>
                 Mostrando sesiones de todos los docentes
               </div>
             )}
@@ -583,7 +589,7 @@ export default function ArbitroPanelPage() {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {(modoAdmin ? todasSesiones : sesiones).map(sesion => {
-            const c = AREA_COLORS[sesion.area || ""] || DEFAULT_COLORS;
+            const c = coloresArea(sesion.area);
             const fecha = new Date(sesion.creadoEn).toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" });
             return (
               <div key={sesion.id}
@@ -595,23 +601,23 @@ export default function ArbitroPanelPage() {
                       <div>
                         <div style={{ fontSize: 15, fontWeight: 800, color: "#1e293b" }}>{sesion.materia}</div>
                         <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>{sesion.tema}</div>
-                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+                        <div style={{ fontSize: 12, color: PALETA.gris, marginTop: 4 }}>
                           {sesion.nivel} · {sesion.anio} · {fecha}
                         </div>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
                         {!!sesion.partidasCount && (
                           <span style={{
-                            fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+                            fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
                             backgroundColor: "#e0e7ff", color: "#4338ca", border: "1px solid #c7d2fe", whiteSpace: "nowrap",
                           }}>
                             🎮 {sesion.partidasCount} partida{sesion.partidasCount === 1 ? "" : "s"}
                           </span>
                         )}
                         <span style={{
-                          fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+                          fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
                           backgroundColor: sesion.tieneInforme ? "#dcfce7" : "#f1f5f9",
-                          color: sesion.tieneInforme ? "#166534" : "#64748b",
+                          color: sesion.tieneInforme ? "#166534" : PALETA.grisOscuro,
                           border: `1px solid ${sesion.tieneInforme ? "#86efac" : "#e2e8f0"}`,
                           whiteSpace: "nowrap",
                         }}>
@@ -619,10 +625,18 @@ export default function ArbitroPanelPage() {
                         </span>
                       </div>
                     </div>
-                    <button onClick={() => verInforme(sesion)}
-                      style={{ marginTop: 12, padding: "8px 16px", borderRadius: 8, border: "none", background: c.gradient, color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                      {sesion.tieneInforme ? "Ver informe" : "Generar informe"}
-                    </button>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                      {sesion.textoFuente && (
+                        <button onClick={() => mostrarTextoDesdeLista(sesion)}
+                          style={{ padding: "8px 16px", borderRadius: 8, border: `2px solid ${c.primary}`, backgroundColor: `${c.primary}12`, color: c.primary, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                          📖 Lectura grupal antes de jugar
+                        </button>
+                      )}
+                      <button onClick={() => verInforme(sesion)}
+                        style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: c.gradient, color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                        {sesion.tieneInforme ? "Ver informe" : "Generar informe"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -863,6 +863,48 @@ export const es = {
   s13_not_use_3: '❌ Cuando hay poco tiempo disponible',
   s13_not_use_4: '❌ Grupos muy grandes donde el cierre sería difícil de gestionar',
   s13_tip: '💡 La autoevaluación identifica a los alumnos más mencionados como "ayudantes". Estos alumnos pueden explicar conceptos clave al resto del grupo en el cierre pedagógico, reforzando su propio aprendizaje y el de sus compañeros.',
+
+  // ============================================
+  // ÁRBITRO — accesibilidad (lotes 0 y 1)
+  // Textos de lectores de pantalla, nombres de colores y mensajes nuevos.
+  // Las rutas /arbitro* y /sesion/* siempre usan esta sección en español
+  // (ver useArbitroT en i18n/index.tsx).
+  // ============================================
+  arbitro: {
+    teamColors: {
+      red: "Rojo",
+      blue: "Azul",
+      green: "Verde",
+      amber: "Ámbar",
+      violet: "Violeta",
+      pink: "Rosa",
+      teal: "Turquesa",
+      orange: "Naranja",
+    },
+    teamColorGroup: "Color del equipo {team}",
+    teamColorNumber: "equipo {n}",
+    timerName: "Temporizador de la pregunta",
+    timerLastSeconds: "⚠️ ¡Últimos 15 segundos!",
+    timerAnnounce15: "Quedan 15 segundos",
+    timerAnnounceUp: "Tiempo cumplido",
+    soundOff: "Silenciar el sonido del temporizador",
+    soundOn: "Activar el sonido del temporizador",
+    rulesStep5Who: "La IA lee los argumentos de ambos equipos",
+    rulesStep5Desc: "Los equipos se califican entre sí. Si el otro equipo no acepta la calificación, ambos argumentan por escrito y el árbitro reparte el punto citando el texto base. Su reparto es definitivo para esa ronda.",
+    rulesStep5Info: "Los equipos se califican entre sí. Si el otro equipo no acepta la calificación, ambos argumentan por escrito y el árbitro (IA) reparte el punto citando el texto base. Su reparto es definitivo para esa ronda.",
+    rulesStep5Template: "5. Si el otro equipo no acepta la calificación, ambos equipos argumentan por escrito y el árbitro (IA) reparte el punto citando el texto base desde el juego. Su reparto es definitivo para esa ronda.",
+    errorConsultFailed: "No pudimos consultar al árbitro. Revisá la conexión e intentá de nuevo.",
+    errorRetryHint: "El reparto del árbitro es definitivo para cada ronda: si no se pudo consultar, reintenten.",
+    errorNoClearAnswer: "El árbitro no pudo dar una respuesta clara. No se sumó ningún punto. Probá de nuevo.",
+    closeConfig: "Cerrar la configuración y volver",
+    closeDialog: "Cerrar la ventana",
+    questionsFieldName: "Preguntas del juego, una por línea",
+    questionsCountName: "Cantidad de preguntas a generar",
+    teamPoints: "{points} puntos",
+    loginToGenerateQuestions: "Iniciá sesión con Google para generar preguntas",
+    loginWithGoogle: "Iniciar sesión con Google",
+    loginToGenerateQuestionsFailed: "No se pudo iniciar sesión. Probá de nuevo.",
+  },
 } as const;
 
-export type TranslationKeys = typeof es;
+export type TranslationKeys = typeof es;

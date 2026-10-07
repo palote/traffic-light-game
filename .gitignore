@@ -28,3 +28,4 @@ dist-ssr
 .env
 "cors.json" 
 "cors.json" 
+credentials.json

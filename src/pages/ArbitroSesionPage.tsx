@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useParams } from "react-router-dom";
 import { app } from "../firebase.config";
+import { PALETA } from "../utils/arbitroPalette";
+import { coloresArea } from "../utils/arbitroAreas";
 
 interface SesionData {
   area?: string;
@@ -28,16 +30,8 @@ interface Interaccion {
   veredicto: Veredicto;
 }
 
-// ─── Area colors ───────────────────────────────────────────────────────────────
-
-const AREA_COLORS: Record<string, { gradient: string; light: string; border: string; primary: string }> = {
-  "Ciencias Exactas y Naturales":    { gradient: "linear-gradient(135deg, #0ea5e9 0%, #0d9488 100%)", light: "#f0f9ff", border: "#bae6fd", primary: "#0ea5e9" },
-  "Ciencias Sociales y Humanidades": { gradient: "linear-gradient(135deg, #f97316 0%, #b45309 100%)", light: "#fff7ed", border: "#fed7aa", primary: "#f97316" },
-  "Comunicación y Lenguajes":        { gradient: "linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)", light: "#faf5ff", border: "#e9d5ff", primary: "#8b5cf6" },
-  "Arte y Expresión":                { gradient: "linear-gradient(135deg, #f43f5e 0%, #f97316 100%)", light: "#fff1f2", border: "#fecdd3", primary: "#f43f5e" },
-};
-
-const DEFAULT_COLORS = { gradient: "linear-gradient(135deg, #1e3a5f 0%, #3730a3 100%)", light: "#f0f7ff", border: "#bfdbfe", primary: "#3730a3" };
+// Los colores por área viven en utils/arbitroPalette.ts (indexados por clave corta);
+// coloresArea() también acepta el nombre completo de las sesiones viejas.
 
 const veredictoLabel: Record<string, string> = {
   A:                 "✅ Posición A es correcta",
@@ -170,7 +164,7 @@ export default function ArbitroSesionPage() {
     );
   }
 
-  const colors = (sesion.area && AREA_COLORS[sesion.area]) ? AREA_COLORS[sesion.area] : DEFAULT_COLORS;
+  const colors = coloresArea(sesion.area);
 
   // ── Pantalla de identificación ───────────────────────────────────────────────
   if (!identificado) {
@@ -192,10 +186,11 @@ export default function ArbitroSesionPage() {
             </p>
 
             <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>
-                Tu nombre o nombres del grupo <span style={{ color: "#ef4444" }}>*</span>
+              <label htmlFor="sesion-nombre-alumno" style={labelStyle}>
+                Tu nombre o nombres del grupo <span style={{ color: PALETA.rojo }}>*</span>
               </label>
               <input
+                id="sesion-nombre-alumno"
                 type="text"
                 value={nombreAlumno}
                 onChange={e => { setNombreAlumno(e.target.value); setErrorIdentificacion(""); }}
@@ -209,10 +204,11 @@ export default function ArbitroSesionPage() {
             </div>
 
             <div style={{ marginBottom: 24 }}>
-              <label style={labelStyle}>
-                Nombre del equipo <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 400 }}>(opcional)</span>
+              <label htmlFor="sesion-nombre-equipo" style={labelStyle}>
+                Nombre del equipo <span style={{ fontSize: 12, color: PALETA.gris, fontWeight: 400 }}>(opcional)</span>
               </label>
               <input
+                id="sesion-nombre-equipo"
                 type="text"
                 value={nombreEquipo}
                 onChange={e => setNombreEquipo(e.target.value)}
@@ -324,26 +320,26 @@ export default function ArbitroSesionPage() {
             </div>
 
             <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle}>¿Cuál es el desacuerdo o la pregunta en disputa?</label>
-              <textarea value={conflicto} onChange={e => setConflicto(e.target.value)} rows={2}
+              <label htmlFor="sesion-conflicto" style={labelStyle}>¿Cuál es el desacuerdo o la pregunta en disputa?</label>
+              <textarea id="sesion-conflicto" value={conflicto} onChange={e => setConflicto(e.target.value)} rows={2}
                 placeholder='Ej: "¿Cuál es la respuesta correcta y por qué?"'
                 style={{ ...inputStyle, resize: "none", fontFamily: "inherit" }} />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
               <div>
-                <label style={{ ...labelStyle, color: "#1e40af" }}>
+                <label htmlFor="sesion-posicion-a" style={{ ...labelStyle, color: "#1e40af" }}>
                   Posición A — <span style={{ fontWeight: 400, color: "#64748b" }}>escribila vos</span>
                 </label>
-                <textarea value={posicionA} onChange={e => setPosicionA(e.target.value)} rows={3}
+                <textarea id="sesion-posicion-a" value={posicionA} onChange={e => setPosicionA(e.target.value)} rows={3}
                   placeholder="Escribí tu respuesta o explicación..."
                   style={{ ...inputStyle, resize: "none", fontFamily: "inherit", borderColor: posicionA ? "#93c5fd" : "#e2e8f0" }} />
               </div>
               <div>
-                <label style={{ ...labelStyle, color: "#16a34a" }}>
+                <label htmlFor="sesion-posicion-b" style={{ ...labelStyle, color: PALETA.verde }}>
                   Posición B — <span style={{ fontWeight: 400, color: "#64748b" }}>la escribe tu compañero/a</span>
                 </label>
-                <textarea value={posicionB} onChange={e => setPosicionB(e.target.value)} rows={3}
+                <textarea id="sesion-posicion-b" value={posicionB} onChange={e => setPosicionB(e.target.value)} rows={3}
                   placeholder="Escribí tu respuesta o explicación..."
                   style={{ ...inputStyle, resize: "none", fontFamily: "inherit", borderColor: posicionB ? "#86efac" : "#e2e8f0" }} />
               </div>
@@ -366,7 +362,7 @@ export default function ArbitroSesionPage() {
               disabled={loadingV || !conflicto.trim() || !posicionA.trim() || !posicionB.trim()}
               style={{
                 width: "100%", padding: "13px", fontSize: 14, fontWeight: 700, borderRadius: 12, border: "none",
-                background: loadingV || !conflicto.trim() || !posicionA.trim() || !posicionB.trim() ? "#94a3b8" : colors.gradient,
+                background: loadingV || !conflicto.trim() || !posicionA.trim() || !posicionB.trim() ? PALETA.gris : colors.gradient,
                 color: "white",
                 cursor: loadingV || !conflicto.trim() || !posicionA.trim() || !posicionB.trim() ? "not-allowed" : "pointer",
                 opacity: loadingV || !conflicto.trim() || !posicionA.trim() || !posicionB.trim() ? 0.7 : 1,
@@ -403,11 +399,11 @@ export default function ArbitroSesionPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
               <div style={{ backgroundColor: "#eff6ff", borderRadius: 10, padding: "10px 14px", border: "1px solid #bfdbfe" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#1e40af", marginBottom: 4 }}>POSICIÓN A</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#1e40af", marginBottom: 4 }}>POSICIÓN A</div>
                 <div style={{ fontSize: 12, color: "#1e3a5f", lineHeight: 1.5 }}>{posicionA}</div>
               </div>
               <div style={{ backgroundColor: "#f0fdf4", borderRadius: 10, padding: "10px 14px", border: "1px solid #86efac" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#166534", marginBottom: 4 }}>POSICIÓN B</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#166534", marginBottom: 4 }}>POSICIÓN B</div>
                 <div style={{ fontSize: 12, color: "#14532d", lineHeight: 1.5 }}>{posicionB}</div>
               </div>
             </div>
@@ -451,16 +447,16 @@ export default function ArbitroSesionPage() {
                   Consulta {i + 1}
                 </div>
                 <div style={{ marginBottom: 6 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Desacuerdo: </span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Desacuerdo: </span>
                   <span style={{ fontSize: 13, color: "#1e293b" }}>{ix.conflicto}</span>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
                   <div style={{ backgroundColor: "#eff6ff", borderRadius: 8, padding: "8px 10px", border: "1px solid #bfdbfe" }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: "#1e40af", marginBottom: 3 }}>POSICIÓN A</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#1e40af", marginBottom: 3 }}>POSICIÓN A</div>
                     <div style={{ fontSize: 12, color: "#1e3a5f", lineHeight: 1.4 }}>{ix.posicionA}</div>
                   </div>
                   <div style={{ backgroundColor: "#f0fdf4", borderRadius: 8, padding: "8px 10px", border: "1px solid #86efac" }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: "#166534", marginBottom: 3 }}>POSICIÓN B</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#166534", marginBottom: 3 }}>POSICIÓN B</div>
                     <div style={{ fontSize: 12, color: "#14532d", lineHeight: 1.4 }}>{ix.posicionB}</div>
                   </div>
                 </div>
@@ -477,7 +473,7 @@ export default function ArbitroSesionPage() {
 
             <button
               onClick={handleCopiarResumen}
-              style={{ width: "100%", padding: "12px", fontSize: 14, fontWeight: 700, borderRadius: 10, border: "none", background: copiado ? "#16a34a" : colors.gradient, color: "white", cursor: "pointer", transition: "background 0.2s" }}
+              style={{ width: "100%", padding: "12px", fontSize: 14, fontWeight: 700, borderRadius: 10, border: "none", background: copiado ? PALETA.verde : colors.gradient, color: "white", cursor: "pointer", transition: "background 0.2s" }}
             >
               {copiado ? "✅ ¡Copiado! Pegalo en tu entrega de Classroom" : "📋 Copiar resumen para Classroom"}
             </button>
@@ -485,7 +481,7 @@ export default function ArbitroSesionPage() {
         )}
 
         {/* ── Footer ── */}
-        <div style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,0.55)", paddingBottom: 16 }}>
+        <div style={{ textAlign: "center", fontSize: 12, color: "white", backgroundColor: "rgba(30,41,59,0.85)", borderRadius: 10, padding: "6px 12px", marginBottom: 16 }}>
           Árbitro de {sesion.materia} · {sesion.tema} · Sesión válida hasta{" "}
           {new Date(sesion.expiresAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
         </div>
@@ -499,4 +495,4 @@ export default function ArbitroSesionPage() {
 
 const pageStyle: React.CSSProperties = { minHeight: "100vh", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif" };
 const labelStyle: React.CSSProperties = { display: "block", marginBottom: 6, fontSize: 13, fontWeight: 700, color: "#374151" };
-const inputStyle: React.CSSProperties = { width: "100%", padding: "10px 12px", fontSize: 13, borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "#f8fafc", color: "#1e293b", outline: "none", boxSizing: "border-box" as const };
+const inputStyle: React.CSSProperties = { width: "100%", padding: "10px 12px", fontSize: 13, borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "#f8fafc", color: "#1e293b", boxSizing: "border-box" as const };

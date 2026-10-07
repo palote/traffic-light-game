@@ -2,9 +2,10 @@ import { useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { useI18n } from "../i18n";
+import { useI18n, useArbitroT } from "../i18n";
 import { useGameMode } from "../contexts/GameModeContext";
 import { app } from "../firebase.config";
+import { PALETA, AREA_COLORS } from "../utils/arbitroPalette";
 import { getCourses, createCourseWork, type ClassroomCourse } from "../services/classroomService";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -33,10 +34,7 @@ const AREAS: Record<string, AreaConfig> = {
   "Exact and Natural Sciences": {
     emoji: "🔬",
     key: "exactas",
-    gradient: "linear-gradient(135deg, #0ea5e9 0%, #0d9488 100%)",
-    primary: "#0ea5e9",
-    light: "#f0f9ff",
-    border: "#bae6fd",
+    ...AREA_COLORS.exactas,
     materias: {
       "Mathematics":    { emoji: "📐", niveles: ["Primaria", "Secundaria"], placeholder: "E.g.: a list of exercises from the unit, a problem to solve in groups..." },
       "Natural Science": { emoji: "🌿", niveles: ["Primaria"],              placeholder: "E.g.: a short text on the topic, images to observe and describe..." },
@@ -52,10 +50,7 @@ const AREAS: Record<string, AreaConfig> = {
   "Social Sciences and Humanities": {
     emoji: "🌍",
     key: "sociales",
-    gradient: "linear-gradient(135deg, #f97316 0%, #b45309 100%)",
-    primary: "#f97316",
-    light: "#fff7ed",
-    border: "#fed7aa",
+    ...AREA_COLORS.sociales,
     materias: {
       "Social Studies":  { emoji: "🏛️", niveles: ["Primaria"],              placeholder: "E.g.: a map image, a simple historical source, a community situation..." },
       "History":         { emoji: "📜", niveles: ["Secundaria"],             placeholder: "E.g.: a primary source, a historical text fragment, a timeline..." },
@@ -72,10 +67,7 @@ const AREAS: Record<string, AreaConfig> = {
   "Communication and Languages": {
     emoji: "💬",
     key: "lenguajes",
-    gradient: "linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)",
-    primary: "#8b5cf6",
-    light: "#faf5ff",
-    border: "#e9d5ff",
+    ...AREA_COLORS.lenguajes,
     materias: {
       "Language & Literature": { emoji: "📖", niveles: ["Primaria", "Secundaria"], placeholder: "E.g.: a text to analyze, sentences to discuss, a literary fragment..." },
       "English":               { emoji: "🇬🇧", niveles: ["Primaria", "Secundaria"], placeholder: "E.g.: a short text, a grammar exercise, vocabulary in context..." },
@@ -90,10 +82,7 @@ const AREAS: Record<string, AreaConfig> = {
   "Art and Expression": {
     emoji: "🎨",
     key: "arte",
-    gradient: "linear-gradient(135deg, #f43f5e 0%, #f97316 100%)",
-    primary: "#f43f5e",
-    light: "#fff1f2",
-    border: "#fecdd3",
+    ...AREA_COLORS.arte,
     materias: {
       "Visual Arts":      { emoji: "🎨", niveles: ["Primaria", "Secundaria"], placeholder: "E.g.: an image to analyze, visual elements to identify, a work of art..." },
       "Music":            { emoji: "🎵", niveles: ["Primaria", "Secundaria"], placeholder: "E.g.: a score, musical concepts to debate, styles to compare..." },
@@ -127,6 +116,7 @@ interface PrintModalProps {
 }
 
 function PrintDocumentModal({ materia, nivel, anio, tema, ejercicio, areaConfig, onClose }: PrintModalProps) {
+  const ta = useArbitroT();
   const [instrucciones, setInstrucciones] = useState(
     `Today we will practice: ${tema}\n\n` +
     `📋 How the session works:\n` +
@@ -185,22 +175,22 @@ ${material ? `<div class="sec"><div class="sec-title">📝 Working material</div
             <div style={{ fontSize: 16, fontWeight: 800 }}>📄 Printable document</div>
             <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>{materia} · {nivel} {anio} · {tema}</div>
           </div>
-          <button onClick={onClose} style={closeBtnStyle}>✕</button>
+          <button onClick={onClose} aria-label={ta.closeDialog} style={closeBtnStyle}><span aria-hidden="true">✕</span></button>
         </div>
 
         <div style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 20, maxHeight: "70vh", overflowY: "auto" }}>
           <div>
-            <div style={sectionBadgeStyle}><span style={badgeNumStyle}>1</span> 📋 Instructions for students <span style={{ fontWeight: 400, color: "#94a3b8", fontSize: 12 }}>— editable</span></div>
+            <div style={sectionBadgeStyle}><span style={badgeNumStyle}>1</span> 📋 Instructions for students <span style={{ fontWeight: 400, color: PALETA.gris, fontSize: 12 }}>— editable</span></div>
             <textarea value={instrucciones} onChange={e => setInstrucciones(e.target.value)} rows={9} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", lineHeight: 1.65 }} />
           </div>
           <div>
-            <div style={sectionBadgeStyle}><span style={badgeNumStyle}>2</span> 📝 Working material <span style={{ fontWeight: 400, color: "#94a3b8", fontSize: 12 }}>— optional, editable</span></div>
+            <div style={sectionBadgeStyle}><span style={badgeNumStyle}>2</span> 📝 Working material <span style={{ fontWeight: 400, color: PALETA.gris, fontSize: 12 }}>— optional, editable</span></div>
             <textarea value={material} onChange={e => setMaterial(e.target.value)} rows={5}
               placeholder="Paste here the text, exercises or prompts you want students to work on..."
               style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", lineHeight: 1.65 }} />
           </div>
           <div>
-            <div style={sectionBadgeStyle}><span style={badgeNumStyle}>3</span> ✍️ Final report instructions <span style={{ fontWeight: 400, color: "#94a3b8", fontSize: 12 }}>— editable</span></div>
+            <div style={sectionBadgeStyle}><span style={badgeNumStyle}>3</span> ✍️ Final report instructions <span style={{ fontWeight: 400, color: PALETA.gris, fontSize: 12 }}>— editable</span></div>
             <textarea value={informe} onChange={e => setInforme(e.target.value)} rows={7} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", lineHeight: 1.65 }} />
           </div>
         </div>
@@ -223,6 +213,7 @@ export default function LearningRefereeConfigPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { language } = useI18n();
+  const ta = useArbitroT();
   const { mode, getLocalizedTheme } = useGameMode();
   const theme = getLocalizedTheme(language);
 
@@ -380,7 +371,7 @@ export default function LearningRefereeConfigPage() {
                 </p>
               </div>
             </div>
-            <button onClick={() => navigate("/")} style={closeBtnStyle}>✕</button>
+            <button onClick={() => navigate("/")} aria-label={ta.closeConfig} title={ta.closeConfig} style={closeBtnStyle}><span aria-hidden="true">✕</span></button>
           </div>
 
           {/* ── Body ── */}
@@ -399,7 +390,7 @@ export default function LearningRefereeConfigPage() {
               }}>
                 <span style={{ fontSize: 28 }}>{areaConfig?.emoji}</span>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 2 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: PALETA.gris, textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 2 }}>
                     Learning Referee —
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: areaConfig?.primary }}>
@@ -445,8 +436,8 @@ export default function LearningRefereeConfigPage() {
                 </div>
               </div>
               <div>
-                <label style={labelStyle}>Year / Grade</label>
-                <select value={anio} onChange={e => setAnio(e.target.value)} style={selectStyle}>
+                <label htmlFor="config-anio" style={labelStyle}>Year / Grade</label>
+                <select id="config-anio" value={anio} onChange={e => setAnio(e.target.value)} style={selectStyle}>
                   {GRADOS[nivel].map(g => <option key={g} value={g}>{g} grade</option>)}
                 </select>
               </div>
@@ -457,7 +448,7 @@ export default function LearningRefereeConfigPage() {
               <div>
                 <label style={labelStyle}>Subject</label>
                 {materiasDisponibles.length === 0 ? (
-                  <div style={{ fontSize: 13, color: "#94a3b8", padding: "12px 14px", backgroundColor: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0" }}>
+                  <div style={{ fontSize: 13, color: PALETA.gris, padding: "12px 14px", backgroundColor: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0" }}>
                     No subjects available for this level in this area.
                   </div>
                 ) : (
@@ -469,7 +460,7 @@ export default function LearningRefereeConfigPage() {
                         backgroundColor: materia === nombre ? `${accentColor}15` : "white",
                       }}>
                         <div style={{ fontSize: 17, marginBottom: 3 }}>{data.emoji}</div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: materia === nombre ? accentColor : "#1e293b", lineHeight: 1.3 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: materia === nombre ? accentColor : "#1e293b", lineHeight: 1.3 }}>
                           {nombre}
                         </div>
                       </button>
@@ -509,7 +500,7 @@ export default function LearningRefereeConfigPage() {
                       cursor: "pointer",
                     }}>
                       <div style={{ fontWeight: 700, fontSize: 14, color: duracion === d.id ? accentColor : "#1e293b" }}>{d.label}</div>
-                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{d.desc}</div>
+                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{d.desc}</div>
                     </button>
                   ))}
                 </div>
@@ -528,7 +519,7 @@ export default function LearningRefereeConfigPage() {
                   display: "flex", justifyContent: "space-between", alignItems: "center",
                 }}>
                   <span>📎 Additional material for students</span>
-                  <span style={{ fontSize: 11, opacity: 0.7 }}>{showMaterial ? "▲ hide" : "▼ add"}</span>
+                  <span style={{ fontSize: 12, opacity: 0.7 }}>{showMaterial ? "▲ hide" : "▼ add"}</span>
                 </button>
                 {showMaterial && (
                   <div style={{ marginTop: 8 }}>
@@ -614,7 +605,7 @@ export default function LearningRefereeConfigPage() {
               <button onClick={() => navigate("/")} style={btnSecondary}>← Back</button>
               <button onClick={handleGenerar} disabled={!canGenerate} style={{
                 padding: "12px 24px", fontSize: 14, fontWeight: 700, borderRadius: 10, border: "none",
-                background: canGenerate ? headerGrad : "#94a3b8",
+                background: canGenerate ? headerGrad : PALETA.gris,
                 color: "white", cursor: canGenerate ? "pointer" : "not-allowed",
                 minWidth: 200, opacity: canGenerate ? 1 : 0.7,
               }}>
@@ -638,7 +629,8 @@ export default function LearningRefereeConfigPage() {
               </div>
               {!creandoTarea && (
                 <button onClick={() => setShowClassroomModal(false)}
-                  style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "white", width: 32, height: 32, borderRadius: "50%", fontSize: 16, cursor: "pointer" }}>✕</button>
+                  aria-label={ta.closeDialog} title={ta.closeDialog}
+                  style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "white", width: 44, height: 44, borderRadius: "50%", fontSize: 16, cursor: "pointer" }}><span aria-hidden="true">✕</span></button>
               )}
             </div>
 
@@ -730,7 +722,7 @@ function HowItWorksAccordionEN({ primary, light, border }: { primary: string; li
         <div style={{ padding: "0 16px 14px", borderTop: `1px solid ${border}` }}>
           {steps.map((txt, i) => (
             <div key={i} style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "flex-start" }}>
-              <div style={{ width: 22, height: 22, borderRadius: "50%", backgroundColor: `${primary}20`, color: primary, fontWeight: 800, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <div style={{ width: 22, height: 22, borderRadius: "50%", backgroundColor: `${primary}20`, color: primary, fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 {i + 1}
               </div>
               <div style={{ fontSize: 12, color: "#1e3a5f", lineHeight: 1.55, paddingTop: 2 }}>{txt}</div>
@@ -750,9 +742,9 @@ function HowItWorksAccordionEN({ primary, light, border }: { primary: string; li
 const pageStyle: React.CSSProperties = { minHeight: "100vh", background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "32px 20px", fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif" };
 const cardStyle: React.CSSProperties = { backgroundColor: "white", borderRadius: 20, width: "100%", maxWidth: 700, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", overflow: "hidden", display: "flex", flexDirection: "column" };
 const labelStyle: React.CSSProperties = { display: "block", marginBottom: 8, fontSize: 14, fontWeight: 700, color: "#475569" };
-const inputStyle: React.CSSProperties = { width: "100%", padding: "11px 14px", fontSize: 14, borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "#f8fafc", outline: "none", boxSizing: "border-box" as const };
+const inputStyle: React.CSSProperties = { width: "100%", padding: "11px 14px", fontSize: 14, borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "#f8fafc", boxSizing: "border-box" as const };
 const selectStyle: React.CSSProperties = { ...inputStyle, cursor: "pointer", appearance: "auto" as any };
 const btnSecondary: React.CSSProperties = { padding: "12px 20px", fontSize: 14, fontWeight: 600, borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "white", color: "#64748b", cursor: "pointer" };
 const closeBtnStyle: React.CSSProperties = { background: "rgba(255,255,255,0.2)", border: "none", color: "white", width: 36, height: 36, borderRadius: "50%", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
 const sectionBadgeStyle: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 };
-const badgeNumStyle: React.CSSProperties = { background: "#e0e7ff", color: "#4f46e5", borderRadius: 6, padding: "2px 7px", fontSize: 11, fontWeight: 700 };
+const badgeNumStyle: React.CSSProperties = { background: "#e0e7ff", color: "#4f46e5", borderRadius: 6, padding: "2px 7px", fontSize: 12, fontWeight: 700 };

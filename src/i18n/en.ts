@@ -833,6 +833,46 @@ export const en = {
     s13_not_use_4: '❌ Very large groups where closing would be hard to manage',
     s13_tip: '💡 Self-assessment identifies students most mentioned as "helpers." These students can explain key concepts to the rest of the group during the pedagogical closing, reinforcing their own learning and that of their peers.',
   },
+
+  // ============================================
+  // REFEREE — accessibility (batches 0 and 1)
+  // Screen-reader texts, color names and new messages.
+  // ============================================
+  arbitro: {
+    teamColors: {
+      red: "Red",
+      blue: "Blue",
+      green: "Green",
+      amber: "Amber",
+      violet: "Violet",
+      pink: "Pink",
+      teal: "Teal",
+      orange: "Orange",
+    },
+    teamColorGroup: "Color for team {team}",
+    teamColorNumber: "team {n}",
+    timerName: "Question timer",
+    timerLastSeconds: "⚠️ Last 15 seconds!",
+    timerAnnounce15: "15 seconds left",
+    timerAnnounceUp: "Time is up",
+    soundOff: "Mute the timer sound",
+    soundOn: "Turn the timer sound on",
+    rulesStep5Who: "The AI reads both teams' arguments",
+    rulesStep5Desc: "Teams grade each other. If the other team does not accept the grade, both write their arguments and the referee splits the point citing the source text. Its split is final for that round.",
+    rulesStep5Info: "Teams grade each other. If the other team does not accept the grade, both write their arguments and the referee (AI) splits the point citing the source text. Its split is final for that round.",
+    rulesStep5Template: "5. If the other team does not accept the grade, both teams write their arguments and the referee (AI) splits the point citing the source text, from inside the game. Its split is final for that round.",
+    errorConsultFailed: "We could not reach the referee. Check your connection and try again.",
+    errorRetryHint: "The referee's split is final for each round: if it could not be reached, try again.",
+    errorNoClearAnswer: "The referee could not give a clear answer. No points were added. Please try again.",
+    closeConfig: "Close the setup and go back",
+    closeDialog: "Close the dialog",
+    questionsFieldName: "Game questions, one per line",
+    questionsCountName: "Number of questions to generate",
+    teamPoints: "{points} points",
+    loginToGenerateQuestions: "Sign in with Google to generate questions",
+    loginWithGoogle: "Sign in with Google",
+    loginToGenerateQuestionsFailed: "Couldn't sign in. Please try again.",
+  },
 } as const;
 
-export type TranslationKeys = typeof en;
+export type TranslationKeys = typeof en;

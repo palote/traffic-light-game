@@ -6,6 +6,7 @@ import { es } from './es';
 import { en } from './en';
 import { pt } from './pt';
 import type { TranslationKeys } from './es';
+import { esRutaArbitro } from '../utils/arbitroRoutes';
 
 // ============================================
 // TIPOS
@@ -62,6 +63,14 @@ function getInitialLanguage(): Language {
 const I18nContext = createContext<I18nContextType | null>(null);
 
 // ============================================
+// HELPER: valor de <html lang> según la ruta
+// ============================================
+
+export function htmlLangForPath(pathname: string, language: Language): Language {
+  return esRutaArbitro(pathname) ? 'es' : language;
+}
+
+// ============================================
 // PROVIDER
 // ============================================
 
@@ -81,8 +90,11 @@ export function I18nProvider({ children, defaultLanguage }: I18nProviderProps) {
     localStorage.setItem('tlg_language', lang);
   };
 
+  // En las rutas del árbitro (/arbitro*, /sesion/*) el idioma del documento es
+  // siempre "es", sin importar el del navegador. Al navegar dentro de la app lo
+  // actualiza ArbitroLangManager (App.tsx), que usa el mismo helper.
   useEffect(() => {
-    document.documentElement.lang = language;
+    document.documentElement.lang = htmlLangForPath(window.location.pathname, language);
   }, [language]);
 
   const value: I18nContextType = {
@@ -108,6 +120,19 @@ export function useI18n() {
     throw new Error('useI18n must be used within an I18nProvider');
   }
   return context;
+}
+
+// Textos del árbitro (sección `arbitro`). En /arbitro* y /sesion/* las páginas
+// están en español, así que siempre devuelve la sección en español; fuera de
+// esas rutas (p. ej. Learning Referee) sigue el idioma elegido.
+export function useArbitroT(): TranslationKeys['arbitro'] {
+  const { t } = useI18n();
+  return esRutaArbitro(window.location.pathname) ? es.arbitro : t.arbitro;
+}
+
+// Reemplaza {nombre} en un texto con los valores indicados.
+export function fillArbitro(text: string, values: Record<string, string | number>): string {
+  return text.replace(/\{(\w+)\}/g, (m, k) => (k in values ? String(values[k]) : m));
 }
 
 // ============================================
@@ -212,4 +237,4 @@ export function LanguageSelector({ compact = false }: { compact?: boolean }) {
 }
 
 // Re-export types
-export type { TranslationKeys };
+export type { TranslationKeys };

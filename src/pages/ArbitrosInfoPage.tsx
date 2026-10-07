@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { PALETA } from "../utils/arbitroPalette";
+import { useArbitroT } from "../i18n";
 
 const AREAS = [
   {
@@ -8,7 +10,7 @@ const AREAS = [
     queHace: "El árbitro de Exactas resuelve desacuerdos sobre procedimientos, resultados y conceptos en matemática y ciencias naturales. Cuando dos alumnos no se ponen de acuerdo si un cálculo está bien, si una definición es correcta o si un razonamiento lógico tiene sentido, el árbitro analiza ambas posiciones y da un veredicto fundamentado. No resuelve el ejercicio por el grupo — solo interviene ante un desacuerdo genuino que el grupo no puede resolver solo.",
   },
   {
-    emoji: "🌍", nombre: "Ciencias Sociales y Humanidades", key: "sociales", primary: "#f97316", bg: "#fff7ed",
+    emoji: "🌍", nombre: "Ciencias Sociales y Humanidades", key: "sociales", primary: PALETA.naranja, bg: "#fff7ed",
     materias: "Historia, Geografía, Filosofía, Economía, Derecho",
     queHace: "El árbitro de Sociales arbitra desacuerdos sobre interpretaciones históricas, conceptos económicos, análisis geográficos o debates filosóficos y legales. En materias donde muchas respuestas no son blanco o negro, el árbitro evalúa si los argumentos están bien fundamentados y si las posiciones son conceptualmente sólidas, sin imponer una única verdad sino guiando al grupo hacia mayor precisión.",
   },
@@ -29,11 +31,12 @@ const PASOS = [
   { n: "2", txt: "Los alumnos arman 2 equipos y entran al link desde el dispositivo de un integrante de cada equipo." },
   { n: "3", txt: "Un equipo le hace una pregunta oral al otro; el que responde lo hace en voz alta." },
   { n: "4", txt: "El equipo que preguntó califica la respuesta: completa (1 punto), incompleta (0.5) o incorrecta (0). El juego suma los puntos solo, automáticamente." },
-  { n: "5", txt: "Si el equipo que respondió no está de acuerdo con la calificación, piden el veredicto del árbitro — su fallo define el puntaje de esa ronda." },
+  { n: "5", txt: "" }, // el texto del paso 5 sale de i18n (arbitro.rulesStep5Info)
   { n: "6", txt: "Al terminar, cada equipo completa una metacognición dentro del juego. El protagonista es el grupo." },
 ];
 
 export default function ArbitrosInfoPage() {
+  const ta = useArbitroT();
   const navigate = useNavigate();
   const [showPasos, setShowPasos] = useState(false);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
@@ -71,7 +74,7 @@ export default function ArbitrosInfoPage() {
                 {PASOS.map(s => (
                   <div key={s.n} style={{ display: "flex", gap: 12, marginBottom: 12, alignItems: "flex-start" }}>
                     <div style={{ width: 26, height: 26, borderRadius: "50%", backgroundColor: "#e0f2fe", color: "#0ea5e9", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{s.n}</div>
-                    <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.55, paddingTop: 3 }}>{s.txt}</div>
+                    <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.55, paddingTop: 3 }}>{s.n === "5" ? ta.rulesStep5Info : s.txt}</div>
                   </div>
                 ))}
               </div>
@@ -147,7 +150,7 @@ export default function ArbitrosInfoPage() {
         </div>
 
         <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 8 }}>Gratuito · Sin registro · Un dispositivo por grupo</div>
+          <div style={{ fontSize: 13, color: PALETA.gris, marginBottom: 8 }}>Gratuito · Sin registro · Un dispositivo por grupo</div>
           <button onClick={() => navigate(-1)} style={{ background: "none", border: "none", color: "#0ea5e9", cursor: "pointer", fontSize: 13, textDecoration: "underline" }}>← Volver al inicio</button>
         </div>
       </div>

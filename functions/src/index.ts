@@ -12,6 +12,7 @@ import type ExcelJS from "exceljs";
 import type PptxGenJS from "pptxgenjs";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as admin from "firebase-admin";
+import { buildArbitroPrompt, normalizarAreaKey, AREA_LABEL_ES } from "./arbitroPrompt";
 
 // Inicializar Firebase Admin UNA SOLA VEZ
 if (!admin.apps.length) {
@@ -1302,6 +1303,27 @@ export const generateEcuaciones = onCall(
 // FUNCIONES DEL ÁRBITRO
 // ============================================================================
 
+const ADMIN_UID_ARBITRO = "P2lU12xoCxMkZ0AdZdMoGGksJ5o1";
+
+// ── Autorización del panel docente ────────────────────────────────────────────
+// Las funciones que leen datos de una sesión para el panel exigen que quien
+// llama sea el docente que la creó (docenteUid) o el administrador.
+async function exigirDocenteDeSesion(
+  auth: { uid: string } | undefined,
+  sessionId: string,
+): Promise<FirebaseFirestore.DocumentData> {
+  if (!auth?.uid) {
+    throw new HttpsError("unauthenticated", "Tenés que iniciar sesión para ver esta información.");
+  }
+  const doc = await db.collection("sesiones_arbitro").doc(sessionId).get();
+  if (!doc.exists) throw new HttpsError("not-found", "Sesión no encontrada.");
+  const data = doc.data()!;
+  if (data.docenteUid !== auth.uid && auth.uid !== ADMIN_UID_ARBITRO) {
+    throw new HttpsError("permission-denied", "Esta sesión pertenece a otro docente.");
+  }
+  return data;
+}
+
 function generateSessionId(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let id = "";
@@ -1323,7 +1345,7 @@ export const crearSesionArbitro = onCall(
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + (duracion === "dia" ? 24 : 3));
       await db.collection("sesiones_arbitro").doc(sessionId).set({
-        area: area || null,
+        area: normalizarAreaKey(area),
         materia,
         nivel,
         anio,
@@ -1363,7 +1385,7 @@ export const getSesionArbitro = onCall(
       throw new HttpsError("deadline-exceeded", "Sesión expirada.");
     }
     return {
-      area: data.area || null,
+      area: normalizarAreaKey(data.area),
       materia: data.materia,
       nivel: data.nivel,
       anio: data.anio,
@@ -1379,186 +1401,6 @@ export const getSesionArbitro = onCall(
 );
 
 // ── Helper compartido del árbitro ─────────────────────────────────────────────
-
-// ── Generador de prompt diferenciado por área ────────────────────────────────
-
-function buildArbitroPrompt(params: {
-  area: string | null;
-  materia: string;
-  nivel: string;
-  anio: string;
-  tema: string;
-  subtema?: string;
-  ejercicio?: string;
-  textoFuente?: string;
-  desacuerdo: string;
-  posicionA: string;
-  posicionB: string;
-  esJuegoOral?: boolean;
-}): string {
-  const { area, materia, nivel, anio, tema, subtema, ejercicio, textoFuente, desacuerdo, posicionA, posicionB, esJuegoOral } = params;
-
-  // ── Instrucción de nivel de idioma (R02) ──────────────────────────────────
-  const anioNum = parseInt(anio, 10);
-  let nivelIdioma: string;
-  if (!isNaN(anioNum) && anioNum <= 3) {
-    nivelIdioma = "Usá un vocabulario muy simple y accesible, con oraciones cortas, como si le hablaras a un chico de primaria.";
-  } else if (!isNaN(anioNum) && anioNum <= 6) {
-    nivelIdioma = "Usá un vocabulario claro y directo, adecuado para la escuela primaria avanzada o primer ciclo secundario.";
-  } else {
-    nivelIdioma = "Podés usar terminología disciplinar precisa, apropiada para un estudiante de secundaria media o superior.";
-  }
-
-  // ── Preguntas previstas para la sesión (banco cargado por el docente) ─────
-  const refMaterial = ejercicio ? `\nPreguntas previstas para la sesión (las cargó el docente; el equipo pudo elegir una de estas o escribir la suya):\n${ejercicio}` : "";
-  const subtemaLine = subtema ? `\nSubtema: "${subtema}"` : "";
-
-  // ── Texto base de la sesión ───────────────────────────────────────────────
-  // Lo carga el docente al crear la sesión y viaja en el documento de Firestore,
-  // no desde el cliente. Se recorta a 8000 caracteres para acotar el prompt.
-  const textoFuenteBlock = textoFuente
-    ? `\nTEXTO BASE DE LA SESIÓN:\n"""\n${textoFuente.substring(0, 8000)}\n"""\n\nFundamentá tu veredicto señalando qué parte del texto sostiene cada posición. Si el texto no alcanza para decidir entre las dos, decilo explícitamente en vez de inventar un fundamento.\n`
-    : "";
-
-  // ── Formato de respuesta JSON (compartido) ────────────────────────────────
-  const jsonFormat = `Respondé ÚNICAMENTE con JSON válido sin backticks ni texto extra:
-{
-  "resultado": "A",
-  "elementosClave": "qué elementos específicos necesitaría una respuesta completa a ESTA pregunta puntual (uno solo, o varios si la pregunta lo requiere), y cuáles de esos mencionó el equipo de forma concreta y no genérica",
-  "calificacionRecomendada": "completa",
-  "veredicto": "una oración que resume quién tiene razón",
-  "explicacion": "2-3 oraciones explicando el concepto de forma pedagógica",
-  "paraSeguirPensando": "una pregunta que invite al grupo a seguir reflexionando"
-}
-
-El campo "elementosClave" es un paso de análisis obligatorio que tenés que resolver ANTES de decidir "calificacionRecomendada": pensá primero qué necesitaría decir una respuesta completa a esta pregunta puntual, y compará eso con lo que el equipo realmente dijo. No lo saltees — la categoría de abajo tiene que salir de esa comparación, no de una impresión general.
-
-El campo "resultado" debe ser exactamente uno de: "A", "B", "ambas_correctas", "ambas_incorrectas".
-
-El campo "calificacionRecomendada" es INDEPENDIENTE de "resultado": indica qué puntaje merece la respuesta del equipo EN SÍ MISMA, evaluada por vos con tu propio conocimiento de la materia — no solo comparando qué posición del desacuerdo "ganó". Debe ser exactamente uno de:
-- "completa": la respuesta es correcta y cubre los elementos específicos que hacían falta para esta pregunta puntual.
-- "incompleta": la respuesta ES CORRECTA en todo lo que afirma Y menciona al menos un dato, nombre o idea ESPECÍFICA y CONCRETA sobre el tema — no genérica ni obvia, algo que demuestre que el equipo sabe algo puntual — pero le falta desarrollo, justificación, precisión o ejemplos. Si la respuesta completa requiere varios elementos (varias causas, varios nombres, varios pasos de un proceso), usá "incompleta" cuando el equipo mencione ALGUNOS de esos elementos de forma específica y correcta, aunque falten otros.
-- "no": la respuesta tiene un error conceptual o factual — un nombre, dato, concepto o relación que está mal — sin importar qué tan convincente sea el argumento de quien la defiende, ni qué tan cerca esté del tema correcto. Confundir un personaje, una fecha o un dato por otro NUNCA es "incompleta" ni "un poco vaga": es un error, y va como "no". TAMBIÉN es "no" una respuesta vacía, evasiva o tan genérica que no menciona ningún dato específico y verificable del tema — que serviría como respuesta a casi cualquier pregunta del mismo tema sin demostrar comprensión real (ejemplo: si preguntan quiénes son los protagonistas y responden solo "la familia" sin nombrar a nadie ni dar ningún detalle). Y TAMBIÉN es "no" cuando la respuesta completa requería varios elementos y el equipo solo dio uno o dos, y esos pocos son genéricos u obvios en vez de específicos — ahí tampoco alcanza para "incompleta", aunque no haya ningún dato objetivamente erróneo. Sé estricto, no condescendiente — no le subas la categoría a una respuesta vacía o casi vacía solo para no ser duro. Chequeo de consistencia obligatorio: si en "explicacion" vos mismo decís que algo "es incorrecto", "está mal" o "confunde X con Y", entonces "calificacionRecomendada" tiene que ser "no" — nunca "incompleta". Esos dos campos no pueden contradecirse. Usá "no" incluso si el equipo que calificó originalmente había puesto "incompleta" — si vos detectás que en realidad está mal o es demasiado vacía, corregilo a "no".`;
-
-  // ── Pertinencia (R05) ─────────────────────────────────────────────────────
-  // Se juzga por la PREGUNTA, no por el bloque completo del desacuerdo: una
-  // respuesta pobre o un argumento flojo no vuelven "fuera de tema" a una
-  // pregunta que sí es del tema. Con texto base, el criterio es el texto; sin
-  // texto base, el área y el tema, con margen amplio.
-  const jsonFueraDeTema = `{"resultado":"fuera_de_tema","calificacionRecomendada":"no","veredicto":"Este desacuerdo no corresponde al tema de la sesión.","explicacion":"El árbitro solo puede intervenir en desacuerdos sobre ${materia} — tema: ${tema}. Como la pregunta no corresponde al tema, no corresponde puntaje por esta respuesta.","paraSeguirPensando":"¿La pregunta que querían plantear sí tiene que ver con ${tema}?"}`;
-
-  const validacionTema = textoFuente
-    ? `PERTINENCIA: juzgá la pertinencia SOLO por la pregunta que se hizo — no por la calidad de la respuesta ni de los argumentos. Una respuesta floja, vaga o casi vacía NO vuelve la pregunta "fuera de tema": eso se resuelve con la calificación, no rechazando el arbitraje.
-Una pregunta es pertinente si puede responderse o evaluarse usando el TEXTO BASE de la sesión. No rechaces por comparación literal con el nombre del tema: usá el texto base como criterio de pertinencia.
-Solo si la pregunta es claramente ajena al texto base y al tema, o no tiene ningún contenido, respondé exactamente:
-${jsonFueraDeTema}`
-    : `PERTINENCIA: juzgá la pertinencia SOLO por la pregunta que se hizo — no por la calidad de la respuesta ni de los argumentos. Una respuesta floja, vaga o casi vacía NO vuelve la pregunta "fuera de tema": eso se resuelve con la calificación, no rechazando el arbitraje.
-Una pregunta es pertinente si corresponde razonablemente al área y al tema configurados, entendidos con criterio amplio: una materia incluye sus subtemas, sus períodos y temas vecinos, y también las preguntas sobre la disciplina misma (sus métodos, sus fuentes, sus ciencias auxiliares). Ante la duda, arbitrá: es mejor dar un veredicto que rechazar.
-Solo si la pregunta es claramente ajena a ${materia} y al tema "${tema}", o no tiene ningún contenido, respondé exactamente:
-${jsonFueraDeTema}`;
-
-  // ── Contexto específico del juego oral competitivo (Árbitro de Aprendizaje) ─
-  const contextoJuego = esJuegoOral ? `
-CONTEXTO DEL JUEGO: Esto es una ronda en vivo de "Árbitro de Aprendizaje", un juego oral entre dos equipos con puntaje. Un equipo le hizo la pregunta al otro en voz alta, escuchó la respuesta oral, y le puso una calificación. El equipo que respondió no está de acuerdo con esa calificación y pidió tu intervención. Los dos equipos están esperando tu fallo en el momento para seguir jugando, así que tu resolución tiene que ser clara, decisiva y breve — evitá quedarte en un "depende" cuando exista una respuesta objetivamente mejor.
-Actuá como un árbitro deportivo: firme y justo, que reconoce lo que está bien y corrige lo que está mal sin desalentar al equipo.
-Muy importante: "calificacionRecomendada" tiene que reflejar el mérito real de la respuesta oral que dieron, no premiar al equipo que argumentó con más convicción en la disputa — si la respuesta tiene un error de fondo, es "no" aunque ese equipo defienda su postura con seguridad. No suavices el puntaje por compasión: confundir un nombre, un dato o un concepto por otro no es "responder vago", es un error, y corresponde "no" — sé un árbitro estricto y justo, no uno condescendiente. Lo mismo vale para una respuesta vacía, evasiva o demasiado genérica sin ningún dato concreto: no tener errores no alcanza para "incompleta" si tampoco hay nada específico — en ese caso también corresponde "no".
-La pregunta de "paraSeguirPensando" tiene que servir para los DOS equipos por igual, porque se lee en voz alta para toda la clase.
-` : "";
-
-  // ── Prompts diferenciados por área (R01) ──────────────────────────────────
-  const areaLower = (area || "").toLowerCase();
-
-  if (areaLower === "exactas") {
-    return `Sos un árbitro experto en ${materia}, especializado en Ciencias Exactas. Estás en una sesión de nivel ${nivel} (${anio}° año).
-Tema: "${tema}"${subtemaLine}${refMaterial}
-
-${nivelIdioma}
-
-Tu rol es arbitrar desacuerdos con precisión: en Exactas hay respuestas correctas e incorrectas. Identificá el error conceptual o de procedimiento con claridad, sin ambigüedad. Si ambas posiciones tienen un error distinto, usá "ambas_incorrectas" y explicá cada error por separado. Si el desacuerdo es sobre una convención (ej. notación), aclaralo explícitamente.
-
-${validacionTema}
-${contextoJuego}
-${jsonFormat}
-
-Reglas adicionales para Exactas:
-- Señalá el paso exacto donde está el error si es un procedimiento.
-- No des la solución completa al ejercicio; solo arbitrá el punto en disputa.
-- Si hay unidades o dimensiones involucradas, verificalas.
-
-${textoFuenteBlock}
-Desacuerdo: ${desacuerdo}
-Posición A: ${posicionA}
-Posición B: ${posicionB}`;
-  }
-
-  if (areaLower === "sociales") {
-    return `Sos un árbitro experto en ${materia}, especializado en Ciencias Sociales. Estás en una sesión de nivel ${nivel} (${anio}° año).
-Tema: "${tema}"${subtemaLine}${refMaterial}
-
-${nivelIdioma}
-
-Tu rol es arbitrar desacuerdos con matiz: en Ciencias Sociales muchas respuestas admiten perspectivas distintas, pero existen afirmaciones factuales incorrectas y generalizaciones inapropiadas. Distinguí entre desacuerdos interpretativos legítimos y errores factuales. Promové el pensamiento crítico y el análisis de fuentes.
-
-${validacionTema}
-${contextoJuego}
-${jsonFormat}
-
-Reglas adicionales para Sociales:
-- Si el desacuerdo es interpretativo y ambas posiciones tienen sustento, usá "ambas_correctas" y explicá los enfoques.
-- Si hay un error factual claro (fecha, personaje, concepto histórico), señalalo con precisión.
-- Invitá a considerar el contexto histórico, geográfico o cultural en la pregunta paraSeguirPensando.
-
-${textoFuenteBlock}
-Desacuerdo: ${desacuerdo}
-Posición A: ${posicionA}
-Posición B: ${posicionB}`;
-  }
-
-  if (areaLower === "arte" || areaLower === "lenguajes") {
-    return `Sos un árbitro experto en ${materia}, especializado en Arte y Lenguajes Artísticos. Estás en una sesión de nivel ${nivel} (${anio}° año).
-Tema: "${tema}"${subtemaLine}${refMaterial}
-
-${nivelIdioma}
-
-Tu rol es arbitrar desacuerdos valorando tanto los aspectos técnicos (que tienen respuesta precisa) como los interpretativos (que admiten diversidad). En Arte, la subjetividad tiene lugar, pero existen criterios técnicos y convenciones del lenguaje artístico que son objetivos. Distinguí entre los dos tipos de disputa.
-
-${validacionTema}
-${contextoJuego}
-${jsonFormat}
-
-Reglas adicionales para Arte:
-- Si el desacuerdo es sobre una técnica o elemento del lenguaje artístico (ritmo, armonía, perspectiva, etc.), arbitrá con precisión técnica.
-- Si es interpretativo, reconocé la validez de múltiples lecturas y usá "ambas_correctas" cuando corresponda.
-- La pregunta paraSeguirPensando debe invitar a explorar, crear o investigar más.
-
-${textoFuenteBlock}
-Desacuerdo: ${desacuerdo}
-Posición A: ${posicionA}
-Posición B: ${posicionB}`;
-  }
-
-  // ── Prompt genérico (fallback) ────────────────────────────────────────────
-  return `Sos un árbitro pedagógico experto en ${materia} de nivel ${nivel} (${anio}° año).
-Tema: "${tema}"${subtemaLine}${refMaterial}
-
-${nivelIdioma}
-
-Tu tarea es arbitrar un desacuerdo entre dos estudiantes con criterio pedagógico y precisión disciplinar.
-
-${validacionTema}
-${contextoJuego}
-${jsonFormat}
-
-Reglas:
-- Solo arbitrá sobre "${tema}".
-- Si las dos posiciones son equivalentes, usá "ambas_correctas".
-- No resolvás ejercicios completos; solo arbitrá el punto en disputa.
-
-${textoFuenteBlock}
-Desacuerdo: ${desacuerdo}
-Posición A: ${posicionA}
-Posición B: ${posicionB}`;
-}
 
 // ── Helper compartido del árbitro ─────────────────────────────────────────────
 
@@ -1584,8 +1426,9 @@ async function runArbitro(params: {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
 
+  // Sin `contexto`: el prompt de producción no lleva línea de área/materia/criterio.
+  // Para activarlas: contexto: { area: AREA_LABEL_ES[k], materia, criterio: criterioDeArea(session.area) }.
   const prompt = buildArbitroPrompt({
-    area: session.area || null,
     materia: session.materia,
     nivel: session.nivel,
     anio: session.anio,
@@ -1606,24 +1449,27 @@ async function runArbitro(params: {
 
   const raw = result.response.text().trim().replace(/```json|```/g, "").trim();
 
+  // Si Gemini no devuelve JSON válido (o, en el juego oral, no trae el reparto
+  // del punto), NO inventamos un veredicto: un respaldo sin puntos cerraba la
+  // ronda 0 a 0. Devolvemos un error y el juego ofrece "Reintentar". La
+  // consulta tampoco se registra, para no ensuciar el informe pedagógico.
   let parsed: any;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    parsed = {
-      resultado: "ambas_incorrectas",
-      calificacionRecomendada: "incompleta",
-      veredicto: "No se pudo determinar con claridad.",
-      explicacion: raw.slice(0, 300),
-      paraSeguirPensando: "¿Pueden reformular el desacuerdo con más precisión?",
-    };
+    console.error("runArbitro: Gemini devolvió algo que no es JSON:", raw.slice(0, 500));
+    throw new HttpsError("unavailable", "El árbitro no pudo dar una respuesta clara. Probá de nuevo.");
+  }
+  if (esJuegoOral && (typeof parsed?.puntosResponde !== "number" || typeof parsed?.puntosPregunta !== "number")) {
+    console.error("runArbitro: falta el reparto del punto en la respuesta:", raw.slice(0, 500));
+    throw new HttpsError("unavailable", "El árbitro no pudo dar una respuesta clara. Probá de nuevo.");
   }
 
   // Registrar consulta (incluye resultado fuera_de_tema para análisis)
   await db.collection("sesiones_arbitro").doc(sessionId).collection("consultas").add({
     desacuerdo, posicionA, posicionB,
     resultado: parsed.resultado,
-    area: session.area || null,
+    area: normalizarAreaKey(session.area),
     materia: session.materia,
     timestamp: new Date().toISOString(),
   });
@@ -1663,9 +1509,14 @@ export const requestVeredicto = onCall(
 export const generarConsignasArbitro = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 60 },
   async (request) => {
-    const { materia, nivel, anio, tema, subtema, cantidad, tipoPreguntas } = request.data as {
+    // Función abierta (invoker público) que gasta Gemini: solo docentes con sesión.
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Iniciá sesión con Google para generar preguntas.");
+    }
+    const { materia, nivel, anio, tema, subtema, cantidad, tipoPreguntas, textoFuente } = request.data as {
       materia: string; nivel: string; anio: string; tema: string; subtema?: string; cantidad?: number;
       tipoPreguntas?: "memoristica" | "mixta" | "capacidades";
+      textoFuente?: string;
     };
     if (!materia || !nivel || !anio || !tema) {
       throw new HttpsError("invalid-argument", "Faltan datos obligatorios.");
@@ -1700,14 +1551,20 @@ Estas preguntas siguen necesitando una respuesta verificable y justificable con 
 ${OPERACIONES_CAPACIDADES.map((o) => `- ${o}`).join("\n")}
 Estas últimas también necesitan una respuesta verificable y justificable con el tema — no es opinión libre, es razonamiento que el árbitro pueda evaluar.`;
 
+    const bloqueTexto = textoFuente && textoFuente.trim()
+      ? `\nTEXTO BASE QUE LOS ALUMNOS VAN A LEER ANTES DEL JUEGO:\n"""\n${textoFuente.trim().substring(0, 8000)}\n"""\n\nMUY IMPORTANTE: las preguntas tienen que poder responderse a partir de este texto. No inventes preguntas sobre aspectos del tema que el texto no cubre, aunque los conozcas de otras fuentes. Priorizá lo que el texto realmente dice, para que el árbitro después pueda evaluar las respuestas citándolo.\n`
+      : `\nNo hay un texto base cargado todavía, así que generá las preguntas con tu conocimiento general del tema.\n`;
+
     const prompt = `Sos un docente experto en ${materia} para ${nivel} ${anio} en Argentina.
 Generá exactamente ${n} preguntas sobre el tema: "${tema}"${subtema ? ` (específicamente: ${subtema})` : ""}.
+${bloqueTexto}
 Estas preguntas se van a usar en un juego oral por equipos: un equipo le hace la pregunta en voz alta
 a otro, que debe responder también en voz alta, y un árbitro (o el docente) evalúa si la respuesta es
 completa, incompleta o incorrecta. Por eso cada pregunta debe:
 - Tener una respuesta verificable, que el árbitro pueda evaluar como correcta, incompleta o incorrecta (evitar preguntas de opinión libre sin ningún criterio posible).
 - Ser breve y clara para decirla en voz alta.
 - Variar en dificultad (algunas más simples, otras más desafiantes).
+- No le pidas al alumno que cite, nombre o argumente "según" un autor o experto mencionado en el texto (aunque el texto sí lo nombre). Si el texto expone una idea de un autor, formulá la pregunta sobre esa idea en sí misma, sin exigir que el alumno recuerde o mencione de quién es. Ejemplo: en vez de "¿cómo argumentarías esto basándote en las ideas de [autor]?", preguntá "¿por qué el texto sostiene que [idea]? ¿estás de acuerdo?".
 
 ${bloqueTipo}
 
@@ -1722,6 +1579,9 @@ Numerá las preguntas del 1 al ${n}. Respondé SOLO con las preguntas numeradas,
 export const requestConsigna = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 60 },
   async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Iniciá sesión con Google para generar preguntas.");
+    }
     const { sessionId } = request.data as { sessionId: string };
     if (!sessionId) throw new HttpsError("invalid-argument", "sessionId es requerido.");
     const sessionDoc = await db.collection("sesiones_arbitro").doc(sessionId).get();
@@ -1899,10 +1759,8 @@ export const generarInformeSesion = onCall(
     const { sessionId, forceRegenerar } = request.data as { sessionId: string; forceRegenerar?: boolean };
     if (!sessionId) throw new HttpsError("invalid-argument", "sessionId es requerido.");
 
-    // Cargar sesión
-    const sessionDoc = await db.collection("sesiones_arbitro").doc(sessionId).get();
-    if (!sessionDoc.exists) throw new HttpsError("not-found", "Sesión no encontrada.");
-    const session = sessionDoc.data()!;
+    // Cargar sesión — solo el docente dueño (o el admin) puede generar o ver el informe
+    const session = await exigirDocenteDeSesion(request.auth, sessionId);
 
     // Cargar consultas
     const consultasSnap = await db
@@ -1998,7 +1856,7 @@ Analizá la siguiente sesión de debate arbitrado y generá un informe para el d
 
 DATOS DE LA SESIÓN:
 - Materia: ${session.materia}
-- Área: ${session.area || "No especificada"}
+- Área: ${(() => { const k = normalizarAreaKey(session.area); return k ? AREA_LABEL_ES[k] : "No especificada"; })()}
 - Nivel: ${session.nivel} — ${session.anio}° año
 - Tema: ${session.tema}
 ${session.subtema ? `- Subtema: ${session.subtema}` : ""}
@@ -2060,8 +1918,12 @@ Respondé ÚNICAMENTE con JSON válido sin backticks ni texto adicional:
 export const listarSesionesDocente = onCall(
   { invoker: "public", timeoutSeconds: 30 },
   async (request) => {
-    const { uid, limit: lim } = request.data as { uid?: string; limit?: number };
-    if (!uid) throw new HttpsError("invalid-argument", "uid es requerido.");
+    // El uid sale de la autenticación, nunca de los datos que manda el
+    // navegador: antes cualquiera podía listar las sesiones de otro docente
+    // pasando su uid.
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Tenés que iniciar sesión para ver tus sesiones.");
+    const { limit: lim } = request.data as { limit?: number };
 
     const snap = await db
       .collection("sesiones_arbitro")
@@ -2147,6 +2009,7 @@ export const getInformesMetacognicion = onCall(
     if (!sessionId) {
       throw new HttpsError("invalid-argument", "sessionId es requerido");
     }
+    await exigirDocenteDeSesion(request.auth, sessionId);
 
     const snapshot = await db
       .collection("sesiones_arbitro")
@@ -2169,9 +2032,7 @@ export const getInformesMetacognicion = onCall(
 export const listarTodasSesionesAdmin = onCall(
   { region: "us-central1" },
   async (request) => {
-    const ADMIN_UID = "P2lU12xoCxMkZ0AdZdMoGGksJ5o1";
-
-    if (request.auth?.uid !== ADMIN_UID) {
+    if (request.auth?.uid !== ADMIN_UID_ARBITRO) {
       throw new HttpsError("permission-denied", "Solo el administrador puede acceder a esta función.");
     }
 

@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useArbitroT } from "../i18n";
+import { PALETA, AREA_COLORS } from "../utils/arbitroPalette";
 
 // ─── Config por área ───────────────────────────────────────────────────────────
 
@@ -21,10 +23,7 @@ const AREAS: Record<string, {
     key: "exactas",
     nombre: "Ciencias Exactas y Naturales",
     emoji: "🔬",
-    gradient: "linear-gradient(135deg, #0ea5e9 0%, #0d9488 100%)",
-    primary: "#0ea5e9",
-    light: "#f0f9ff",
-    border: "#bae6fd",
+    ...AREA_COLORS.exactas,
     materias: ["Matemática", "Física", "Química", "Biología", "Estadística", "Informática"],
     descripcion: "Los alumnos debaten en grupos sobre el tema que vos elegís. La IA solo interviene cuando dos alumnos tienen posiciones distintas que no pueden resolver solos — no explica ni resuelve, solo arbitra el desacuerdo.",
     ejemplo: "Ecuaciones, fracciones, funciones, estadística, reacciones químicas, problemas de física…",
@@ -33,10 +32,7 @@ const AREAS: Record<string, {
     key: "sociales",
     nombre: "Ciencias Sociales y Humanidades",
     emoji: "🌍",
-    gradient: "linear-gradient(135deg, #f97316 0%, #b45309 100%)",
-    primary: "#f97316",
-    light: "#fff7ed",
-    border: "#fed7aa",
+    ...AREA_COLORS.sociales,
     materias: ["Historia", "Geografía", "Filosofía", "Economía", "Derecho", "Psicología"],
     descripcion: "Los alumnos debaten en grupos sobre fuentes, interpretaciones o conceptos. La IA no opina ni explica — solo arbitra cuando el grupo tiene un desacuerdo genuino que no puede resolver solo.",
     ejemplo: "Fuentes históricas, conceptos filosóficos, datos económicos, situaciones jurídicas…",
@@ -45,10 +41,7 @@ const AREAS: Record<string, {
     key: "lenguajes",
     nombre: "Comunicación y Lenguajes",
     emoji: "💬",
-    gradient: "linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)",
-    primary: "#8b5cf6",
-    light: "#faf5ff",
-    border: "#e9d5ff",
+    ...AREA_COLORS.lenguajes,
     materias: ["Lengua y Literatura", "Inglés", "Portugués", "Francés", "Comunicación"],
     descripcion: "Los alumnos trabajan en grupos sobre textos, consignas o producciones. La IA arbitra desacuerdos genuinos sobre interpretación, gramática o uso del lenguaje — sin reemplazar el debate entre pares.",
     ejemplo: "Análisis de textos, gramática en contexto, interpretación literaria, producción oral…",
@@ -57,10 +50,7 @@ const AREAS: Record<string, {
     key: "arte",
     nombre: "Arte y Expresión",
     emoji: "🎨",
-    gradient: "linear-gradient(135deg, #f43f5e 0%, #f97316 100%)",
-    primary: "#f43f5e",
-    light: "#fff1f2",
-    border: "#fecdd3",
+    ...AREA_COLORS.arte,
     materias: ["Plástica", "Música", "Teatro", "Educación Física", "Danza"],
     descripcion: "Los alumnos debaten en grupos sobre obras, técnicas o conceptos expresivos. La IA arbitra desacuerdos puntuales — el protagonismo sigue siendo el intercambio entre alumnos.",
     ejemplo: "Análisis de obras, estilos musicales, reglas de juego, conceptos de expresión…",
@@ -70,6 +60,7 @@ const AREAS: Record<string, {
 // ─── ComoFuncionaES ────────────────────────────────────────────────────────────
 
 function ComoFuncionaES({ primary }: { primary: string }) {
+  const ta = useArbitroT();
   const [open, setOpen] = useState(false);
   const etapas = [
     {
@@ -99,8 +90,8 @@ function ComoFuncionaES({ primary }: { primary: string }) {
     {
       numero: "5",
       titulo: "El árbitro interviene",
-      quien: "La IA lee los argumentos de ambos equipos",
-      descripcion: "Da su veredicto sobre esa discrepancia puntual, citando el texto base. El equipo que preguntó decide el puntaje final.",
+      quien: ta.rulesStep5Who,
+      descripcion: ta.rulesStep5Desc,
     },
     {
       numero: "6",
@@ -288,7 +279,7 @@ export default function ArbitroLandingPage() {
                   📊 Mis sesiones
                 </Link>
                 <div style={{
-                  fontSize: 11,
+                  fontSize: 12,
                   color: "rgba(255,255,255,0.6)",
                   display: "flex",
                   alignItems: "center",
@@ -312,7 +303,7 @@ export default function ArbitroLandingPage() {
                       background: "none",
                       border: "none",
                       color: "rgba(255,255,255,0.5)",
-                      fontSize: 11,
+                      fontSize: 12,
                       cursor: cerrandoSesion ? "default" : "pointer",
                       padding: "2px 6px",
                       borderRadius: 6,
@@ -346,7 +337,7 @@ export default function ArbitroLandingPage() {
               </button>
             )}
             {errorAcceso && (
-              <div style={{ fontSize: 11, color: "#fecaca", textAlign: "right", maxWidth: 180 }}>{errorAcceso}</div>
+              <div style={{ fontSize: 12, color: "#fecaca", textAlign: "right", maxWidth: 180 }}>{errorAcceso}</div>
             )}
           </div>
         )}
@@ -418,7 +409,7 @@ export default function ArbitroLandingPage() {
               </span>
             ))}
           </div>
-          <div style={{ marginTop: 12, fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>
+          <div style={{ marginTop: 12, fontSize: 12, color: PALETA.grisOscuro, lineHeight: 1.5 }}>
             <strong>Ejemplos de temas:</strong> {cfg.ejemplo}
           </div>
         </div>
@@ -444,7 +435,7 @@ export default function ArbitroLandingPage() {
           >
             ⚖️ Configurar mi sesión →
           </button>
-          <div style={{ marginTop: 10, fontSize: 13, color: "#94a3b8" }}>
+          <div style={{ marginTop: 10, fontSize: 13, color: PALETA.gris }}>
             Gratuito · Solo necesitás un dispositivo por grupo
           </div>
         </div>

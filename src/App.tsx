@@ -52,9 +52,10 @@ import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { GameModeProvider } from "./contexts/GameModeContext";
-import { I18nProvider } from "./i18n";
+import { I18nProvider, useI18n, htmlLangForPath } from "./i18n";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
+import { setManifestForRoute } from "./utils/dynamicManifest";
 
 import type { Game } from "./types/game";
 
@@ -128,13 +129,8 @@ const ArbitroLandingPage = lazy(() => import("./pages/ArbitroLandingPage"));
 const ArbitrosInfoPage = lazy(() => import("./pages/ArbitrosInfoPage"));
 const ArbitroJuegoPage = lazy(() => import("./pages/ArbitroJuegoPage"));
 
-// 🆕 LEARNING REFEREE — English version (Lazy Load)
-const LearningRefereeConfigPage = lazy(() => import("./pages/LearningRefereeConfigPage"));
-
 // 📊 A/B TEST DASHBOARD
 import { ABTestDashboard } from "./components/ABTestDashboard";
-// LearningRefereeSesionPage is loaded lazily inside LearningRefereeLandingPage (dual-route pattern)
-const LearningRefereeLandingPage = lazy(() => import("./pages/LearningRefereeLandingPage"));
 
 // ✅ CORREGIDO: ClassroomView real para Stage 1
 function ClassroomRouteWrapper() {
@@ -525,6 +521,26 @@ function LoadingSpinner() {
   );
 }
 
+// 🆕 Actualiza el <link rel="manifest"> según la ruta (árbitro vs juego normal)
+function ManifestManager() {
+  const location = useLocation();
+  useEffect(() => {
+    setManifestForRoute();
+  }, [location.pathname]);
+  return null;
+}
+
+// 🆕 Fija <html lang="es"> en las rutas del árbitro (/arbitro*, /sesion/*),
+// sin importar el idioma del navegador; en el resto sigue el idioma elegido.
+function ArbitroLangManager() {
+  const location = useLocation();
+  const { language } = useI18n();
+  useEffect(() => {
+    document.documentElement.lang = htmlLangForPath(location.pathname, language);
+  }, [location.pathname, language]);
+  return null;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -532,6 +548,8 @@ function App() {
         <GameModeProvider>
           <BrowserRouter>
             <>
+              <ManifestManager />
+              <ArbitroLangManager />
               <PWAMiniBadge />
               <PWAInstallBanner />
               <Routes>
@@ -683,26 +701,6 @@ function App() {
                   element={
                     <Suspense fallback={<div>Cargando...</div>}>
                       <EcuacionesGeneratorPage />
-                    </Suspense>
-                  }
-                />
-
-                {/* 🆕 LEARNING REFEREE — English version */}
-                <Route
-                  path="/learning-referee-config"
-                  element={
-                    <Suspense fallback={<div>Loading...</div>}>
-                      <LearningRefereeConfigPage />
-                    </Suspense>
-                  }
-                />
-                {/* Single route handles both /learning-referee/:area (landing) and /learning-referee/:sessionId (session).
-                    LearningRefereeLandingPage checks if the param is a known area key; if not, renders the session page. */}
-                <Route
-                  path="/learning-referee/:area"
-                  element={
-                    <Suspense fallback={<div>Loading...</div>}>
-                      <LearningRefereeLandingPage />
                     </Suspense>
                   }
                 />
