@@ -46,7 +46,9 @@ export const EQUIPO_COLOR_2 = EQUIPO_COLORES[1].hex; // azul
 // Indexados por la clave corta del área (exactas, sociales, lenguajes, arte).
 // `primary` se usa como color de TEXTO y de botones con texto blanco, por eso es
 // una variante más oscura del color de marca (>= 4,5:1 sobre blanco y sobre
-// `light`); los degradés del encabezado conservan el color de marca.
+// `light`). Los degradés de encabezado llevan texto blanco: sus dos extremos
+// están oscurecidos para dar >= 4,5:1 en todo el recorrido (Exactas 4,79:1,
+// Lenguajes 4,81:1, Arte 4,82:1, Sociales 5,02:1; ver tools/grad_calc.mjs).
 import type { AreaKey } from "./arbitroAreas";
 
 export interface AreaColors {
@@ -58,7 +60,7 @@ export interface AreaColors {
 
 export const AREA_COLORS: Record<AreaKey, AreaColors> = {
   exactas: {
-    gradient: "linear-gradient(135deg, #0ea5e9 0%, #0d9488 100%)",
+    gradient: "linear-gradient(135deg, #0a79ab 0%, #0b8076 100%)",
     light: "#f0f9ff",
     border: "#bae6fd",
     primary: "#0369a1",
@@ -70,13 +72,13 @@ export const AREA_COLORS: Record<AreaKey, AreaColors> = {
     primary: PALETA.naranja,
   },
   lenguajes: {
-    gradient: "linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)",
+    gradient: "linear-gradient(135deg, #8155e4 0%, #c63c81 100%)",
     light: "#faf5ff",
     border: "#e9d5ff",
     primary: "#7c3aed",
   },
   arte: {
-    gradient: `linear-gradient(135deg, #f43f5e 0%, ${PALETA.naranja} 100%)`,
+    gradient: `linear-gradient(135deg, #d13650 0%, ${PALETA.naranja} 100%)`,
     light: "#fff1f2",
     border: "#fecdd3",
     primary: "#be123c",

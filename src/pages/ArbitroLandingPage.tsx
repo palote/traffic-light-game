@@ -2,11 +2,14 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { useArbitroT } from "../i18n";
+import { useArbitroT, useTituloPagina } from "../i18n";
+import { nombreVisible } from "../utils/arbitroNombres";
 import { PALETA, AREA_COLORS } from "../utils/arbitroPalette";
 
 // ─── Config por área ───────────────────────────────────────────────────────────
 
+// Los nombres de área y de materia son claves estables; lo que se muestra sale de ta.areaNames / ta.materiaNames.
+// i18n-clave
 const AREAS: Record<string, {
   key: string;
   nombre: string;
@@ -16,8 +19,6 @@ const AREAS: Record<string, {
   light: string;
   border: string;
   materias: string[];
-  descripcion: string;
-  ejemplo: string;
 }> = {
   exactas: {
     key: "exactas",
@@ -25,8 +26,6 @@ const AREAS: Record<string, {
     emoji: "🔬",
     ...AREA_COLORS.exactas,
     materias: ["Matemática", "Física", "Química", "Biología", "Estadística", "Informática"],
-    descripcion: "Los alumnos debaten en grupos sobre el tema que vos elegís. La IA solo interviene cuando dos alumnos tienen posiciones distintas que no pueden resolver solos — no explica ni resuelve, solo arbitra el desacuerdo.",
-    ejemplo: "Ecuaciones, fracciones, funciones, estadística, reacciones químicas, problemas de física…",
   },
   sociales: {
     key: "sociales",
@@ -34,8 +33,6 @@ const AREAS: Record<string, {
     emoji: "🌍",
     ...AREA_COLORS.sociales,
     materias: ["Historia", "Geografía", "Filosofía", "Economía", "Derecho", "Psicología"],
-    descripcion: "Los alumnos debaten en grupos sobre fuentes, interpretaciones o conceptos. La IA no opina ni explica — solo arbitra cuando el grupo tiene un desacuerdo genuino que no puede resolver solo.",
-    ejemplo: "Fuentes históricas, conceptos filosóficos, datos económicos, situaciones jurídicas…",
   },
   lenguajes: {
     key: "lenguajes",
@@ -43,8 +40,6 @@ const AREAS: Record<string, {
     emoji: "💬",
     ...AREA_COLORS.lenguajes,
     materias: ["Lengua y Literatura", "Inglés", "Portugués", "Francés", "Comunicación"],
-    descripcion: "Los alumnos trabajan en grupos sobre textos, consignas o producciones. La IA arbitra desacuerdos genuinos sobre interpretación, gramática o uso del lenguaje — sin reemplazar el debate entre pares.",
-    ejemplo: "Análisis de textos, gramática en contexto, interpretación literaria, producción oral…",
   },
   arte: {
     key: "arte",
@@ -52,8 +47,6 @@ const AREAS: Record<string, {
     emoji: "🎨",
     ...AREA_COLORS.arte,
     materias: ["Plástica", "Música", "Teatro", "Educación Física", "Danza"],
-    descripcion: "Los alumnos debaten en grupos sobre obras, técnicas o conceptos expresivos. La IA arbitra desacuerdos puntuales — el protagonismo sigue siendo el intercambio entre alumnos.",
-    ejemplo: "Análisis de obras, estilos musicales, reglas de juego, conceptos de expresión…",
   },
 };
 
@@ -63,52 +56,24 @@ function ComoFuncionaES({ primary }: { primary: string }) {
   const ta = useArbitroT();
   const [open, setOpen] = useState(false);
   const etapas = [
-    {
-      numero: "1",
-      titulo: "Lectura previa",
-      quien: "Todos los alumnos",
-      descripcion: "Antes de jugar, leen el texto base que entregó el docente. Durante el juego el texto no está disponible en pantalla.",
-    },
-    {
-      numero: "2",
-      titulo: "El turno — pregunta y respuesta",
-      quien: "Equipo A pregunta · Equipo B responde",
-      descripcion: "El equipo que pregunta elige una pregunta de la lista y se la hace en voz alta al otro equipo. El otro equipo responde oralmente.",
-    },
-    {
-      numero: "3",
-      titulo: "Calificación",
-      quien: "El equipo que preguntó califica",
-      descripcion: "Decide si la respuesta fue completa (1 punto), incompleta (0,5 puntos) o incorrecta (0 puntos).",
-    },
-    {
-      numero: "4",
-      titulo: "¿Se acepta la calificación?",
-      quien: "El equipo que respondió decide",
-      descripcion: "Si acepta, se asigna el punto y sigue el juego. Si no acepta, ambos equipos argumentan por escrito y llaman al árbitro.",
-    },
-    {
-      numero: "5",
-      titulo: "El árbitro interviene",
-      quien: ta.rulesStep5Who,
-      descripcion: ta.rulesStep5Desc,
-    },
-    {
-      numero: "6",
-      titulo: "Metacognición",
-      quien: "Ambos equipos",
-      descripcion: "Al terminar, cada equipo completa un informe que llega automáticamente al panel del docente.",
-    },
+    { numero: "1", titulo: ta.cfgHow1T, quien: ta.cfgHow1W, descripcion: ta.cfgHow1D },
+    { numero: "2", titulo: ta.cfgHow2T, quien: ta.cfgHow2W, descripcion: ta.cfgHow2D },
+    { numero: "3", titulo: ta.cfgHow3T, quien: ta.cfgHow3W, descripcion: ta.cfgHow3D },
+    { numero: "4", titulo: ta.cfgHow4T, quien: ta.cfgHow4W, descripcion: ta.cfgHow4D },
+    { numero: "5", titulo: ta.cfgHow5T, quien: ta.rulesStep5Who, descripcion: ta.rulesStep5Desc },
+    { numero: "6", titulo: ta.cfgHow6T, quien: ta.cfgHow6W, descripcion: ta.cfgHow6D },
   ];
   return (
-    <div style={{ backgroundColor: "white", borderRadius: 16, marginBottom: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+    <section style={{ backgroundColor: "white", borderRadius: 16, marginBottom: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+      <h2 style={{ margin: 0 }}>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen(o => !o)} aria-expanded={open}
         style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px", background: "none", border: "none", cursor: "pointer", textAlign: "left" as const, borderRadius: 16 }}
       >
-        <span style={{ fontSize: 17, fontWeight: 800, color: "#1e293b" }}>¿Cómo funciona?</span>
-        <span style={{ fontSize: 20, color: primary, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none", display: "inline-block" }}>▾</span>
+        <span style={{ fontSize: 17, fontWeight: 800, color: "#1e293b" }}>{ta.cfgHowTitle}</span>
+        <span aria-hidden="true" style={{ fontSize: 20, color: primary, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none", display: "inline-block" }}>▾</span>
       </button>
+      </h2>
       {open && (
         <div style={{ padding: "0 24px 20px", borderTop: "1px solid #e2e8f0" }}>
           {etapas.map((et) => (
@@ -117,24 +82,26 @@ function ComoFuncionaES({ primary }: { primary: string }) {
                 {et.numero}
               </div>
               <div style={{ paddingTop: 2, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: "#1e293b", lineHeight: 1.4 }}>{et.titulo}</div>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#1e293b", lineHeight: 1.4 }}>{et.titulo}</h3>
                 <div style={{ fontSize: 12, fontWeight: 600, color: primary, lineHeight: 1.4, marginTop: 2 }}>{et.quien}</div>
                 <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.55, marginTop: 4 }}>{et.descripcion}</div>
               </div>
             </div>
           ))}
           <div style={{ marginTop: 14, padding: "12px 14px", backgroundColor: "#f0fdf4", borderRadius: 10, border: "1px solid #86efac", fontSize: 13, color: "#166534", lineHeight: 1.6 }}>
-            ✅ Al terminar, cada equipo presiona "Enviar informe" dentro del juego. El docente lo ve automáticamente en su panel.
+            {ta.landDone}
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
 // ─── Componente ────────────────────────────────────────────────────────────────
 
 export default function ArbitroLandingPage() {
+  const ta = useArbitroT();
+  useTituloPagina(`${ta.landPageTitle} — ${ta.pageTitleSuffix}`);
   const { area } = useParams<{ area: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -154,7 +121,7 @@ export default function ArbitroLandingPage() {
       await loginWithGoogle();
       navigate("/arbitro-panel");
     } catch {
-      setErrorAcceso("No se pudo iniciar sesión. Probá de nuevo.");
+      setErrorAcceso(ta.landErrLogin);
     }
     setIniciandoSesion(false);
   };
@@ -168,7 +135,7 @@ export default function ArbitroLandingPage() {
     try {
       await logout();
     } catch {
-      setErrorAcceso("No se pudo cerrar la sesión. Probá de nuevo.");
+      setErrorAcceso(ta.landErrLogout);
     }
     setCerrandoSesion(false);
   };
@@ -229,7 +196,7 @@ export default function ArbitroLandingPage() {
 
 
   return (
-    <div style={{
+    <main style={{
       minHeight: "100vh",
       background: "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
       fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
@@ -265,22 +232,22 @@ export default function ArbitroLandingPage() {
                   style={{
                     fontSize: 12,
                     fontWeight: 700,
-                    color: "rgba(255,255,255,0.85)",
+                    color: "#ffffff",
                     textDecoration: "none",
-                    backgroundColor: "rgba(255,255,255,0.15)",
+                    backgroundColor: "rgba(0,0,0,0.25)",
                     padding: "5px 12px",
                     borderRadius: 20,
-                    border: "1px solid rgba(255,255,255,0.25)",
+                    border: "1px solid rgba(255,255,255,0.7)",
                     display: "flex",
                     alignItems: "center",
                     gap: 5,
                     whiteSpace: "nowrap",
                   }}>
-                  📊 Mis sesiones
+                  {ta.cfgMySessions}
                 </Link>
                 <div style={{
                   fontSize: 12,
-                  color: "rgba(255,255,255,0.6)",
+                  color: "#ffffff",
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
@@ -302,16 +269,17 @@ export default function ArbitroLandingPage() {
                     style={{
                       background: "none",
                       border: "none",
-                      color: "rgba(255,255,255,0.5)",
+                      color: "#ffffff",
                       fontSize: 12,
                       cursor: cerrandoSesion ? "default" : "pointer",
-                      padding: "2px 6px",
+                      padding: "4px 8px",
+                      minHeight: 24,
                       borderRadius: 6,
                       fontWeight: 600,
                       textDecoration: "underline",
                       flexShrink: 0,
                     }}>
-                    {cerrandoSesion ? "Saliendo…" : "Salir"}
+                    {cerrandoSesion ? ta.cfgLoggingOut : ta.cfgLogout}
                   </button>
                 </div>
               </>
@@ -322,9 +290,9 @@ export default function ArbitroLandingPage() {
                 style={{
                   fontSize: 12,
                   fontWeight: 700,
-                  color: "rgba(255,255,255,0.9)",
-                  backgroundColor: "rgba(255,255,255,0.15)",
-                  border: "1px solid rgba(255,255,255,0.3)",
+                  color: "#ffffff",
+                  backgroundColor: "rgba(0,0,0,0.25)",
+                  border: "1px solid rgba(255,255,255,0.7)",
                   borderRadius: 20,
                   padding: "6px 14px",
                   cursor: iniciandoSesion ? "default" : "pointer",
@@ -333,7 +301,7 @@ export default function ArbitroLandingPage() {
                   gap: 6,
                   whiteSpace: "nowrap",
                 }}>
-                {iniciandoSesion ? "⏳ Ingresando…" : "🔑 Ya lo usé antes"}
+                {iniciandoSesion ? ta.landLoggingIn : ta.landUsedBefore}
               </button>
             )}
             {errorAcceso && (
@@ -343,14 +311,14 @@ export default function ArbitroLandingPage() {
         )}
 
         <div style={{ fontSize: 56, marginBottom: 12 }}>{cfg.emoji}</div>
-        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "1.5px", opacity: 0.85, textTransform: "uppercase", marginBottom: 8 }}>
-          Árbitro de Aprendizaje
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 8 }}>
+          {ta.sesTitle}
         </div>
         <h1 style={{ margin: "0 0 12px", fontSize: 28, fontWeight: 900, lineHeight: 1.2 }}>
-          {cfg.nombre}
+          {nombreVisible(ta.areaNames, cfg.nombre)}
         </h1>
-        <p style={{ margin: "0 auto", fontSize: 16, opacity: 0.92, maxWidth: 560, lineHeight: 1.6 }}>
-          {cfg.descripcion}
+        <p style={{ margin: "0 auto", fontSize: 16, maxWidth: 560, lineHeight: 1.6 }}>
+          {(ta as any)[`landDesc_${cfg.key}`]}
         </p>
 
         <button
@@ -371,11 +339,11 @@ export default function ArbitroLandingPage() {
           onMouseOver={e => (e.currentTarget.style.transform = "scale(1.04)")}
           onMouseOut={e => (e.currentTarget.style.transform = "none")}
         >
-          ⚖️ Configurar una sesión →
+          {ta.landConfigure}
         </button>
 
-        <div style={{ marginTop: 14, fontSize: 13, opacity: 0.75 }}>
-          Gratuito · Solo necesitás un dispositivo por grupo
+        <div style={{ marginTop: 14, fontSize: 13 }}>
+          {ta.landFree}
         </div>
       </div>
 
@@ -394,9 +362,9 @@ export default function ArbitroLandingPage() {
           padding: 20,
           marginBottom: 28,
         }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: cfg.primary, marginBottom: 10 }}>
-            Materias disponibles en esta área
-          </div>
+          <h2 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700, color: cfg.primary }}>
+            {ta.landSubjects}
+          </h2>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {cfg.materias.map(m => (
               <span key={m} style={{
@@ -405,12 +373,12 @@ export default function ArbitroLandingPage() {
                 border: `1px solid ${cfg.border}`,
                 fontSize: 13, color: "#374151", fontWeight: 500,
               }}>
-                {m}
+                {nombreVisible(ta.materiaNames, m)}
               </span>
             ))}
           </div>
           <div style={{ marginTop: 12, fontSize: 12, color: PALETA.grisOscuro, lineHeight: 1.5 }}>
-            <strong>Ejemplos de temas:</strong> {cfg.ejemplo}
+            <strong>{ta.landExamples}</strong> {(ta as any)[`landEx_${cfg.key}`]}
           </div>
         </div>
 
@@ -433,13 +401,13 @@ export default function ArbitroLandingPage() {
             onMouseOver={e => (e.currentTarget.style.transform = "scale(1.04)")}
             onMouseOut={e => (e.currentTarget.style.transform = "none")}
           >
-            ⚖️ Configurar mi sesión →
+            {ta.landConfigureMine}
           </button>
-          <div style={{ marginTop: 10, fontSize: 13, color: PALETA.gris }}>
-            Gratuito · Solo necesitás un dispositivo por grupo
+          <div style={{ marginTop: 10, fontSize: 13, color: PALETA.grisOscuro }}>
+            {ta.landFree}
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

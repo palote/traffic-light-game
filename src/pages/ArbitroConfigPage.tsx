@@ -2,11 +2,15 @@ import { useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { useArbitroT } from "../i18n";
+import { useArbitroT, useI18n, useLocaleArbitro, useTituloPagina, fillArbitro, arbitroDic } from "../i18n";
+import { instruccionesPorDefecto, informePorDefecto, contenidoCompleto, tituloClassroom } from "../utils/arbitroDocumentos";
+import { nombreVisible } from "../utils/arbitroNombres";
+import { idiomaSesionPorDefecto, type IdiomaSesion } from "../utils/idiomaSesion";
 import { useGameMode } from "../contexts/GameModeContext";
 import { app } from "../firebase.config";
 import { PALETA, AREA_COLORS } from "../utils/arbitroPalette";
-import { esIaNoDisponible } from "../utils/arbitroErrores";
+import { ModalDialogo, fieldsetReset, legendReset, srOnly } from "../utils/arbitroA11y";
+import { esIaNoDisponible, textoErrorArbitro } from "../utils/arbitroErrores";
 import { getCourses, createCourseWork, type ClassroomCourse } from "../services/classroomService";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -16,7 +20,6 @@ type NivelKey = "Primaria" | "Secundaria";
 interface MateriaData {
   emoji: string;
   niveles: NivelKey[];
-  placeholder: string;
 }
 
 interface AreaConfig {
@@ -31,20 +34,23 @@ interface AreaConfig {
 
 // ─── Areas & Materias ──────────────────────────────────────────────────────────
 
+// Los nombres de área y de materia son claves estables (se guardan y se mandan tal cual);
+// lo que se muestra sale de ta.areaNames / ta.materiaNames.
+// i18n-clave
 const AREAS: Record<string, AreaConfig> = {
   "Ciencias Exactas y Naturales": {
     emoji: "🔬",
     key: "exactas",
     ...AREA_COLORS.exactas,
     materias: {
-      "Matemática": { emoji: "📐", niveles: ["Primaria", "Secundaria"], placeholder: "Ej: una lista de ejercicios de la unidad, un problema para resolver en grupo..." },
-      "Ciencias Naturales": { emoji: "🌿", niveles: ["Primaria"], placeholder: "Ej: un texto corto sobre el tema, imágenes para observar y describir..." },
-      "Biología": { emoji: "🧬", niveles: ["Secundaria"], placeholder: "Ej: un esquema, una imagen para analizar, un fragmento de texto científico..." },
-      "Física": { emoji: "⚡", niveles: ["Secundaria"], placeholder: "Ej: un problema de aplicación, una situación física para analizar en grupo..." },
-      "Química": { emoji: "⚗️", niveles: ["Secundaria"], placeholder: "Ej: una reacción química, una tabla de elementos, un experimento para discutir..." },
-      "Tecnología": { emoji: "⚙️", niveles: ["Primaria", "Secundaria"], placeholder: "Ej: un proceso tecnológico, un objeto técnico para analizar o diseñar..." },
-      "Informática": { emoji: "💻", niveles: ["Primaria", "Secundaria"], placeholder: "Ej: un algoritmo, un fragmento de código, un problema computacional..." },
-      "Estadística": { emoji: "📊", niveles: ["Secundaria"], placeholder: "Ej: una tabla de datos, un gráfico para interpretar, un conjunto de resultados..." },
+      "Matemática": { emoji: "📐", niveles: ["Primaria", "Secundaria"] },
+      "Ciencias Naturales": { emoji: "🌿", niveles: ["Primaria"] },
+      "Biología": { emoji: "🧬", niveles: ["Secundaria"] },
+      "Física": { emoji: "⚡", niveles: ["Secundaria"] },
+      "Química": { emoji: "⚗️", niveles: ["Secundaria"] },
+      "Tecnología": { emoji: "⚙️", niveles: ["Primaria", "Secundaria"] },
+      "Informática": { emoji: "💻", niveles: ["Primaria", "Secundaria"] },
+      "Estadística": { emoji: "📊", niveles: ["Secundaria"] },
     },
   },
 
@@ -53,15 +59,15 @@ const AREAS: Record<string, AreaConfig> = {
     key: "sociales",
     ...AREA_COLORS.sociales,
     materias: {
-      "Ciencias Sociales": { emoji: "🏛️", niveles: ["Primaria"], placeholder: "Ej: una imagen de mapa, una fuente histórica simple, una situación de la comunidad..." },
-      "Historia": { emoji: "📜", niveles: ["Secundaria"], placeholder: "Ej: una fuente primaria, un fragmento de texto histórico, una línea de tiempo..." },
-      "Geografía": { emoji: "🗺️", niveles: ["Primaria", "Secundaria"], placeholder: "Ej: un mapa, una infografía, datos de población o recursos naturales..." },
-      "Formación Ética y Ciudadana": { emoji: "🤝", niveles: ["Primaria", "Secundaria"], placeholder: "Ej: una situación dilema, un caso para debatir, un artículo de la Constitución..." },
-      "Filosofía": { emoji: "💭", niveles: ["Secundaria"], placeholder: "Ej: un fragmento filosófico, un argumento para analizar o refutar..." },
-      "Psicología": { emoji: "🧠", niveles: ["Secundaria"], placeholder: "Ej: un caso o situación para analizar, un concepto para debatir en grupo..." },
-      "Economía": { emoji: "📈", niveles: ["Secundaria"], placeholder: "Ej: un gráfico económico, una situación de mercado, datos para interpretar..." },
-      "Derecho": { emoji: "⚖️", niveles: ["Secundaria"], placeholder: "Ej: un artículo legal, un caso jurídico simplificado para debatir..." },
-      "Antropología": { emoji: "🏺", niveles: ["Secundaria"], placeholder: "Ej: una descripción cultural, un texto etnográfico breve para analizar..." },
+      "Ciencias Sociales": { emoji: "🏛️", niveles: ["Primaria"] },
+      "Historia": { emoji: "📜", niveles: ["Secundaria"] },
+      "Geografía": { emoji: "🗺️", niveles: ["Primaria", "Secundaria"] },
+      "Formación Ética y Ciudadana": { emoji: "🤝", niveles: ["Primaria", "Secundaria"] },
+      "Filosofía": { emoji: "💭", niveles: ["Secundaria"] },
+      "Psicología": { emoji: "🧠", niveles: ["Secundaria"] },
+      "Economía": { emoji: "📈", niveles: ["Secundaria"] },
+      "Derecho": { emoji: "⚖️", niveles: ["Secundaria"] },
+      "Antropología": { emoji: "🏺", niveles: ["Secundaria"] },
     },
   },
 
@@ -70,13 +76,13 @@ const AREAS: Record<string, AreaConfig> = {
     key: "lenguajes",
     ...AREA_COLORS.lenguajes,
     materias: {
-      "Lengua y Literatura": { emoji: "📖", niveles: ["Primaria", "Secundaria"], placeholder: "Ej: un texto para analizar, oraciones para discutir, fragmento literario..." },
-      "Inglés": { emoji: "🇬🇧", niveles: ["Primaria", "Secundaria"], placeholder: "Ej: a short text, a grammar exercise, vocabulary in context..." },
-      "Portugués": { emoji: "🇧🇷", niveles: ["Secundaria"], placeholder: "Ex: um texto curto, exercício de gramática, vocabulário em contexto..." },
-      "Francés": { emoji: "🇫🇷", niveles: ["Secundaria"], placeholder: "Ex: un texte court, un exercice de grammaire, du vocabulaire en contexte..." },
-      "Comunicación": { emoji: "📡", niveles: ["Primaria", "Secundaria"], placeholder: "Ej: una noticia, una publicidad, un mensaje para analizar críticamente..." },
-      "TIC y Medios": { emoji: "🖥️", niveles: ["Primaria", "Secundaria"], placeholder: "Ej: una captura de pantalla, un texto digital, una situación de uso tecnológico..." },
-      "Literatura": { emoji: "📚", niveles: ["Secundaria"], placeholder: "Ej: un fragmento literario, una poesía, un cuento para analizar..." },
+      "Lengua y Literatura": { emoji: "📖", niveles: ["Primaria", "Secundaria"] },
+      "Inglés": { emoji: "🇬🇧", niveles: ["Primaria", "Secundaria"] },
+      "Portugués": { emoji: "🇧🇷", niveles: ["Secundaria"] },
+      "Francés": { emoji: "🇫🇷", niveles: ["Secundaria"] },
+      "Comunicación": { emoji: "📡", niveles: ["Primaria", "Secundaria"] },
+      "TIC y Medios": { emoji: "🖥️", niveles: ["Primaria", "Secundaria"] },
+      "Literatura": { emoji: "📚", niveles: ["Secundaria"] },
     },
   },
 
@@ -85,12 +91,12 @@ const AREAS: Record<string, AreaConfig> = {
     key: "arte",
     ...AREA_COLORS.arte,
     materias: {
-      "Plástica / Artes Visuales": { emoji: "🎨", niveles: ["Primaria", "Secundaria"], placeholder: "Ej: una imagen para analizar, elementos visuales a identificar, una obra de arte..." },
-      "Música": { emoji: "🎵", niveles: ["Primaria", "Secundaria"], placeholder: "Ej: una partitura, conceptos musicales para debatir, estilos para comparar..." },
-      "Teatro": { emoji: "🎭", niveles: ["Primaria", "Secundaria"], placeholder: "Ej: una escena para analizar, un personaje para caracterizar, texto dramático..." },
-      "Educación Física": { emoji: "⚽", niveles: ["Primaria", "Secundaria"], placeholder: "Ej: una regla de juego en disputa, situación táctica, concepto de salud..." },
-      "Danza": { emoji: "💃", niveles: ["Primaria", "Secundaria"], placeholder: "Ej: una secuencia de movimientos, estilos para comparar, conceptos de expresión..." },
-      "Artesanía y Diseño": { emoji: "✂️", niveles: ["Primaria", "Secundaria"], placeholder: "Ej: un proceso de producción, materiales y técnicas para analizar o comparar..." },
+      "Plástica / Artes Visuales": { emoji: "🎨", niveles: ["Primaria", "Secundaria"] },
+      "Música": { emoji: "🎵", niveles: ["Primaria", "Secundaria"] },
+      "Teatro": { emoji: "🎭", niveles: ["Primaria", "Secundaria"] },
+      "Educación Física": { emoji: "⚽", niveles: ["Primaria", "Secundaria"] },
+      "Danza": { emoji: "💃", niveles: ["Primaria", "Secundaria"] },
+      "Artesanía y Diseño": { emoji: "✂️", niveles: ["Primaria", "Secundaria"] },
     },
   },
 };
@@ -113,9 +119,10 @@ function CollapsibleField({
   value: string; onChange: (v: string) => void; rows: number; placeholder?: string;
   accentColor: string; extra?: React.ReactNode;
 }) {
+  const ta = useArbitroT();
   return (
     <div>
-      <button onClick={onToggle} style={{
+      <button onClick={onToggle} aria-expanded={open} style={{
         width: "100%", padding: "11px 16px", borderRadius: 10, textAlign: "left" as const,
         border: `1px solid ${open ? accentColor : "#e2e8f0"}`,
         backgroundColor: open ? `${accentColor}08` : "#f8fafc",
@@ -124,7 +131,7 @@ function CollapsibleField({
         display: "flex", justifyContent: "space-between", alignItems: "center",
       }}>
         <span>{label}</span>
-        <span style={{ fontSize: 12, opacity: 0.7 }}>{open ? "▲ ocultar" : "▼ ver / editar"}</span>
+        <span style={{ fontSize: 12 }}>{open ? ta.cfgHide : ta.cfgShowEdit}</span>
       </button>
       {open && (
         <div style={{ marginTop: 8 }}>
@@ -148,7 +155,9 @@ export default function ArbitroConfigPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const ta = useArbitroT();
+  const locale = useLocaleArbitro(); // fechas y números según el idioma (es-AR / en-US)
   const { mode } = useGameMode();
+  useTituloPagina(`${ta.cfgFormTitleDoc} — ${ta.pageTitleSuffix}`);
 
   const preselectedArea = AREA_BY_KEY[searchParams.get("area") || ""] || "";
 
@@ -171,6 +180,9 @@ export default function ArbitroConfigPage() {
   const [errorSesion, setErrorSesion] = useState("");
   const [duracion, setDuracion] = useState<"clase" | "dia">("clase");
   const [permitirPreguntasPropias, setPermitirPreguntasPropias] = useState(true); // «Permitir preguntas propias»: activada por defecto
+  // «Idioma de la sesión»: por defecto, el idioma actual de la interfaz (inglés o, si no, español).
+  const { language: idiomaInterfaz } = useI18n();
+  const [idiomaSesion, setIdiomaSesion] = useState<IdiomaSesion>(() => idiomaSesionPorDefecto(idiomaInterfaz));
   const [tiempoPregunta, setTiempoPregunta] = useState(0); // 0 = sin límite
   const [showMaterial, setShowMaterial] = useState(true);
 
@@ -210,7 +222,7 @@ export default function ArbitroConfigPage() {
 
   // Numerito de paso, mismo estilo circular que ya usa "¿Cómo funciona?" — para
   // que el docente vea de un vistazo el orden completo del formulario (1 a 7).
-  const PasoLabel = ({ n, children, htmlFor, id }: { n: number; children: React.ReactNode; htmlFor?: string; id?: string }) => {
+  const PasoLabel = ({ n, children, htmlFor, id, legend }: { n: number; children: React.ReactNode; htmlFor?: string; id?: string; legend?: boolean }) => {
     const contenido = (
       <>
         <span style={{ width: 20, height: 20, borderRadius: "50%", backgroundColor: `${accentColor}20`, color: accentColor, fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -222,6 +234,8 @@ export default function ArbitroConfigPage() {
     const estilo = { ...labelStyle, display: "flex", alignItems: "center", gap: 8 } as const;
     // Con campo propio es un <label for>; si el paso es un grupo de botones, es un
     // título referenciado por aria-labelledby (un <label> sin campo no sirve).
+    // En un <fieldset> el título es la <legend> del grupo (el estilo va en un span interno).
+    if (legend) return <legend id={id} style={legendReset}><span style={estilo}>{contenido}</span></legend>;
     return htmlFor
       ? <label id={id} htmlFor={htmlFor} style={estilo}>{contenido}</label>
       : <div id={id} style={estilo}>{contenido}</div>;
@@ -257,7 +271,7 @@ export default function ArbitroConfigPage() {
     }
     setFaltaLoginPreguntas(false);
     if (!materia || !tema.trim()) {
-      setErrorGenerarPreguntas("Elegí la materia y escribí el tema antes de generar preguntas.");
+      setErrorGenerarPreguntas(ta.cfgErrPickSubject);
       return;
     }
     // El generador funciona sin texto base, pero pierde precisión (genera con
@@ -271,7 +285,7 @@ export default function ArbitroConfigPage() {
     setGenerandoPreguntas(true);
     try {
       const fn = httpsCallable(getFunctions(app, "us-central1"), "generarConsignasArbitro");
-      const res = await fn({ materia, nivel, anio, tema: tema.trim(), subtema: "", cantidad: cantidadPreguntas, tipoPreguntas, textoFuente }) as {
+      const res = await fn({ materia, nivel, anio, tema: tema.trim(), subtema: "", cantidad: cantidadPreguntas, tipoPreguntas, textoFuente, idioma: idiomaSesion }) as {
         data: { consignas: string };
       };
       const generadas = res.data.consignas.trim();
@@ -284,7 +298,7 @@ export default function ArbitroConfigPage() {
       } else if (esIaNoDisponible(err)) {
         setErrorGenerarPreguntas(ta.aiUnavailable);
       } else {
-        setErrorGenerarPreguntas(`No se pudieron generar las preguntas: ${err.message}`);
+        setErrorGenerarPreguntas(fillArbitro(ta.cfgErrGenQuestions, { detail: textoErrorArbitro(err, ta, err.message) }));
       }
     } finally {
       setGenerandoPreguntas(false);
@@ -292,9 +306,9 @@ export default function ArbitroConfigPage() {
   };
 
   const TIPO_PREGUNTAS_OPCIONES: { key: "memoristica" | "mixta" | "capacidades"; label: string }[] = [
-    { key: "memoristica", label: "🧠 Memorísticas" },
-    { key: "mixta", label: "🔀 Mixtas" },
-    { key: "capacidades", label: "🎯 De desarrollo de capacidades" },
+    { key: "memoristica", label: ta.cfgTypeMemory },
+    { key: "mixta", label: ta.cfgTypeMixed },
+    { key: "capacidades", label: ta.cfgTypeSkills },
   ];
 
   const renderAvisoLoginPreguntas = () => faltaLoginPreguntas ? (
@@ -309,12 +323,13 @@ export default function ArbitroConfigPage() {
   ) : null;
 
   const renderSelectorTipoPreguntas = () => (
-    <div style={{ marginBottom: 8 }}>
+    <fieldset style={{ ...fieldsetReset, marginBottom: 8 }}>
+      <legend style={srOnly}>{ta.questionTypeLegend}</legend>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
         {TIPO_PREGUNTAS_OPCIONES.map(op => (
-          <button key={op.key} type="button" onClick={() => setTipoPreguntas(op.key)}
+          <button key={op.key} type="button" onClick={() => setTipoPreguntas(op.key)} aria-pressed={tipoPreguntas === op.key}
             style={{
-              padding: "4px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer",
+              padding: "4px 10px", minHeight: 32, borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer",
               border: tipoPreguntas === op.key ? `2px solid ${accentColor}` : "1px solid #cbd5e1",
               backgroundColor: tipoPreguntas === op.key ? `${accentColor}15` : "white",
               color: tipoPreguntas === op.key ? accentColor : "#475569",
@@ -325,60 +340,35 @@ export default function ArbitroConfigPage() {
       </div>
       {tipoPreguntas === "capacidades" && (
         <p style={{ margin: "6px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.4 }}>
-          Buscan que el equipo compare, argumente o detecte un error en vez de solo recordar un dato — le dan más al árbitro para arbitrar.
+          {ta.cfgTypeSkillsHint}
         </p>
       )}
-    </div>
+    </fieldset>
   );
 
-  const defaultInstrucciones = (t: string) => (
-    `Hoy vamos a practicar: ${t}\n\n` +
-    `📖 Antes de jugar: dediquen unos minutos a leer el texto base del tema. Si no lo tienen a mano, pídanle al docente que lo proyecte desde su panel. Durante el juego no lo van a tener disponible en pantalla — el debate se basa en lo que comprendieron.\n\n` +
-    `📋 Cómo funciona:\n` +
-    `1. Formen 2 equipos.\n` +
-    `2. Entren al link de esta sesión desde el dispositivo de un integrante de cada equipo — ahí se juega toda la ronda.\n` +
-    `3. Un equipo le hace una pregunta oral al otro; el equipo que responde lo hace en voz alta.\n` +
-    `4. El equipo que preguntó califica la respuesta: completa (1 punto), incompleta (0.5) o incorrecta (0). El juego suma los puntos solo, automáticamente.\n` +
-    `${ta.rulesStep5Template}\n` +
-    `6. Al terminar, cada equipo completa la metacognición dentro del juego, que se manda al profesor.`
-  );
-
-  const defaultInforme = (t: string) => (
-    `Al terminar el juego, cada equipo escribe:\n\n` +
-    `1. ¿Qué aprendieron hoy sobre "${t}"?\n` +
-    `2. ¿En qué momento dudaron más? ¿Cómo lo resolvieron?\n` +
-    `3. Contá una disputa donde intervino el árbitro: ¿cuál era tu postura antes de esa decisión y cuál después? ¿Te ayudó a ver el tema desde otro punto de vista?\n` +
-    `4. ¿Cómo le explicarían a otro compañero lo que aprendieron hoy?\n\n` +
-    `Al terminar, presioná el botón "Enviar informe al docente" dentro del juego. El informe llega automáticamente al panel del docente — no hace falta hacer nada más.`
-  );
+  // Los documentos exportados (instrucciones, informe, Classroom, impresión) siguen el idioma de la SESIÓN, no el de la pantalla.
+  const [idiomaCreada, setIdiomaCreada] = useState<IdiomaSesion>("es");
+  const tx = arbitroDic(idiomaCreada);
 
   // Una sola fuente de contenido: lo que se edita acá es exactamente lo que se
   // manda a Classroom y lo que se imprime — nada de copias separadas.
-  const buildContenidoCompleto = () => [
-    `⚖️ Árbitro de Aprendizaje — ${materia} · ${tema}`,
-    `${nivel} ${anio}`,
-    instrucciones,
-    ejercicio ? `📋 PREGUNTAS PARA EL JUEGO:\n${ejercicio}` : "",
-    `✍️ INFORME FINAL:\n${informe}`,
-    `🔗 Link del juego: ${linkSesion}`,
-    `👩‍🏫 Docente: cuando los equipos terminen de jugar vas a poder ver sus respuestas y el informe pedagógico en https://eljuegodelsemaforo.com/arbitro-panel — entrá con la misma cuenta de Google con la que creaste esta tarea. Los alumnos no tienen acceso a esa vista.`,
-  ].filter(Boolean).join("\n\n");
+  const buildContenidoCompleto = () => contenidoCompleto(tx, { materia, tema, nivel, anio, instrucciones, ejercicio, informe, link: linkSesion });
 
   // Criterio compartido entre las advertencias de "Generar sesión" y "Compartir
   // por Classroom": las dos avisan por lo mismo (falta texto base y/o preguntas),
   // así que arman el mensaje con la misma función en vez de tener cada una su
   // propio texto fijo.
-  const getFaltantes = (): string[] => {
-    const faltan: string[] = [];
-    if (!textoFuente.trim()) faltan.push("texto base");
+  const getFaltantes = (): ("texto" | "preguntas")[] => {
+    const faltan: ("texto" | "preguntas")[] = [];
+    if (!textoFuente.trim()) faltan.push("texto");
     if (!ejercicio.trim()) faltan.push("preguntas");
     return faltan;
   };
 
-  const mensajeFaltantes = (faltan: string[]): string => {
-    if (faltan.length === 2) return "No cargaste preguntas ni texto base todavía.";
-    if (faltan[0] === "texto base") return "No cargaste un texto base todavía.";
-    return "No cargaste preguntas todavía.";
+  const mensajeFaltantes = (faltan: ("texto" | "preguntas")[]): string => {
+    if (faltan.length === 2) return ta.cfgMissingBoth;
+    if (faltan[0] === "texto") return ta.cfgMissingText;
+    return ta.cfgMissingQuestions;
   };
 
   const handleGenerar = async (skipCheck = false) => {
@@ -390,9 +380,9 @@ export default function ArbitroConfigPage() {
       setMostrarAdvertenciaGenerar(true);
       return;
     }
-    if (!area) { setError("Elegí un área."); return; }
-    if (!materia) { setError("Elegí una materia."); return; }
-    if (!tema.trim()) { setError("Escribí el tema de la sesión."); return; }
+    if (!area) { setError(ta.cfgErrArea); return; }
+    if (!materia) { setError(ta.cfgErrMateria); return; }
+    if (!tema.trim()) { setError(ta.cfgErrTema); return; }
     setError(null); setLoading(true);
 
     // Iniciar sesión con Google es obligatorio para crear una sesión: así el
@@ -403,7 +393,7 @@ export default function ArbitroConfigPage() {
       try {
         await loginWithGoogle();
       } catch (err: any) {
-        setError("Necesitás iniciar sesión con Google para crear la sesión.");
+        setError(ta.cfgErrLogin);
         setLoading(false);
         return;
       }
@@ -411,14 +401,15 @@ export default function ArbitroConfigPage() {
 
     try {
       const fn = httpsCallable(getFunctions(app, "us-central1"), "crearSesionArbitro");
-      const res = await fn({ area: areaConfig?.key ?? area, materia, nivel, anio, tema: tema.trim(), subtema: "", ejercicio, duracion, tiempoPregunta, textoFuente, permitirPreguntasPropias }) as {
+      const res = await fn({ area: areaConfig?.key ?? area, materia, nivel, anio, tema: tema.trim(), subtema: "", ejercicio, duracion, tiempoPregunta, textoFuente, permitirPreguntasPropias, idioma: idiomaSesion }) as {
         data: { id: string; link: string; expiresAt: string };
       };
       setSesion(res.data);
-      setInstrucciones(defaultInstrucciones(tema.trim()));
-      setInforme(defaultInforme(tema.trim()));
+      setIdiomaCreada(idiomaSesion);
+      setInstrucciones(instruccionesPorDefecto(arbitroDic(idiomaSesion), tema.trim()));
+      setInforme(informePorDefecto(arbitroDic(idiomaSesion), tema.trim()));
     } catch (err: any) {
-      setError(`Error al crear la sesión: ${err.message}`);
+      setError(fillArbitro(ta.cfgErrCreate, { detail: textoErrorArbitro(err, ta, err.message) }));
     } finally {
       setLoading(false);
     }
@@ -474,7 +465,7 @@ export default function ArbitroConfigPage() {
     try {
       await logout();
     } catch {
-      setErrorSesion("No se pudo cerrar la sesión.");
+      setErrorSesion(ta.cfgErrLogout);
     }
     setCerrandoSesion(false);
   };
@@ -486,7 +477,7 @@ export default function ArbitroConfigPage() {
     try {
       await createCourseWork(
         cursoId,
-        `⚖️ Árbitro de Aprendizaje — ${materia}: ${tema}`,
+        tituloClassroom(tx, materia, tema),
         buildContenidoCompleto(),
         linkSesion,
         (() => {
@@ -526,7 +517,7 @@ export default function ArbitroConfigPage() {
         }
       `}</style>
 
-      <div style={pageStyle}>
+      <main style={pageStyle}>
         <div style={cardStyle}>
 
           {/* ── Header ── */}
@@ -534,9 +525,9 @@ export default function ArbitroConfigPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 28 }}>{areaConfig ? areaConfig.emoji : "⚖️"}</span>
               <div>
-                <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Árbitro de Aprendizaje</h1>
-                <p style={{ margin: "4px 0 0", fontSize: 13, opacity: 0.9 }}>
-                  {area || "Seleccioná un área para comenzar"}
+                <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{ta.sesTitle}</h1>
+                <p style={{ margin: "4px 0 0", fontSize: 13 }}>
+                  {area ? nombreVisible(ta.areaNames, area) : ta.cfgPickArea}
                 </p>
               </div>
             </div>
@@ -556,23 +547,23 @@ export default function ArbitroConfigPage() {
                 style={{
                   fontSize: 12,
                   fontWeight: 700,
-                  color: "rgba(255,255,255,0.85)",
+                  color: "#ffffff",
                   textDecoration: "none",
-                  backgroundColor: "rgba(255,255,255,0.15)",
+                  backgroundColor: "rgba(0,0,0,0.25)",
                   padding: "5px 12px",
                   borderRadius: 20,
-                  border: "1px solid rgba(255,255,255,0.25)",
+                  border: "1px solid rgba(255,255,255,0.7)",
                   display: "flex",
                   alignItems: "center",
                   gap: 5,
                   whiteSpace: "nowrap",
                 }}>
-                📊 Mis sesiones
+                {ta.cfgMySessions}
               </a>
               {user && (
                 <div style={{
                   fontSize: 12,
-                  color: "rgba(255,255,255,0.6)",
+                  color: "#ffffff",
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
@@ -589,16 +580,17 @@ export default function ArbitroConfigPage() {
                     style={{
                       background: "none",
                       border: "none",
-                      color: "rgba(255,255,255,0.5)",
+                      color: "#ffffff",
                       fontSize: 12,
                       cursor: cerrandoSesion ? "default" : "pointer",
-                      padding: "2px 6px",
+                      padding: "4px 8px",
+                      minHeight: 24,
                       borderRadius: 6,
                       fontWeight: 600,
                       textDecoration: "underline",
                       flexShrink: 0,
                     }}>
-                    {cerrandoSesion ? "Saliendo…" : "Salir"}
+                    {cerrandoSesion ? ta.cfgLoggingOut : ta.cfgLogout}
                   </button>
                 </div>
               )}
@@ -611,6 +603,10 @@ export default function ArbitroConfigPage() {
 
           {/* ── Body ── */}
           <div style={{ padding: "24px 28px", overflowY: "auto", maxHeight: "72vh", display: "flex", flexDirection: "column", gap: 20 }}>
+
+            {/* Encabezado de la sección del formulario (para lectores de pantalla) y avisos de estado */}
+            <h2 style={srOnly}>{ta.configFormTitle}</h2>
+            <div role="status" style={srOnly}>{sesion ? ta.sessionCreatedAnnounce : generandoPreguntas ? ta.generatingQuestions : ""}</div>
 
             {/* Cómo funciona — acordeón */}
             <ComoFuncionaAccordionES primary={accentColor} light={areaConfig ? areaConfig.light : "#f0f7ff"} border={areaConfig ? areaConfig.border : "#bfdbfe"} />
@@ -626,19 +622,19 @@ export default function ArbitroConfigPage() {
               }}>
                 <span style={{ fontSize: 28 }}>{areaConfig?.emoji}</span>
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: PALETA.gris, textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 2 }}>
-                    Árbitro de
+                  <div style={{ fontSize: 12, fontWeight: 600, color: PALETA.grisOscuro, textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 2 }}>
+                    {ta.cfgRefereeOf}
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: areaConfig?.primary }}>
-                    {area}
+                    {nombreVisible(ta.areaNames, area)}
                   </div>
                 </div>
               </div>
             ) : (
               // Sin pre-selección → mostrar selector completo
-              <div>
-                <div id="config-area-label" style={labelStyle}>Área del conocimiento</div>
-                <div role="group" aria-labelledby="config-area-label" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <fieldset style={fieldsetReset}>
+                <legend style={{ ...legendReset, ...labelStyle }}>{ta.cfgAreaLegend}</legend>
+                <div className="arb-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {Object.entries(AREAS).map(([nombre, cfg]) => (
                     <button key={nombre} onClick={() => handleAreaChange(nombre)} aria-pressed={area === nombre} style={{
                       padding: "16px 12px", borderRadius: 14, cursor: "pointer", textAlign: "center" as const,
@@ -648,48 +644,48 @@ export default function ArbitroConfigPage() {
                     }}>
                       <div style={{ fontSize: 26, marginBottom: 5 }}>{cfg.emoji}</div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: area === nombre ? cfg.primary : "#475569", lineHeight: 1.3 }}>
-                        {nombre}
+                        {nombreVisible(ta.areaNames, nombre)}
                       </div>
                     </button>
                   ))}
                 </div>
-              </div>
+              </fieldset>
             )}
 
             {/* ── Nivel + Año ── */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <PasoLabel n={1} id="config-nivel-label">Nivel</PasoLabel>
-                <div role="group" aria-labelledby="config-nivel-label" style={{ display: "flex", borderRadius: 10, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+            <div className="arb-una-columna" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <fieldset style={fieldsetReset}>
+                <PasoLabel n={1} legend>{ta.cfgLevel}</PasoLabel>
+                <div style={{ display: "flex", borderRadius: 10, border: "1px solid #e2e8f0", overflow: "hidden" }}>
                   {(["Primaria", "Secundaria"] as NivelKey[]).map(n => (
-                    <button key={n} onClick={() => handleNivelChange(n)} aria-pressed={nivel === n} style={{
+                    <button key={n} className="arb-foco" onClick={() => handleNivelChange(n)} aria-pressed={nivel === n} style={{
                       flex: 1, padding: "10px", fontSize: 13, fontWeight: 600,
                       border: "none", cursor: "pointer",
                       backgroundColor: nivel === n ? accentColor : "white",
                       color: nivel === n ? "white" : "#475569",
                       transition: "all 0.2s",
-                    }}>{n}</button>
+                    }}>{nombreVisible(ta.levelNames, n)}</button>
                   ))}
                 </div>
-              </div>
+              </fieldset>
               <div>
-                <label htmlFor="config-anio" style={labelStyle}>Año / Grado</label>
+                <label htmlFor="config-anio" style={labelStyle}>{ta.cfgGradeYear}</label>
                 <select id="config-anio" value={anio} onChange={e => setAnio(e.target.value)} style={selectStyle}>
-                  {GRADOS[nivel].map(g => <option key={g} value={g}>{g} año</option>)}
+                  {GRADOS[nivel].map(g => <option key={g} value={g}>{ta.gradeLabel(g)}</option>)}
                 </select>
               </div>
             </div>
 
             {/* ── Materia ── */}
             {area && (
-              <div>
-                <PasoLabel n={2} id="config-materia-label">Materia</PasoLabel>
+              <fieldset style={fieldsetReset}>
+                <PasoLabel n={2} legend>{ta.cfgSubject}</PasoLabel>
                 {materiasDisponibles.length === 0 ? (
                   <div style={{ fontSize: 13, color: PALETA.gris, padding: "12px 14px", backgroundColor: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0" }}>
-                    No hay materias para {nivel} en esta área.
+                    {fillArbitro(ta.cfgNoSubjects, { level: nombreVisible(ta.levelNames, nivel) })}
                   </div>
                 ) : (
-                  <div role="group" aria-labelledby="config-materia-label" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 8 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 8 }}>
                     {materiasDisponibles.map(([nombre, data]) => (
                       <button key={nombre} onClick={() => setMateria(nombre)} aria-pressed={materia === nombre} style={{
                         padding: "11px 8px", borderRadius: 12, cursor: "pointer", textAlign: "center" as const,
@@ -698,38 +694,44 @@ export default function ArbitroConfigPage() {
                       }}>
                         <div style={{ fontSize: 17, marginBottom: 3 }}>{data.emoji}</div>
                         <div style={{ fontSize: 12, fontWeight: 700, color: materia === nombre ? accentColor : "#1e293b", lineHeight: 1.3 }}>
-                          {nombre}
+                          {nombreVisible(ta.materiaNames, nombre)}
                         </div>
                       </button>
                     ))}
                   </div>
                 )}
-              </div>
+              </fieldset>
             )}
 
             {/* ── Tema (texto libre) ── */}
             {materia && (
               <div>
                 <PasoLabel n={3} htmlFor="config-tema">
-                  Tema de la sesión <span style={{ color: PALETA.rojo }}>*</span>
+                  {ta.cfgTopic} <span style={{ color: PALETA.rojo, fontWeight: 700 }}>({ta.required})</span>
                 </PasoLabel>
                 <input
                   id="config-tema"
                   type="text" value={tema} onChange={e => setTema(e.target.value)}
-                  placeholder="Escribí el tema que van a trabajar hoy..."
+                  required aria-required="true" aria-describedby={tema.trim() ? undefined : "config-tema-ayuda"}
+                  placeholder={ta.cfgTopicPlaceholder}
                   style={{ ...inputStyle, borderColor: tema.trim() ? "#e2e8f0" : "#fca5a5", fontSize: 15 }}
                 />
+                {!tema.trim() && (
+                  <p id="config-tema-ayuda" style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.rojo, fontWeight: 600 }}>
+                    {ta.themeRequiredHint}
+                  </p>
+                )}
               </div>
             )}
 
             {/* ── Duración ── */}
             {tema.trim() && (
-              <div>
-                <PasoLabel n={4} id="config-duracion-label">Duración de la sesión</PasoLabel>
-                <div role="group" aria-labelledby="config-duracion-label" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <fieldset style={fieldsetReset}>
+                <PasoLabel n={4} legend>{ta.cfgDuration}</PasoLabel>
+                <div className="arb-una-columna" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {([
-                    { id: "clase" as const, label: "⏱️ Clase", desc: "Expira en 3 horas" },
-                    { id: "dia" as const, label: "📅 Día", desc: "Expira en 24 horas" },
+                    { id: "clase" as const, label: ta.cfgDurClass, desc: ta.cfgDurClassDesc },
+                    { id: "dia" as const, label: ta.cfgDurDay, desc: ta.cfgDurDayDesc },
                   ]).map(d => (
                     <button key={d.id} onClick={() => setDuracion(d.id)} aria-pressed={duracion === d.id} style={{
                       padding: "12px 16px", borderRadius: 12, textAlign: "left" as const,
@@ -738,23 +740,23 @@ export default function ArbitroConfigPage() {
                       cursor: "pointer",
                     }}>
                       <div style={{ fontWeight: 700, fontSize: 14, color: duracion === d.id ? accentColor : "#1e293b" }}>{d.label}</div>
-                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{d.desc}</div>
+                      <div style={{ fontSize: 12, color: PALETA.grisOscuro, marginTop: 2 }}>{d.desc}</div>
                     </button>
                   ))}
                 </div>
-              </div>
+              </fieldset>
             )}
 
             {/* ── Tiempo para formular la pregunta ── */}
             {tema.trim() && (
-              <div>
-                <PasoLabel n={5} id="config-tiempo-label">Tiempo por ronda</PasoLabel>
-                <div role="group" aria-labelledby="config-tiempo-label" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+              <fieldset style={fieldsetReset}>
+                <PasoLabel n={5} legend>{ta.cfgRoundTime}</PasoLabel>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
                   {([
-                    { val: 0, label: "Sin límite" },
-                    { val: 60, label: "1 min" },
-                    { val: 120, label: "2 min" },
-                    { val: 180, label: "3 min" },
+                    { val: 0, label: ta.cfgNoLimit },
+                    { val: 60, label: fillArbitro(ta.cfgMinutes, { n: 1 }) },
+                    { val: 120, label: fillArbitro(ta.cfgMinutes, { n: 2 }) },
+                    { val: 180, label: fillArbitro(ta.cfgMinutes, { n: 3 }) },
                   ]).map(t => (
                     <button key={t.val} onClick={() => setTiempoPregunta(t.val)} aria-pressed={tiempoPregunta === t.val}
                       style={{
@@ -769,9 +771,9 @@ export default function ArbitroConfigPage() {
                   ))}
                 </div>
                 <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>
-                  Cuenta desde que el equipo elige la pregunta hasta que responden. Al vencerse pueden seguir igual o pasar la pregunta. El árbitro no tiene límite de tiempo.
+                  {ta.cfgRoundTimeHint}
                 </p>
-              </div>
+              </fieldset>
             )}
 
             {/* ── Preguntas propias ── */}
@@ -783,7 +785,7 @@ export default function ArbitroConfigPage() {
                     type="checkbox"
                     checked={permitirPreguntasPropias}
                     onChange={e => setPermitirPreguntasPropias(e.target.checked)}
-                    style={{ width: 20, height: 20, marginTop: 2, accentColor, flexShrink: 0 }}
+                    style={{ width: 24, height: 24, marginTop: 2, accentColor, flexShrink: 0 }}
                   />
                   <span>
                     <span style={{ display: "block", fontWeight: 700, fontSize: 14, color: "#1e293b" }}>{ta.allowOwnQuestions}</span>
@@ -793,13 +795,37 @@ export default function ArbitroConfigPage() {
               </div>
             )}
 
+            {/* ── Idioma de la sesión ── */}
+            {tema.trim() && (
+              <fieldset style={fieldsetReset}>
+                <legend style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", padding: 0, marginBottom: 8 }}>{ta.cfgSessionLang}</legend>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+                  {([
+                    { id: "es" as const, label: ta.cfgLangEs },
+                    { id: "en" as const, label: ta.cfgLangEn },
+                  ]).map(i => (
+                    <button key={i.id} type="button" lang={i.id} onClick={() => setIdiomaSesion(i.id)} aria-pressed={idiomaSesion === i.id}
+                      style={{
+                        padding: "10px 6px", borderRadius: 10, minHeight: 44,
+                        border: `2px solid ${idiomaSesion === i.id ? accentColor : "#e2e8f0"}`,
+                        backgroundColor: idiomaSesion === i.id ? `${accentColor}12` : "white",
+                        color: idiomaSesion === i.id ? accentColor : "#64748b",
+                        fontWeight: 700, fontSize: 13, cursor: "pointer",
+                      }}>
+                      {i.label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+
             {/* ── Texto base de la sesión ── */}
             {tema.trim() && (
               <div id="texto-base-sesion">
                 <PasoLabel n={6} htmlFor="config-texto-base">
-                  📖 Texto base de la sesión{" "}
+                  {ta.cfgBaseText}{" "}
                   <span style={{ fontSize: 12, fontWeight: 400, color: "#64748b", marginLeft: 6 }}>
-                    (recomendado)
+                    {ta.cfgRecommended}
                   </span>
                 </PasoLabel>
                 <textarea
@@ -807,13 +833,13 @@ export default function ArbitroConfigPage() {
                   value={textoFuente}
                   onChange={e => setTextoFuente(e.target.value)}
                   rows={6}
-                  placeholder={"Pegá acá el texto sobre el que van a trabajar los equipos. El árbitro va a arbitrar citando este texto.\n\nSi no cargás un texto, el árbitro va a trabajar con su conocimiento general del tema — funciona, pero es menos preciso."}
+                  placeholder={ta.cfgBaseTextPlaceholder}
                   style={{ ...inputStyle, resize: "vertical" as const, fontFamily: "inherit", lineHeight: 1.6 }}
                 />
                 {/* Aviso + contador de caracteres */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginTop: 6, gap: 12 }}>
                   <div style={{ fontSize: 12, color: PALETA.gris, lineHeight: 1.5, flex: 1 }}>
-                    ⚠️ <strong>Antes de jugar:</strong> dedicá un tiempo a la lectura comprensiva — en grupo o de a dos. Durante el juego el texto <strong>no estará disponible en pantalla</strong>. Conviene tenerlo impreso.
+                    ⚠️ <strong>{ta.cfgBeforePlayStrong}</strong> {ta.cfgBeforePlayA} <strong>{ta.cfgBeforePlayStrong2}</strong>{ta.cfgBeforePlayB}
                   </div>
                   {textoFuente.length > 0 && (
                     <div style={{
@@ -821,15 +847,24 @@ export default function ArbitroConfigPage() {
                       color: textoFuente.length > 8000 ? "#dc2626" : textoFuente.length > 6000 ? PALETA.ambar : PALETA.gris,
                     }}>
                       <div style={{ whiteSpace: "nowrap" as const }}>
-                        {textoFuente.length.toLocaleString("es-AR")} / 8.000 car.
+                        {ta.cfgCharCount(textoFuente.length.toLocaleString(locale))}
                       </div>
+                      {textoFuente.length > 6000 && textoFuente.length <= 8000 && (
+                        <div style={{ marginTop: 2, lineHeight: 1.4 }}>
+                          ⚠️ {ta.charsNearLimit}
+                        </div>
+                      )}
                       {textoFuente.length > 8000 && (
                         <div style={{ color: "#dc2626", fontWeight: 700, marginTop: 2, lineHeight: 1.4 }}>
-                          ⚠️ El texto se va a cortar al enviarlo al árbitro
+                          ⚠️ {ta.cfgCutWarning}
                         </div>
                       )}
                     </div>
                   )}
+                  {/* El aviso se anuncia una sola vez al cruzar el umbral, no en cada tecla */}
+                  <div role="status" style={srOnly}>
+                    {textoFuente.length > 8000 ? ta.charsOverLimit : textoFuente.length > 6000 ? ta.charsNearLimit : ""}
+                  </div>
                 </div>
               </div>
             )}
@@ -837,7 +872,7 @@ export default function ArbitroConfigPage() {
             {/* ── Material adicional (colapsable) ── */}
             {tema.trim() && (
               <div id="banco-preguntas">
-                <button onClick={() => setShowMaterial(!showMaterial)} style={{
+                <button onClick={() => setShowMaterial(!showMaterial)} aria-expanded={showMaterial} style={{
                   width: "100%", padding: "11px 16px", borderRadius: 10, textAlign: "left" as const,
                   border: `1px solid ${showMaterial ? accentColor : "#e2e8f0"}`,
                   backgroundColor: showMaterial ? `${accentColor}08` : "#f8fafc",
@@ -849,25 +884,25 @@ export default function ArbitroConfigPage() {
                     <span style={{ width: 20, height: 20, borderRadius: "50%", backgroundColor: `${accentColor}20`, color: accentColor, fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       7
                     </span>
-                    📋 Preguntas para el juego
+                    {ta.cfgGameQuestions}
                   </span>
-                  <span style={{ fontSize: 12, opacity: 0.7 }}>{showMaterial ? "▲ ocultar" : "▼ agregar"}</span>
+                  <span style={{ fontSize: 12 }}>{showMaterial ? ta.cfgHide : ta.cfgAdd}</span>
                 </button>
                 {showMaterial && (
                   <div style={{ marginTop: 8 }}>
                     <p style={{ margin: "0 0 6px", fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>
-                      Las preguntas aparecen en la pantalla del juego: el equipo que pregunta elige una de esta lista en cada turno. Las preguntas ya usadas quedan marcadas para no repetirse.
+                      {ta.cfgQuestionsHint1}
                     </p>
                     <p style={{ margin: "0 0 8px", fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>
-                      💡 Si necesitás mostrar el texto durante la clase, podés proyectarlo desde tu panel en cualquier momento.
+                      {ta.cfgQuestionsHint2}
                     </p>
                     {renderSelectorTipoPreguntas()}
                     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" as const }}>
-                      <label htmlFor="config-cantidad-preguntas-a" style={{ fontSize: 12, color: "#475569", fontWeight: 600 }}>Generar con IA:</label>
+                      <label htmlFor="config-cantidad-preguntas-a" style={{ fontSize: 12, color: "#475569", fontWeight: 600 }}>{ta.cfgGenerateWithAI}</label>
                       <input id="config-cantidad-preguntas-a" aria-label={ta.questionsCountName} type="number" min={3} max={30} value={cantidadPreguntas}
                         onChange={e => setCantidadPreguntas(Math.min(30, Math.max(3, parseInt(e.target.value) || 6)))}
                         style={{ width: 56, padding: "6px 8px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 13 }} />
-                      <span style={{ fontSize: 12, color: "#64748b" }}>preguntas</span>
+                      <span style={{ fontSize: 12, color: "#64748b" }}>{ta.cfgQuestionsUnit}</span>
                       <button onClick={() => handleGenerarPreguntas()} disabled={generandoPreguntas || !materia || !tema.trim()}
                         style={{
                           padding: "6px 12px", borderRadius: 8, border: "none",
@@ -875,15 +910,15 @@ export default function ArbitroConfigPage() {
                           color: "white", fontWeight: 600, fontSize: 12,
                           cursor: generandoPreguntas || !materia || !tema.trim() ? "default" : "pointer",
                         }}>
-                        {generandoPreguntas ? "⏳ Generando…" : "✨ Generar con IA"}
+                        {generandoPreguntas ? ta.cfgGenerating : ta.cfgGenerateBtn}
                       </button>
                     </div>
                     {renderAvisoLoginPreguntas()}
                     {errorGenerarPreguntas && (
-                      <p style={{ margin: "0 0 8px", fontSize: 12, color: "#dc2626" }}>{errorGenerarPreguntas}</p>
+                      <p role="alert" style={{ margin: "0 0 8px", fontSize: 12, color: "#dc2626" }}>{errorGenerarPreguntas}</p>
                     )}
                     <textarea aria-label={ta.questionsFieldName} value={ejercicio} onChange={e => { setEjercicio(e.target.value); setEjercicioEsIA(false); }} rows={4}
-                      placeholder={"Pegá las preguntas para el juego, o generalas con IA arriba. Una por línea — el equipo que pregunta elige una de esta lista en cada turno."}
+                      placeholder={ta.cfgQuestionsPlaceholder}
                       style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", lineHeight: 1.6 }} />
                   </div>
                 )}
@@ -892,64 +927,64 @@ export default function ArbitroConfigPage() {
 
             {/* Error */}
             {error && (
-              <div style={{ padding: "12px 14px", backgroundColor: "#fef2f2", borderRadius: 8, fontSize: 13, color: "#dc2626", border: "1px solid #fecaca" }}>
+              <div role="alert" style={{ padding: "12px 14px", backgroundColor: "#fef2f2", borderRadius: 8, fontSize: 13, color: "#b91c1c", border: "1px solid #fecaca" }}>
                 {error}
               </div>
             )}
 
             {loading && (
-              <div style={{ padding: "14px 18px", backgroundColor: "#fffbeb", borderRadius: 10, border: "1px solid #fbbf24", display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 24 }}>⏳</span>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#92400e" }}>Creando sesión…</div>
+              <div role="status" style={{ padding: "14px 18px", backgroundColor: "#fffbeb", borderRadius: 10, border: "1px solid #fbbf24", display: "flex", alignItems: "center", gap: 12 }}>
+                <span aria-hidden="true" style={{ fontSize: 24 }}>⏳</span>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#92400e" }}>{ta.cfgCreatingSession}</div>
               </div>
             )}
 
             {/* ── Sesión creada ── */}
             {sesion && (
               <div style={{ backgroundColor: "#f0fdf4", border: "2px solid #86efac", borderRadius: 16, padding: 20 }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: "#166534", marginBottom: 4 }}>✅ Sesión creada</div>
+                <h2 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 800, color: "#166534" }}>{ta.cfgSessionCreated}</h2>
                 <div style={{ fontSize: 12, color: "#15803d", marginBottom: 14 }}>
-                  Expira: {new Date(sesion.expiresAt).toLocaleString("es-AR")}
+                  {fillArbitro(ta.cfgExpires, { date: new Date(sesion.expiresAt).toLocaleString(locale) })}
                 </div>
                 <div style={{ backgroundColor: "white", borderRadius: 10, border: "1px solid #bbf7d0", padding: "12px 14px", fontFamily: "monospace", fontSize: 13, color: "#166534", wordBreak: "break-all", marginBottom: 8 }}>
                   {linkSesion}
                 </div>
                 <div style={{ fontSize: 12, color: "#15803d", marginBottom: 12, lineHeight: 1.5 }}>
-                  👥 Es un solo link para toda la clase: cada pareja de alumnos lo abre en su propio dispositivo y arma su equipo — no hace falta crear una sesión por pareja.
+                  {ta.cfgOneLink}
                 </div>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
                   <button onClick={handleCopy} style={{ flex: 1, padding: "11px 16px", borderRadius: 10, border: "2px solid #86efac", backgroundColor: "white", color: "#166534", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                    {copied ? "✅ Copiado" : "📋 Copiar link"}
+                    {copied ? ta.cfgCopied : ta.cfgCopyLink}
                   </button>
-                  <button onClick={() => handleClassroom()} style={{ flex: 1, padding: "11px 16px", borderRadius: 10, border: "none", backgroundColor: "#1a73e8", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                    📚 Compartir en Classroom
+                  <button onClick={() => handleClassroom()} style={{ flex: 1, padding: "11px 16px", borderRadius: 10, border: "none", backgroundColor: "#1967d2", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    {ta.cfgShareClassroom}
                   </button>
                 </div>
                 <a href="/arbitro-panel"
-                  style={{ display: "block", textAlign: "center", marginTop: 10, fontSize: 13, color: "#64748b", textDecoration: "none", fontWeight: 600 }}>
-                  📊 Ver historial de sesiones →
+                  style={{ display: "block", textAlign: "center", marginTop: 10, padding: "8px 0", minHeight: 24, fontSize: 13, color: PALETA.grisOscuro, textDecoration: "none", fontWeight: 600 }}>
+                  {ta.cfgSeeHistory}
                 </a>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
                   <CollapsibleField
-                    label="📋 Instrucciones para los alumnos" open={showPostInstrucciones}
+                    label={ta.cfgPostInstr} open={showPostInstrucciones}
                     onToggle={() => setShowPostInstrucciones(v => !v)}
-                    description="Esto es lo que se manda a Classroom y lo que se imprime — editalo si querés cambiar algo."
+                    description={ta.cfgPostInstrDesc}
                     value={instrucciones} onChange={setInstrucciones} rows={7} accentColor={accentColor}
                   />
                   <CollapsibleField
-                    label="📋 Preguntas para el juego" open={showPostPreguntas}
+                    label={ta.cfgGameQuestions} open={showPostPreguntas}
                     onToggle={() => setShowPostPreguntas(v => !v)}
-                    description="Opcional. No aparece en la pantalla del juego — repartila antes por Classroom o en el PDF."
-                    value={ejercicio} onChange={v => { setEjercicio(v); setEjercicioEsIA(false); }} rows={4} placeholder={"Pegá las preguntas para el juego, o generalas con IA arriba. Una por línea — el equipo que pregunta elige una de esta lista en cada turno."} accentColor={accentColor}
+                    description={ta.cfgPostQuestionsDesc}
+                    value={ejercicio} onChange={v => { setEjercicio(v); setEjercicioEsIA(false); }} rows={4} placeholder={ta.cfgQuestionsPlaceholder} accentColor={accentColor}
                     extra={
                       <div>
                       {renderSelectorTipoPreguntas()}
                       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" as const }}>
-                        <label htmlFor="config-cantidad-preguntas-b" style={{ fontSize: 12, color: "#475569", fontWeight: 600 }}>Generar con IA:</label>
+                        <label htmlFor="config-cantidad-preguntas-b" style={{ fontSize: 12, color: "#475569", fontWeight: 600 }}>{ta.cfgGenerateWithAI}</label>
                         <input id="config-cantidad-preguntas-b" aria-label={ta.questionsCountName} type="number" min={3} max={30} value={cantidadPreguntas}
                           onChange={e => setCantidadPreguntas(Math.min(30, Math.max(3, parseInt(e.target.value) || 6)))}
                           style={{ width: 56, padding: "6px 8px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 13 }} />
-                        <span style={{ fontSize: 12, color: "#64748b" }}>preguntas</span>
+                        <span style={{ fontSize: 12, color: "#64748b" }}>{ta.cfgQuestionsUnit}</span>
                         <button onClick={() => handleGenerarPreguntas()} disabled={generandoPreguntas || !materia || !tema.trim()}
                           style={{
                             padding: "6px 12px", borderRadius: 8, border: "none",
@@ -957,44 +992,44 @@ export default function ArbitroConfigPage() {
                             color: "white", fontWeight: 600, fontSize: 12,
                             cursor: generandoPreguntas || !materia || !tema.trim() ? "default" : "pointer",
                           }}>
-                          {generandoPreguntas ? "⏳ Generando…" : "✨ Generar con IA"}
+                          {generandoPreguntas ? ta.cfgGenerating : ta.cfgGenerateBtn}
                         </button>
-                        {errorGenerarPreguntas && <span style={{ fontSize: 12, color: "#dc2626" }}>{errorGenerarPreguntas}</span>}
+                        {errorGenerarPreguntas && <span role="alert" style={{ fontSize: 12, color: "#dc2626" }}>{errorGenerarPreguntas}</span>}
                       </div>
                       {renderAvisoLoginPreguntas()}
                       </div>
                     }
                   />
                   <CollapsibleField
-                    label="✍️ Informe final (metacognición)" open={showPostInforme}
+                    label={ta.cfgPostReport} open={showPostInforme}
                     onToggle={() => setShowPostInforme(v => !v)}
-                    description="Las preguntas que cada equipo responde al terminar el juego."
+                    description={ta.cfgPostReportDesc}
                     value={informe} onChange={setInforme} rows={7} accentColor={accentColor}
                   />
                 </div>
 
                 <button onClick={handleImprimir} style={{ width: "100%", padding: "10px", borderRadius: 10, border: `1px solid ${accentColor}`, backgroundColor: `${accentColor}08`, color: accentColor, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-                  🖨️ Imprimir / Guardar PDF
+                  {ta.cfgPrint}
                 </button>
                 <div style={{ fontSize: 12, color: PALETA.gris, marginTop: 6, marginBottom: 6, textAlign: "center" as const }}>
-                  Imprime el contenido de arriba (instrucciones, preguntas e informe) — las instrucciones ya les llegan a los alumnos por Classroom, esto es solo si además querés una copia en papel.
+                  {ta.cfgPrintHint}
                 </div>
 
                 <button onClick={() => setSesion(null)} style={{ background: "none", border: "none", color: "#15803d", textDecoration: "underline", fontSize: 12, marginTop: 8, cursor: "pointer" }}>
-                  Crear otra sesión
+                  {ta.cfgCreateAnother}
                 </button>
 
                 {/* Versión oculta en pantalla, visible solo al imprimir (window.print) */}
                 <div id="arbitro-print-area">
-                  <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>{areaConfig ? areaConfig.emoji : "⚖️"} Árbitro de {materia}</h1>
-                  <div style={{ fontSize: 13, color: "#475569", marginBottom: 20 }}>{nivel} {anio} · {tema}</div>
-                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.5px", color: "#374151", margin: "18px 0 6px" }}>📋 Instrucciones para los alumnos</div>
+                  <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>{areaConfig ? areaConfig.emoji : "⚖️"} {fillArbitro(tx.docPrintTitle, { materia: nombreVisible(tx.materiaNames, materia) })}</h1>
+                  <div style={{ fontSize: 13, color: "#475569", marginBottom: 20 }}>{nombreVisible(tx.levelNames, nivel)} {anio} · {tema}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.5px", color: "#374151", margin: "18px 0 6px" }}>{tx.docPrintInstr}</div>
                   <div style={{ whiteSpace: "pre-wrap" as const, fontSize: 13, lineHeight: 1.7 }}>{instrucciones}</div>
                   {ejercicio && (<>
-                    <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.5px", color: "#374151", margin: "18px 0 6px" }}>📋 Preguntas para el juego</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.5px", color: "#374151", margin: "18px 0 6px" }}>{tx.docPrintQuestions}</div>
                     <div style={{ whiteSpace: "pre-wrap" as const, fontSize: 13, lineHeight: 1.7 }}>{ejercicio}</div>
                   </>)}
-                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.5px", color: "#374151", margin: "18px 0 6px" }}>✍️ Informe final</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.5px", color: "#374151", margin: "18px 0 6px" }}>{tx.docPrintReport}</div>
                   <div style={{ whiteSpace: "pre-wrap" as const, fontSize: 13, lineHeight: 1.7 }}>{informe}</div>
                   <div style={{ marginTop: 24, fontSize: 12, color: "#64748b" }}>🔗 {linkSesion}</div>
                 </div>
@@ -1007,38 +1042,33 @@ export default function ArbitroConfigPage() {
             <div style={{ padding: "16px 28px", borderTop: "1px solid #e2e8f0" }}>
               {!user && (
                 <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10, textAlign: "right" }}>
-                  🔐 Te vamos a pedir iniciar sesión con Google al crear la sesión, para que el link, el informe y el email de los resultados queden asociados a vos.
+                  {ta.cfgLoginNotice}
                 </div>
               )}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <button onClick={volverAlArbitro} style={btnSecondary}>← Volver</button>
+                <button onClick={volverAlArbitro} style={btnSecondary}>{ta.jgBack}</button>
                 <button onClick={() => handleGenerar()} disabled={!canGenerate} style={{
                   padding: "12px 24px", fontSize: 14, fontWeight: 700, borderRadius: 10, border: "none",
                   background: canGenerate ? headerGrad : PALETA.gris,
                   color: "white", cursor: canGenerate ? "pointer" : "not-allowed",
                   minWidth: 200, opacity: canGenerate ? 1 : 0.7,
                 }}>
-                  {loading ? "⏳ Creando…" : user ? "⚖️ Generar sesión de práctica" : "🔐 Iniciar sesión y generar sesión"}
+                  {loading ? ta.cfgCreating : user ? ta.cfgGenerateSession : ta.cfgLoginAndGenerate}
                 </button>
               </div>
             </div>
           )}
         </div>
-      </div>
+      </main>
 
       {mostrarAdvertenciaGenerar && (
-        <div
-          style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000, padding: 20 }}
-          onClick={() => setMostrarAdvertenciaGenerar(false)}>
-          <div
-            style={{ backgroundColor: "white", borderRadius: 20, maxWidth: 440, width: "100%", padding: "28px 28px 24px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: "#1e293b", marginBottom: 10 }}>
+        <ModalDialogo onCerrar={() => setMostrarAdvertenciaGenerar(false)} idTitulo="dlg-generar-titulo" idDescripcion="dlg-generar-desc" panelStyle={{ padding: "28px 28px 24px" }}>
+            <div aria-hidden="true" style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
+            <h2 id="dlg-generar-titulo" style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 800, color: "#1e293b" }}>
               {textoAdvertenciaGenerar}
-            </div>
-            <div style={{ fontSize: 14, color: "#475569", lineHeight: 1.7, marginBottom: 20 }}>
-              El árbitro funciona mejor cuando tiene un texto para citar y preguntas basadas en ese texto. Podés agregarlos ahora o generar la sesión igual.
+            </h2>
+            <div id="dlg-generar-desc" style={{ fontSize: 14, color: "#475569", lineHeight: 1.7, marginBottom: 20 }}>
+              {ta.cfgWarnGenerateDesc}
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button
@@ -1050,7 +1080,7 @@ export default function ArbitroConfigPage() {
                   }, 60);
                 }}
                 style={{ flex: 1, padding: "11px", borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "#475569" }}>
-                ← Agregar preguntas
+                {ta.cfgAddQuestions}
               </button>
               <button
                 onClick={() => {
@@ -1058,26 +1088,20 @@ export default function ArbitroConfigPage() {
                   handleGenerar(true);
                 }}
                 style={{ flex: 1, padding: "11px", borderRadius: 10, border: "none", backgroundColor: accentColor, color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                Generar sesión igual →
+                {ta.cfgGenerateAnyway}
               </button>
             </div>
-          </div>
-        </div>
+          </ModalDialogo>
       )}
 
       {mostrarAdvertenciaTextoBase && (
-        <div
-          style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000, padding: 20 }}
-          onClick={() => setMostrarAdvertenciaTextoBase(false)}>
-          <div
-            style={{ backgroundColor: "white", borderRadius: 20, maxWidth: 440, width: "100%", padding: "28px 28px 24px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>📖</div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: "#1e293b", marginBottom: 10 }}>
-              Todavía no cargaste el texto base
-            </div>
-            <div style={{ fontSize: 14, color: "#475569", lineHeight: 1.7, marginBottom: 20 }}>
-              El árbitro busca mejorar la comprensión lectora: funciona mejor cuando el equipo leyó el texto antes de jugar. Dedicarle unos minutos antes de empezar ayuda mucho.
+        <ModalDialogo onCerrar={() => setMostrarAdvertenciaTextoBase(false)} idTitulo="dlg-textobase-titulo" idDescripcion="dlg-textobase-desc" panelStyle={{ padding: "28px 28px 24px" }}>
+            <div aria-hidden="true" style={{ fontSize: 32, marginBottom: 12 }}>📖</div>
+            <h2 id="dlg-textobase-titulo" style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 800, color: "#1e293b" }}>
+              {ta.cfgNoBaseTitle}
+            </h2>
+            <div id="dlg-textobase-desc" style={{ fontSize: 14, color: "#475569", lineHeight: 1.7, marginBottom: 20 }}>
+              {ta.cfgNoBaseDesc}
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button
@@ -1088,7 +1112,7 @@ export default function ArbitroConfigPage() {
                   }, 60);
                 }}
                 style={{ flex: 1, padding: "11px", borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "#475569" }}>
-                ← Cargar texto base
+                {ta.cfgLoadBaseText}
               </button>
               <button
                 onClick={() => {
@@ -1096,28 +1120,22 @@ export default function ArbitroConfigPage() {
                   handleGenerarPreguntas(true);
                 }}
                 style={{ flex: 1, padding: "11px", borderRadius: 10, border: "none", backgroundColor: accentColor, color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                Generar igual →
+                {ta.cfgGenerateQuestionsAnyway}
               </button>
             </div>
-          </div>
-        </div>
+          </ModalDialogo>
       )}
 
       {mostrarAdvertenciaPDF && (
-        <div
-          style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000, padding: 20 }}
-          onClick={() => setMostrarAdvertenciaPDF(false)}>
-          <div
-            style={{ backgroundColor: "white", borderRadius: 20, maxWidth: 440, width: "100%", padding: "28px 28px 24px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: "#1e293b", marginBottom: 10 }}>
-              Todavía no compartiste el juego con tus alumnos
-            </div>
-            <div style={{ fontSize: 14, color: "#475569", lineHeight: 1.7, marginBottom: 20 }}>
-              El PDF tiene las instrucciones para los alumnos, pero también van a necesitar el link para entrar al juego.
+        <ModalDialogo onCerrar={() => setMostrarAdvertenciaPDF(false)} idTitulo="dlg-pdf-titulo" idDescripcion="dlg-pdf-desc" panelStyle={{ padding: "28px 28px 24px" }}>
+            <div aria-hidden="true" style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
+            <h2 id="dlg-pdf-titulo" style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 800, color: "#1e293b" }}>
+              {ta.cfgNotSharedTitle}
+            </h2>
+            <div id="dlg-pdf-desc" style={{ fontSize: 14, color: "#475569", lineHeight: 1.7, marginBottom: 20 }}>
+              {ta.cfgNotSharedDesc1}
               <br /><br />
-              La forma más simple es compartirlo por <strong>Google Classroom</strong> — un click y el link llega a todos los alumnos automáticamente, junto con las instrucciones.
+              {ta.cfgNotSharedDesc2a} <strong>Google Classroom</strong> {ta.cfgNotSharedDesc2b}
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button
@@ -1125,8 +1143,8 @@ export default function ArbitroConfigPage() {
                   setMostrarAdvertenciaPDF(false);
                   handleClassroom();
                 }}
-                style={{ flex: 1, padding: "11px", borderRadius: 10, border: "none", backgroundColor: "#1a73e8", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                📚 Compartir por Classroom
+                style={{ flex: 1, padding: "11px", borderRadius: 10, border: "none", backgroundColor: "#1967d2", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                {ta.cfgShareByClassroom}
               </button>
               <button
                 onClick={() => {
@@ -1137,24 +1155,20 @@ export default function ArbitroConfigPage() {
                   setTimeout(abrirPDF, 80);
                 }}
                 style={{ flex: 1, padding: "11px", borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "#475569" }}>
-                Descargar PDF igual
+                {ta.cfgDownloadAnyway}
               </button>
             </div>
-          </div>
-        </div>
+          </ModalDialogo>
       )}
 
       {mostrarAdvertenciaPreguntas && (
-        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000, padding: 20 }}
-          onClick={() => setMostrarAdvertenciaPreguntas(false)}>
-          <div style={{ backgroundColor: "white", borderRadius: 20, maxWidth: 440, width: "100%", padding: "28px 28px 24px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: "#1e293b", marginBottom: 10 }}>
+        <ModalDialogo onCerrar={() => setMostrarAdvertenciaPreguntas(false)} idTitulo="dlg-preguntas-titulo" idDescripcion="dlg-preguntas-desc" panelStyle={{ padding: "28px 28px 24px" }}>
+            <div aria-hidden="true" style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+            <h2 id="dlg-preguntas-titulo" style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 800, color: "#1e293b" }}>
               {textoAdvertenciaClassroom}
-            </div>
-            <div style={{ fontSize: 14, color: "#475569", lineHeight: 1.7, marginBottom: 20 }}>
-              El árbitro funciona mejor cuando tiene un texto para citar y preguntas basadas en ese texto. Podés agregarlos ahora o compartir la sesión igual.
+            </h2>
+            <div id="dlg-preguntas-desc" style={{ fontSize: 14, color: "#475569", lineHeight: 1.7, marginBottom: 20 }}>
+              {ta.cfgWarnShareDesc}
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button
@@ -1168,72 +1182,68 @@ export default function ArbitroConfigPage() {
                   }, 60);
                 }}
                 style={{ flex: 1, padding: "11px", borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "#475569" }}>
-                ← Agregar preguntas
+                {ta.cfgAddQuestions}
               </button>
               <button
                 onClick={() => {
                   setMostrarAdvertenciaPreguntas(false);
                   handleClassroom(true);
                 }}
-                style={{ flex: 1, padding: "11px", borderRadius: 10, border: "none", backgroundColor: "#1a73e8", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                Compartir igual →
+                style={{ flex: 1, padding: "11px", borderRadius: 10, border: "none", backgroundColor: "#1967d2", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                {ta.cfgShareAnyway}
               </button>
             </div>
-          </div>
-        </div>
+          </ModalDialogo>
       )}
 
       {showClassroomModal && (
-        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000, padding: 20 }}
-          onClick={() => !creandoTarea && setShowClassroomModal(false)}>
-          <div style={{ backgroundColor: "white", borderRadius: 20, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", overflow: "hidden" }}
-            onClick={e => e.stopPropagation()}>
+        <ModalDialogo onCerrar={() => !creandoTarea && setShowClassroomModal(false)} idTitulo="dlg-classroom-titulo" velo={0.6} panelStyle={{ maxWidth: 480, overflow: "hidden" }}>
 
-            <div style={{ background: "linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%)", padding: "18px 24px", color: "white", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ background: "linear-gradient(135deg, #1967d2 0%, #0d47a1 100%)", padding: "18px 24px", color: "white", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800 }}>📚 Publicar en Google Classroom</div>
-                <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>{materia} · {tema}</div>
+                <h2 id="dlg-classroom-titulo" style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>{ta.cfgPublishClassroom}</h2>
+                <div style={{ fontSize: 12, marginTop: 2 }}>{materia} · {tema}</div>
               </div>
               {!creandoTarea && (
                 <button onClick={() => setShowClassroomModal(false)}
                   aria-label={ta.closeDialog} title={ta.closeDialog}
-                  style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "white", width: 44, height: 44, borderRadius: "50%", fontSize: 16, cursor: "pointer" }}><span aria-hidden="true">✕</span></button>
+                  style={{ background: "rgba(0,0,0,0.25)", border: "none", color: "white", width: 44, height: 44, borderRadius: "50%", fontSize: 16, cursor: "pointer" }}><span aria-hidden="true">✕</span></button>
               )}
             </div>
 
             <div style={{ padding: 24 }}>
               {tareaCreada ? (
-                <div style={{ textAlign: "center", padding: "16px 0" }}>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-                  <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#166534" }}>¡Tarea creada en Classroom!</p>
-                  <p style={{ margin: "8px 0 0", fontSize: 13, color: "#64748b" }}>Los alumnos ya pueden verla en su curso.</p>
+                <div role="status" style={{ textAlign: "center", padding: "16px 0" }}>
+                  <div aria-hidden="true" style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+                  <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#166534" }}>{ta.cfgTaskCreated}</p>
+                  <p style={{ margin: "8px 0 0", fontSize: 13, color: "#64748b" }}>{ta.cfgTaskCreatedDesc}</p>
                   <button onClick={() => setShowClassroomModal(false)}
-                    style={{ marginTop: 20, padding: "10px 28px", fontSize: 14, fontWeight: 600, borderRadius: 10, border: "none", backgroundColor: "#1a73e8", color: "white", cursor: "pointer" }}>
-                    Cerrar
+                    style={{ marginTop: 20, padding: "10px 28px", fontSize: 14, fontWeight: 600, borderRadius: 10, border: "none", backgroundColor: "#1967d2", color: "white", cursor: "pointer" }}>
+                    {ta.cfgClose}
                   </button>
                 </div>
               ) : errorClassroom ? (
                 <div>
-                  <div style={{ padding: "12px 14px", backgroundColor: "#fef2f2", borderRadius: 8, fontSize: 13, color: "#dc2626", marginBottom: 16 }}>
+                  <div role="alert" style={{ padding: "12px 14px", backgroundColor: "#fef2f2", borderRadius: 8, fontSize: 13, color: "#b91c1c", marginBottom: 16 }}>
                     ⚠️ {errorClassroom}
                   </div>
                   <button onClick={() => { setErrorClassroom(""); handleClassroom(true); }}
                     style={{ width: "100%", padding: "10px", fontSize: 13, fontWeight: 600, borderRadius: 8, border: "2px solid #e2e8f0", backgroundColor: "white", cursor: "pointer" }}>
-                    Reintentar
+                    {ta.cfgRetryPlain}
                   </button>
                 </div>
               ) : cargandoCursos ? (
-                <div style={{ textAlign: "center", padding: "24px 0", color: "#64748b" }}>
-                  ⏳ Cargando tus cursos...
+                <div role="status" style={{ textAlign: "center", padding: "24px 0", color: "#64748b" }}>
+                  {ta.cfgLoadingCourses}
                 </div>
               ) : cursos.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "16px 0", color: "#64748b", fontSize: 14 }}>
-                  No se encontraron cursos activos en tu cuenta.
+                  {ta.cfgNoCourses}
                 </div>
               ) : (
                 <div>
                   <p style={{ margin: "0 0 14px", fontSize: 13, color: "#475569" }}>
-                    Elegí el curso donde querés publicar la tarea:
+                    {ta.cfgPickCourse}
                   </p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 300, overflowY: "auto" }}>
                     {cursos.map(curso => (
@@ -1242,11 +1252,11 @@ export default function ArbitroConfigPage() {
                         onClick={() => handleCrearTarea(curso.id, curso.name)}
                         disabled={creandoTarea}
                         style={{ padding: "14px 16px", borderRadius: 12, border: "1.5px solid #e2e8f0", backgroundColor: "white", textAlign: "left" as const, cursor: creandoTarea ? "not-allowed" : "pointer", transition: "all 0.15s" }}
-                        onMouseOver={e => { if (!creandoTarea) { e.currentTarget.style.borderColor = "#1a73e8"; e.currentTarget.style.backgroundColor = "#f0f7ff"; }}}
+                        onMouseOver={e => { if (!creandoTarea) { e.currentTarget.style.borderColor = "#1967d2"; e.currentTarget.style.backgroundColor = "#f0f7ff"; }}}
                         onMouseOut={e => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.backgroundColor = "white"; }}
                       >
                         <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b" }}>
-                          {creandoTarea ? "⏳ Creando tarea..." : `📚 ${curso.name}`}
+                          {creandoTarea ? ta.cfgCreatingTask : `📚 ${curso.name}`}
                         </div>
                         {curso.section && (
                           <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{curso.section}</div>
@@ -1257,8 +1267,7 @@ export default function ArbitroConfigPage() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
+        </ModalDialogo>
       )}
     </>
   );
@@ -1274,50 +1283,20 @@ function ComoFuncionaAccordionES({ primary, light, border }: { primary: string; 
   const ta = useArbitroT();
   const [open, setOpen] = useState(false);
   const etapas = [
-    {
-      numero: "1",
-      titulo: "Lectura previa",
-      quien: "Todos los alumnos",
-      descripcion: "Antes de jugar, leen el texto base que entregó el docente. Durante el juego el texto no está disponible en pantalla.",
-    },
-    {
-      numero: "2",
-      titulo: "El turno — pregunta y respuesta",
-      quien: "Equipo A pregunta · Equipo B responde",
-      descripcion: "El equipo que pregunta elige una pregunta de la lista y se la hace en voz alta al otro equipo. El otro equipo responde oralmente.",
-    },
-    {
-      numero: "3",
-      titulo: "Calificación",
-      quien: "El equipo que preguntó califica",
-      descripcion: "Decide si la respuesta fue completa (1 punto), incompleta (0,5 puntos) o incorrecta (0 puntos).",
-    },
-    {
-      numero: "4",
-      titulo: "¿Se acepta la calificación?",
-      quien: "El equipo que respondió decide",
-      descripcion: "Si acepta, se asigna el punto y sigue el juego. Si no acepta, ambos equipos argumentan por escrito y llaman al árbitro.",
-    },
-    {
-      numero: "5",
-      titulo: "El árbitro interviene",
-      quien: ta.rulesStep5Who,
-      descripcion: ta.rulesStep5Desc,
-    },
-    {
-      numero: "6",
-      titulo: "Metacognición",
-      quien: "Ambos equipos",
-      descripcion: "Al terminar, cada equipo completa un informe que llega automáticamente al panel del docente.",
-    },
+    { numero: "1", titulo: ta.cfgHow1T, quien: ta.cfgHow1W, descripcion: ta.cfgHow1D },
+    { numero: "2", titulo: ta.cfgHow2T, quien: ta.cfgHow2W, descripcion: ta.cfgHow2D },
+    { numero: "3", titulo: ta.cfgHow3T, quien: ta.cfgHow3W, descripcion: ta.cfgHow3D },
+    { numero: "4", titulo: ta.cfgHow4T, quien: ta.cfgHow4W, descripcion: ta.cfgHow4D },
+    { numero: "5", titulo: ta.cfgHow5T, quien: ta.rulesStep5Who, descripcion: ta.rulesStep5Desc },
+    { numero: "6", titulo: ta.cfgHow6T, quien: ta.cfgHow6W, descripcion: ta.cfgHow6D },
   ];
   return (
     <div style={{ backgroundColor: light, borderRadius: 12, border: `1px solid ${border}` }}>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen(o => !o)} aria-expanded={open}
         style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left" as const, borderRadius: 12 }}
       >
-        <span style={{ fontSize: 13, fontWeight: 700, color: "#1e3a5f" }}>¿Cómo funciona? <span style={{ fontWeight: 400, fontSize: 12, color: PALETA.grisOscuro }}>— tocá para ver</span></span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "#1e3a5f" }}>{ta.cfgHowTitle} <span style={{ fontWeight: 400, fontSize: 12, color: PALETA.grisOscuro }}>{ta.cfgTapToSee}</span></span>
         <span style={{ fontSize: 16, color: primary, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none", display: "inline-block" }}>▾</span>
       </button>
       {open && (
@@ -1328,14 +1307,14 @@ function ComoFuncionaAccordionES({ primary, light, border }: { primary: string; 
                 {et.numero}
               </div>
               <div style={{ paddingTop: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 800, color: "#1e3a5f", lineHeight: 1.4 }}>{et.titulo}</div>
+                <h3 style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: "#1e3a5f", lineHeight: 1.4 }}>{et.titulo}</h3>
                 <div style={{ fontSize: 12, fontWeight: 600, color: primary, lineHeight: 1.4, marginTop: 1 }}>{et.quien}</div>
                 <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.55, marginTop: 3 }}>{et.descripcion}</div>
               </div>
             </div>
           ))}
           <div style={{ marginTop: 12, padding: "10px 12px", backgroundColor: "#fef9c3", borderRadius: 8, border: "1px solid #fde047", fontSize: 12, color: "#713f12", lineHeight: 1.6 }}>
-            📚 <strong>Cómo le llega el resultado al docente:</strong> al terminar, cada equipo presiona el botón para enviar el informe y las respuestas de metacognición llegan solas a tu panel, sin que tengan que mandarte nada. Por las dudas, el juego también les deja copiar o descargar ese texto.
+            📚 <strong>{ta.cfgHowNoteStrong}</strong> {ta.cfgHowNote}
           </div>
         </div>
       )}
@@ -1347,6 +1326,6 @@ const labelStyle: React.CSSProperties = { display: "block", marginBottom: 8, fon
 const inputStyle: React.CSSProperties = { width: "100%", padding: "11px 14px", fontSize: 14, borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "#f8fafc", boxSizing: "border-box" as const };
 const selectStyle: React.CSSProperties = { ...inputStyle, cursor: "pointer", appearance: "auto" as any };
 const btnSecondary: React.CSSProperties = { padding: "12px 20px", fontSize: 14, fontWeight: 600, borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "white", color: "#64748b", cursor: "pointer" };
-const closeBtnStyle: React.CSSProperties = { background: "rgba(255,255,255,0.2)", border: "none", color: "white", width: 44, height: 44, borderRadius: "50%", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
+const closeBtnStyle: React.CSSProperties = { background: "rgba(0,0,0,0.25)", border: "none", color: "white", width: 44, height: 44, borderRadius: "50%", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
 const sectionBadgeStyle: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 };
 const badgeNumStyle: React.CSSProperties = { background: "#e0e7ff", color: "#4f46e5", borderRadius: 6, padding: "2px 7px", fontSize: 12, fontWeight: 700 };

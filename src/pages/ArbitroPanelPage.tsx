@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { useArbitroT, useFormatoPuntos, fillArbitro } from "../i18n";
-import { esIaNoDisponible } from "../utils/arbitroErrores";
+import { useArbitroT, useFormatoPuntos, fillArbitro, useLocaleArbitro, useTituloPagina } from "../i18n";
+import { etiquetaCalificacion } from "../utils/arbitroEtiquetas";
+import { nombreVisible } from "../utils/arbitroNombres";
+import { esIaNoDisponible, textoErrorArbitro } from "../utils/arbitroErrores";
 import { useNavigate } from "react-router-dom";
 import { app } from "../firebase.config";
 import { useAuth } from "../contexts/AuthContext";
 import { PALETA } from "../utils/arbitroPalette";
 import { coloresArea } from "../utils/arbitroAreas";
+import { DialogoEnPagina, fieldsetReset, legendReset, srOnly } from "../utils/arbitroA11y";
 
 const ADMIN_UID = "P2lU12xoCxMkZ0AdZdMoGGksJ5o1";
 
@@ -130,15 +133,19 @@ interface InformeSesion {
 // Los colores por área viven en utils/arbitroPalette.ts (clave corta); las sesiones
 // viejas guardaron el nombre completo y coloresArea() también lo acepta.
 
-const NIVEL_BADGE: Record<string, { label: string; color: string; bg: string }> = {
-  superficial: { label: "Superficial", color: "#92400e", bg: "#fef3c7" },
-  adecuado:    { label: "Adecuado",    color: "#166534", bg: "#dcfce7" },
-  profundo:    { label: "Profundo",    color: "#1e40af", bg: "#dbeafe" },
+// Colores del nivel de debate (el texto sale del diccionario, ver nivelEtiqueta).
+const NIVEL_BADGE: Record<string, { color: string; bg: string }> = {
+  superficial: { color: "#92400e", bg: "#fef3c7" },
+  adecuado:    { color: "#166534", bg: "#dcfce7" },
+  profundo:    { color: "#1e40af", bg: "#dbeafe" },
 };
 
 export default function ArbitroPanelPage() {
   const ta = useArbitroT();
+  const locale = useLocaleArbitro(); // fechas y números según el idioma (es-AR / en-US)
   const fmt = useFormatoPuntos();
+  useTituloPagina(`${ta.panPageTitle} — ${ta.pageTitleSuffix}`);
+  const nivelEtiqueta = (k: string) => (k === "superficial" ? ta.panLevelShallow : k === "profundo" ? ta.panLevelDeep : ta.panLevelAdequate);
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const functions = getFunctions(app, "us-central1");
@@ -162,6 +169,7 @@ export default function ArbitroPanelPage() {
   const [seleccion, setSeleccion] = useState<Record<string, string>>({});
   const [corrigiendo, setCorrigiendo] = useState<string | null>(null);
   const [errorCorreccion, setErrorCorreccion] = useState<{ id: string; msg: string } | null>(null);
+  const [avisoCorreccion, setAvisoCorreccion] = useState(""); // «Corrección guardada», para la región viva
 
   useEffect(() => {
     if (authLoading) return; // esperar a que Firebase Auth termine de restaurar la sesión
@@ -171,7 +179,7 @@ export default function ArbitroPanelPage() {
     // El servidor usa el uid de la sesión autenticada; no se envía uid desde acá.
     fn({ limit: 50 })
       .then((res: any) => { setSesiones(res.data.sesiones || []); setLoading(false); })
-      .catch((e: any) => { setError(e.message); setLoading(false); });
+      .catch((e: any) => { setError(textoErrorArbitro(e, ta, e.message)); setLoading(false); });
   }, [authLoading, user]);
 
   const cargarRondas = (sessionId: string) => {
@@ -181,7 +189,7 @@ export default function ArbitroPanelPage() {
     const fn = httpsCallable(functions, "listarRondasSesion");
     fn({ sessionId })
       .then((res: any) => { setRondasData(res.data as RondasData); })
-      .catch((e: any) => { setErrorRondas(e?.message || ta.roundsError); })
+      .catch((e: any) => { setErrorRondas(textoErrorArbitro(e, ta, ta.roundsError)); })
       .finally(() => setLoadingRondas(false));
   };
 
@@ -193,6 +201,7 @@ export default function ArbitroPanelPage() {
     const [tieneRazon, grado] = elegida.split("|");
     setCorrigiendo(r.id);
     setErrorCorreccion(null);
+    setAvisoCorreccion("");
     try {
       const fn = httpsCallable(functions, "corregirRonda");
       await fn({ sessionId: sesionSeleccionada.id, rondaId: r.id, tieneRazon, grado });
@@ -200,6 +209,7 @@ export default function ArbitroPanelPage() {
       const res = await lista({ sessionId: sesionSeleccionada.id }) as any;
       setRondasData(res.data as RondasData);
       setSeleccion(prev => { const n = { ...prev }; delete n[r.id]; return n; });
+      setAvisoCorreccion(ta.correctSaved);
     } catch (e: any) {
       setErrorCorreccion({ id: r.id, msg: String(e?.code || "").endsWith("permission-denied") ? ta.correctOnlyOwner : ta.correctError });
     }
@@ -229,7 +239,7 @@ export default function ArbitroPanelPage() {
       setInforme(res.data);
     } catch (e: any) {
       // Gemini caído: texto propio según el código. El resto (login, permisos, sin consultas) como hoy.
-      setErrorInforme(esIaNoDisponible(e) ? ta.aiUnavailable : e.message);
+      setErrorInforme(esIaNoDisponible(e) ? ta.aiUnavailable : textoErrorArbitro(e, ta, e.message));
     }
     setLoadingInforme(false);
   };
@@ -250,7 +260,7 @@ export default function ArbitroPanelPage() {
       setTodasSesiones(res.data.sesiones || []);
       setModoAdmin(true);
     } catch (e: any) {
-      setError(e.message);
+      setError(textoErrorArbitro(e, ta, e.message));
     }
     setLoadingAdmin(false);
   };
@@ -267,12 +277,13 @@ export default function ArbitroPanelPage() {
     const o = OPCIONES_REPARTO.find(x => x.key === key)!;
     return `${base} — ${r.equipoPregunta} ${fmt(o.puntos[0])} · ${r.equipoResponde} ${fmt(o.puntos[1])}`;
   };
+  // La etiqueta sale del diccionario a partir de la clave estable de la calificación.
   const badgeCalificacion = (c: RondaDoc["calificacion"]) =>
-    c === "completa" ? { icon: "✅", label: "Completa", color: "#166534", bg: "#dcfce7" }
-    : c === "incompleta" ? { icon: "⚡", label: "Incompleta", color: "#92400e", bg: "#fef3c7" }
-    : c === "pasada" ? { icon: "⏭️", label: ta.passedLabel, color: "#475569", bg: "#f1f5f9" }
-    : c === "fuera_de_tema" ? { icon: "🚫", label: ta.offTopicLabel, color: "#9a3412", bg: "#ffedd5" }
-    : { icon: "❌", label: "No", color: "#991b1b", bg: "#fee2e2" };
+    c === "completa" ? { icon: "✅", label: etiquetaCalificacion(c, ta), color: "#166534", bg: "#dcfce7" }
+    : c === "incompleta" ? { icon: "⚡", label: etiquetaCalificacion(c, ta), color: "#92400e", bg: "#fef3c7" }
+    : c === "pasada" ? { icon: "⏭️", label: etiquetaCalificacion(c, ta), color: "#475569", bg: "#f1f5f9" }
+    : c === "fuera_de_tema" ? { icon: "🚫", label: etiquetaCalificacion(c, ta), color: "#9a3412", bg: "#ffedd5" }
+    : { icon: "❌", label: etiquetaCalificacion(c, ta), color: "#991b1b", bg: "#fee2e2" };
   // Correcciones y totales: lo último que trajo el panel (rondasData) o, si no cargó, lo que trae el informe.
   const correcciones = rondasData
     ? { rondasConVeredicto: rondasData.resumen.rondasConVeredicto, rondasCorregidas: rondasData.resumen.rondasCorregidas, totales: rondasData.totales }
@@ -284,11 +295,13 @@ export default function ArbitroPanelPage() {
   const colors = sesionSeleccionada
     ? coloresArea(sesionSeleccionada.area)
     : coloresArea(null);
+  const materiaDe = (m: string) => nombreVisible(ta.materiaNames, m);
+  const nivelDe = (n: string) => nombreVisible(ta.levelNames, n);
 
   // ── Vista detalle de sesión ─────────────────────────────────────────────
   if (sesionSeleccionada) {
     return (
-      <div style={{ minHeight: "100vh", backgroundColor: "#f8fafc", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
+      <main style={{ minHeight: "100vh", backgroundColor: "#f8fafc", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
         <style>{`
           #panel-print-title { display: none; }
           @media print {
@@ -301,30 +314,30 @@ export default function ArbitroPanelPage() {
         <div data-noprint style={{ background: colors.gradient, padding: "20px 24px", color: "white" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
             <button onClick={() => { setSesionSeleccionada(null); setInforme(null); setMetacogniciones([]); setRondasData(null); setErrorRondas(""); setSeleccion({}); }}
-              style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-              ← Volver al panel
+              style={{ background: "rgba(0,0,0,0.25)", border: "none", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+              {ta.panBackToList}
             </button>
             {informe && (
               <button onClick={() => window.print()}
-                style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-                🖨️ Descargar informe (PDF)
+                style={{ background: "rgba(0,0,0,0.25)", border: "none", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                {ta.panDownloadPdf}
               </button>
             )}
           </div>
-          <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 900 }}>⚖️ {sesionSeleccionada.materia}</h1>
-          <p style={{ margin: 0, fontSize: 13, opacity: 0.9 }}>{sesionSeleccionada.tema}</p>
-          <p style={{ margin: "4px 0 0", fontSize: 12, opacity: 0.75 }}>
-            {sesionSeleccionada.nivel} · {sesionSeleccionada.anio} ·{" "}
-            {new Date(sesionSeleccionada.creadoEn).toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })}
+          <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 900 }}>⚖️ {materiaDe(sesionSeleccionada.materia)}</h1>
+          <p style={{ margin: 0, fontSize: 13 }}>{sesionSeleccionada.tema}</p>
+          <p style={{ margin: "4px 0 0", fontSize: 12 }}>
+            {nivelDe(sesionSeleccionada.nivel)} · {sesionSeleccionada.anio} ·{" "}
+            {new Date(sesionSeleccionada.creadoEn).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" })}
           </p>
         </div>
 
         <div id="panel-print-title">
-          <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 900, color: "#1e293b" }}>⚖️ {sesionSeleccionada.materia}</h1>
+          <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 900, color: "#1e293b" }}>⚖️ {materiaDe(sesionSeleccionada.materia)}</h1>
           <p style={{ margin: 0, fontSize: 13, color: "#1e293b" }}>{sesionSeleccionada.tema}</p>
           <p style={{ margin: "4px 0 0", fontSize: 12, color: "#475569" }}>
-            {sesionSeleccionada.nivel} · {sesionSeleccionada.anio} ·{" "}
-            {new Date(sesionSeleccionada.creadoEn).toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })}
+            {nivelDe(sesionSeleccionada.nivel)} · {sesionSeleccionada.anio} ·{" "}
+            {new Date(sesionSeleccionada.creadoEn).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" })}
           </p>
         </div>
 
@@ -334,29 +347,31 @@ export default function ArbitroPanelPage() {
             <div data-noprint style={{ marginBottom: 16 }}>
               <button
                 onClick={() => setMostrarTexto(true)}
-                style={{ padding: "10px 20px", borderRadius: 10, border: `2px solid ${colors.primary}`, backgroundColor: `${colors.primary}12`, color: colors.primary, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                📖 Mostrar texto a los alumnos
+                style={{ padding: "10px 20px", borderRadius: 10, border: `2px solid ${colors.primary}`, backgroundColor: "white", color: colors.primary, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                {ta.panShowText}
               </button>
               <span style={{ fontSize: 12, color: PALETA.gris, marginLeft: 10 }}>
-                Abre en pantalla completa para proyectar
+                {ta.panShowTextHint}
               </span>
             </div>
           )}
 
-          {loadingInforme && (
-            <div style={{ textAlign: "center", padding: "48px 0" }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>⚖️</div>
-              <p style={{ fontSize: 15, fontWeight: 600, color: "#1e293b" }}>Generando informe pedagógico…</p>
-              <p style={{ fontSize: 13, color: "#64748b" }}>Estamos analizando las disputas de la sesión</p>
-            </div>
-          )}
+          <div role="status" aria-live="polite">
+            {loadingInforme && (
+              <div style={{ textAlign: "center", padding: "48px 0" }}>
+                <div aria-hidden="true" style={{ fontSize: 36, marginBottom: 12 }}>⚖️</div>
+                <p style={{ fontSize: 15, fontWeight: 600, color: "#1e293b" }}>{ta.panGenerating}</p>
+                <p style={{ fontSize: 13, color: "#64748b" }}>{ta.panAnalyzing}</p>
+              </div>
+            )}
+          </div>
 
           {errorInforme && (
-            <div style={{ backgroundColor: "#fef2f2", borderRadius: 12, padding: 20, border: "1px solid #fecaca" }}>
-              <p style={{ margin: 0, color: "#dc2626", fontWeight: 600 }}>⚠️ {errorInforme}</p>
+            <div role="alert" style={{ backgroundColor: "#fef2f2", borderRadius: 12, padding: 20, border: "1px solid #fecaca" }}>
+              <p style={{ margin: 0, color: "#b91c1c", fontWeight: 600 }}>⚠️ {errorInforme}</p>
               <button onClick={() => verInforme(sesionSeleccionada)}
                 style={{ marginTop: 12, padding: "8px 16px", borderRadius: 8, border: "none", backgroundColor: "#dc2626", color: "white", cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
-                Reintentar
+                {ta.cfgRetryPlain}
               </button>
             </div>
           )}
@@ -374,7 +389,7 @@ export default function ArbitroPanelPage() {
                     onClick={() => sesionSeleccionada && verInforme(sesionSeleccionada, true)}
                     disabled={loadingInforme}
                     style={{ padding: "8px 14px", borderRadius: 8, border: "none", backgroundColor: PALETA.ambar, color: "white", fontWeight: 700, fontSize: 12, cursor: loadingInforme ? "default" : "pointer", whiteSpace: "nowrap" }}>
-                    🔄 Actualizar informe
+                    {ta.panUpdateReport}
                   </button>
                 </div>
               )}
@@ -385,13 +400,13 @@ export default function ArbitroPanelPage() {
                 informe.totalConsultasActual > informe.totalConsultas && (
                 <div style={{ backgroundColor: "#fffbeb", borderRadius: 12, padding: "12px 16px", border: "1px solid #fde68a", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div style={{ fontSize: 13, color: "#92400e", lineHeight: 1.5 }}>
-                    ⏳ Hay consultas al árbitro nuevas desde que se generó este informe — puede que falten grupos.
+                    {ta.panNewQueries}
                   </div>
                   <button
                     onClick={() => sesionSeleccionada && verInforme(sesionSeleccionada, true)}
                     disabled={loadingInforme}
                     style={{ padding: "8px 14px", borderRadius: 8, border: "none", backgroundColor: PALETA.ambar, color: "white", fontWeight: 700, fontSize: 12, cursor: loadingInforme ? "default" : "pointer", whiteSpace: "nowrap" }}>
-                    🔄 Actualizar informe
+                    {ta.panUpdateReport}
                   </button>
                 </div>
               )}
@@ -399,27 +414,28 @@ export default function ArbitroPanelPage() {
               {/* Nivel de debate */}
               {informe.nivelDebate && (() => {
                 const nb = NIVEL_BADGE[informe.nivelDebate] || NIVEL_BADGE.adecuado;
+                const nbLabel = nivelEtiqueta(informe.nivelDebate);
                 return (
                   <div style={{ backgroundColor: nb.bg, borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 12 }}>
                     <div style={{ fontSize: 28 }}>
                       {informe.nivelDebate === "profundo" ? "🏆" : informe.nivelDebate === "adecuado" ? "✅" : "📊"}
                     </div>
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: nb.color, textTransform: "uppercase", letterSpacing: "0.5px" }}>Nivel de debate</div>
-                      <div style={{ fontSize: 18, fontWeight: 900, color: nb.color }}>{nb.label}</div>
+                      <h2 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: nb.color, textTransform: "uppercase", letterSpacing: "0.5px" }}>{ta.panDebateLevel}</h2>
+                      <div style={{ fontSize: 18, fontWeight: 900, color: nb.color }}>{nbLabel}</div>
                     </div>
                   </div>
                 );
               })()}
 
               {/* Resumen ejecutivo */}
-              <Card title="📋 Resumen ejecutivo">
+              <Card title={ta.panExecSummary}>
                 <p style={{ margin: 0, fontSize: 14, color: "#1e293b", lineHeight: 1.7 }}>{informe.resumenEjecutivo}</p>
               </Card>
 
               {/* Conceptos debatidos */}
               {informe.conceptosDebatidos?.length > 0 && (
-                <Card title="💡 Conceptos debatidos">
+                <Card title={ta.panConcepts}>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                     {informe.conceptosDebatidos.map((c, i) => (
                       <span key={i} style={{ backgroundColor: colors.light, color: colors.primary, border: `1px solid ${colors.primary}30`, borderRadius: 20, padding: "4px 12px", fontSize: 13, fontWeight: 600 }}>
@@ -431,14 +447,14 @@ export default function ArbitroPanelPage() {
               )}
 
               {/* Fortalezas y áreas de oportunidad */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="arb-una-columna" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 {informe.fortalezas && (
-                  <Card title="💪 Fortalezas">
+                  <Card title={ta.panStrengths}>
                     <p style={{ margin: 0, fontSize: 13, color: "#166534", lineHeight: 1.6 }}>{informe.fortalezas}</p>
                   </Card>
                 )}
                 {informe.areasDeOportunidad && (
-                  <Card title="🎯 Áreas de oportunidad">
+                  <Card title={ta.panOpportunities}>
                     <p style={{ margin: 0, fontSize: 13, color: "#92400e", lineHeight: 1.6 }}>{informe.areasDeOportunidad}</p>
                   </Card>
                 )}
@@ -446,14 +462,14 @@ export default function ArbitroPanelPage() {
 
               {/* Patrones observados */}
               {informe.patronesObservados && (
-                <Card title="🔍 Patrones observados">
+                <Card title={ta.panPatterns}>
                   <p style={{ margin: 0, fontSize: 14, color: "#1e293b", lineHeight: 1.7 }}>{informe.patronesObservados}</p>
                 </Card>
               )}
 
               {/* Recomendaciones */}
               {informe.recomendacionesDocente?.length > 0 && (
-                <Card title="📌 Recomendaciones para el docente">
+                <Card title={ta.panRecommendations}>
                   <ol style={{ margin: 0, paddingLeft: 20 }}>
                     {informe.recomendacionesDocente.map((r, i) => (
                       <li key={i} style={{ fontSize: 13, color: "#1e293b", marginBottom: 8, lineHeight: 1.6 }}>{r}</li>
@@ -464,7 +480,7 @@ export default function ArbitroPanelPage() {
 
               {/* Preguntas para retomar */}
               {informe.preguntasParaRetomar?.length > 0 && (
-                <Card title="❓ Preguntas para retomar en clase">
+                <Card title={ta.panRetake}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {informe.preguntasParaRetomar.map((p, i) => (
                       <div key={i} style={{ backgroundColor: "#f8fafc", borderRadius: 8, padding: "10px 14px", border: "1px solid #e2e8f0", fontSize: 13, color: "#1e293b", lineHeight: 1.6 }}>
@@ -501,22 +517,22 @@ export default function ArbitroPanelPage() {
 
               {/* Preguntas pasadas — fuera del análisis, pero visibles */}
               {informe.rondasPasadas && informe.rondasPasadas.length > 0 && (
-                <Card title="⏭️ Preguntas pasadas">
+                <Card title={ta.panPassed}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {informe.rondasPasadas.map((r, i) => (
                       <div key={i} style={{ backgroundColor: "#f8fafc", borderRadius: 8, padding: "10px 14px", border: "1px solid #e2e8f0" }}>
                         <div style={{ fontSize: 12, color: PALETA.gris, marginBottom: 4 }}>
-                          Pasada por {r.equipoPregunta || "un equipo"}
+                          {fillArbitro(ta.panPassedBy, { team: r.equipoPregunta || ta.panAnotherTeam })}
                           {typeof r.tiempoSegundos === "number"
-                            ? ` · ${Math.floor(r.tiempoSegundos / 60)}:${String(r.tiempoSegundos % 60).padStart(2, "0")} min`
+                            ? fillArbitro(ta.panPassedTime, { time: `${Math.floor(r.tiempoSegundos / 60)}:${String(r.tiempoSegundos % 60).padStart(2, "0")}` })
                             : ""}
                         </div>
-                        <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.5 }}>{r.pregunta || "(sin texto)"}</div>
+                        <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.5 }}>{r.pregunta || ta.panNoText}</div>
                       </div>
                     ))}
                   </div>
                   <div style={{ fontSize: 12, color: PALETA.gris, marginTop: 10, fontStyle: "italic" }}>
-                    Estas preguntas no se incluyeron en el análisis pedagógico.
+                    {ta.panPassedNote}
                   </div>
                 </Card>
               )}
@@ -528,8 +544,11 @@ export default function ArbitroPanelPage() {
           {(loadingRondas || errorRondas || (rondasData && rondasData.rondas.length > 0)) && (
             <div style={{ marginBottom: 16 }}>
               <Card title={`🧾 ${ta.roundsTitle}`}>
-                {loadingRondas && <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>{ta.roundsLoading}</p>}
-                {errorRondas && <p style={{ margin: 0, fontSize: 13, color: "#dc2626" }}>⚠️ {errorRondas}</p>}
+                <div role="status" aria-live="polite">
+                  {loadingRondas && <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>{ta.roundsLoading}</p>}
+                  {avisoCorreccion && <p style={srOnly}>{avisoCorreccion}</p>}
+                </div>
+                {errorRondas && <p role="alert" style={{ margin: 0, fontSize: 13, color: "#dc2626" }}>⚠️ {errorRondas}</p>}
                 {rondasData && (() => {
                   const partidas: string[] = [];
                   rondasData.rondas.forEach(r => { if (!partidas.includes(r.partidaId)) partidas.push(r.partidaId); });
@@ -543,7 +562,7 @@ export default function ArbitroPanelPage() {
                         return (
                           <div key={pid} style={{ border: "1px solid #e2e8f0", borderRadius: 12, padding: 14, backgroundColor: "#fafafa" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-                              <span style={{ fontSize: 12, fontWeight: 800, color: "white", backgroundColor: "#3730a3", borderRadius: 20, padding: "2px 10px" }}>{fillArbitro(ta.gameN, { n: pi + 1 })}</span>
+                              <h3 style={{ margin: 0, fontSize: 12, fontWeight: 800, color: "white", backgroundColor: "#3730a3", borderRadius: 20, padding: "2px 10px" }}>{fillArbitro(ta.gameN, { n: pi + 1 })}</h3>
                               {tot && (
                                 <span style={{ fontSize: 12, color: "#475569" }} data-testid="partida-totales">
                                   {tot.equipos.map(e => e.puntosFinales !== e.puntosAlumnos
@@ -577,7 +596,7 @@ export default function ArbitroPanelPage() {
                                         {fillArbitro(ta.correctedDetail, {
                                           original: repartoTxt(r, r.correccion.repartoOriginal),
                                           nuevo: repartoTxt(r, r.correccion.repartoNuevo),
-                                          fecha: new Date(r.correccion.fecha).toLocaleDateString("es-AR"),
+                                          fecha: new Date(r.correccion.fecha).toLocaleDateString(locale),
                                         })}
                                       </div>
                                     )}
@@ -594,14 +613,21 @@ export default function ArbitroPanelPage() {
                                     )}
                                     {r.disputa && rondasData.puedeCorregir && (
                                       <div data-noprint style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
-                                        <div style={{ flex: "1 1 260px" }}>
-                                          <label htmlFor={`corregir-${r.id}`} style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 3 }}>{ta.correctSplit}</label>
-                                          <select id={`corregir-${r.id}`} value={elegida || actual} disabled={corrigiendo === r.id}
-                                            onChange={e => setSeleccion(prev => ({ ...prev, [r.id]: e.target.value === actual ? "" : e.target.value }))}
-                                            style={{ width: "100%", minHeight: 44, padding: "8px 10px", fontSize: 13, borderRadius: 8, border: "1.5px solid #cbd5e1", backgroundColor: "white" }}>
-                                            {OPCIONES_REPARTO.map(o => <option key={o.key} value={o.key}>{textoOpcion(o.key, r)}</option>)}
-                                          </select>
-                                        </div>
+                                        <fieldset style={{ ...fieldsetReset, flex: "1 1 260px" }}>
+                                          <legend style={{ ...legendReset, fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 3 }}>{ta.correctSplit}</legend>
+                                          <div className="arb-una-columna" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                                            {OPCIONES_REPARTO.map(o => {
+                                              const marcada = (elegida || actual) === o.key;
+                                              return (
+                                                <button key={o.key} type="button" aria-pressed={marcada} disabled={corrigiendo === r.id}
+                                                  onClick={() => setSeleccion(prev => ({ ...prev, [r.id]: o.key === actual ? "" : o.key }))}
+                                                  style={{ minHeight: 44, padding: "8px 10px", fontSize: 13, textAlign: "left", lineHeight: 1.3, borderRadius: 8, cursor: "pointer", border: `2px solid ${marcada ? "#3730a3" : "#cbd5e1"}`, backgroundColor: marcada ? "#eef2ff" : "white", color: marcada ? "#312e81" : "#1e293b", fontWeight: marcada ? 700 : 500 }}>
+                                                  {marcada && <span aria-hidden="true">✓ </span>}{textoOpcion(o.key, r)}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        </fieldset>
                                         <button onClick={() => corregirRonda(r)} disabled={!elegida || corrigiendo === r.id}
                                           style={{ minHeight: 44, padding: "8px 16px", borderRadius: 8, border: "none", backgroundColor: !elegida || corrigiendo === r.id ? "#94a3b8" : "#3730a3", color: "white", fontWeight: 700, fontSize: 13, cursor: !elegida || corrigiendo === r.id ? "default" : "pointer" }}>
                                           {corrigiendo === r.id ? ta.correctSaving : ta.correctSave}
@@ -630,11 +656,11 @@ export default function ArbitroPanelPage() {
               sola sesión puede tener 6-7 parejas jugando en simultáneo desde
               el mismo link */}
           {(loadingMeta || metacogniciones.length > 0) && (
-            <Card title={`✍️ Reflexiones de los equipos${metacogniciones.length > 0 ? ` (${metacogniciones.length} partida${metacogniciones.length === 1 ? "" : "s"})` : ""}`}>
+            <Card title={`✍️ ${ta.panReflectionsTitle(metacogniciones.length)}`}>
               {loadingMeta ? (
-                <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>Cargando reflexiones…</p>
+                <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>{ta.panLoadingReflections}</p>
               ) : metacogniciones.length === 0 ? (
-                <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>Todavía no hay informes de metacognición enviados.</p>
+                <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>{ta.panNoReflections}</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   {metacogniciones.map((meta, idx) => {
@@ -643,9 +669,9 @@ export default function ArbitroPanelPage() {
                       return (
                         <div key={meta.id} style={{ border: "1px solid #e2e8f0", borderRadius: 12, padding: 14, backgroundColor: "#fafafa" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                            <span style={{ fontSize: 12, fontWeight: 800, color: "white", backgroundColor: "#3730a3", borderRadius: 20, padding: "2px 10px" }}>
-                              Partida {idx + 1}
-                            </span>
+                            <h3 style={{ margin: 0, fontSize: 12, fontWeight: 800, color: "white", backgroundColor: "#3730a3", borderRadius: 20, padding: "2px 10px" }}>
+                              {fillArbitro(ta.gameN, { n: idx + 1 })}
+                            </h3>
                             <span style={{ fontSize: 12, color: "#64748b" }}>
                               {meta.equipos.map(eq => `${eq.nombre} (${fmt(eq.puntos)})`).join(" vs ")}
                             </span>
@@ -662,16 +688,16 @@ export default function ArbitroPanelPage() {
                           {meta.equipos.map((eq, i) => (
                             <div key={i} style={{ marginBottom: i < meta.equipos!.length - 1 ? 16 : 0, backgroundColor: "white", borderRadius: 10, padding: 12, border: "1px solid #f1f5f9" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                                <div style={{ width: 12, height: 12, borderRadius: "50%", backgroundColor: eq.color }} />
-                                <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{eq.nombre}</span>
+                                <div aria-hidden="true" style={{ width: 12, height: 12, borderRadius: "50%", backgroundColor: eq.color }} />
+                                <h4 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{eq.nombre}</h4>
                                 <span style={{ fontSize: 12, color: PALETA.gris }}>{eq.integrantes}</span>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginLeft: "auto" }}>{fmt(eq.puntos)} pts</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginLeft: "auto" }}>{fmt(eq.puntos)} {ta.pointsAbbrev}</span>
                               </div>
                               {[
-                                { label: "¿Qué aprendieron?", val: eq.respuestas?.q1 },
-                                { label: "¿Momento más difícil?", val: eq.respuestas?.q2 },
-                                { label: "¿Acuerdo con el árbitro?", val: eq.respuestas?.q3 },
-                                { label: "¿Qué le enseñarían a otro?", val: eq.respuestas?.q4 },
+                                { label: ta.panQ1, val: eq.respuestas?.q1 },
+                                { label: ta.panQ2, val: eq.respuestas?.q2 },
+                                { label: ta.panQ3, val: eq.respuestas?.q3 },
+                                { label: ta.panQ4, val: eq.respuestas?.q4 },
                               ].filter(r => r.val?.trim()).map((r, j) => (
                                 <div key={j} style={{ marginBottom: 8 }}>
                                   <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 3 }}>{r.label}</div>
@@ -684,35 +710,27 @@ export default function ArbitroPanelPage() {
                           {/* Detalle ronda por ronda: si fue al árbitro y en qué pregunta */}
                           {meta.registros && meta.registros.length > 0 && (
                             <div style={{ marginTop: 12 }}>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 6 }}>
-                                Detalle de rondas ({meta.registros.length})
-                              </div>
+                              <h4 style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                                {ta.panRoundDetail(meta.registros.length)}
+                              </h4>
                               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                                 {meta.registros.map((r, k) => {
-                                  const calBadge = r.calificacion === "completa"
-                                    ? { icon: "✅", label: "Completa", color: "#166534", bg: "#dcfce7" }
-                                    : r.calificacion === "incompleta"
-                                    ? { icon: "⚡", label: "Incompleta", color: "#92400e", bg: "#fef3c7" }
-                                    : r.calificacion === "pasada"
-                                    ? { icon: "⏭️", label: "Pasada", color: "#475569", bg: "#f1f5f9" }
-                                    : r.calificacion === "fuera_de_tema"
-                                    ? { icon: "🚫", label: ta.offTopicLabel, color: "#9a3412", bg: "#ffedd5" }
-                                    : { icon: "❌", label: "No", color: "#991b1b", bg: "#fee2e2" };
+                                  const calBadge = badgeCalificacion(r.calificacion);
                                   return (
                                     <div key={k} style={{ backgroundColor: "white", borderRadius: 8, padding: "8px 12px", border: "1px solid #f1f5f9" }}>
                                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                                         <span style={{ fontSize: 12, fontWeight: 700, color: "#1e293b" }}>
-                                          Ronda {r.ronda}: {r.equipoPregunta} → {r.equipoResponde}
+                                          {fillArbitro(ta.roundLabel, { n: r.ronda })}: {r.equipoPregunta} → {r.equipoResponde}
                                         </span>
                                         <span style={{ fontSize: 12, fontWeight: 700, color: calBadge.color, backgroundColor: calBadge.bg, borderRadius: 20, padding: "2px 8px", whiteSpace: "nowrap" }}>
-                                          {calBadge.icon} {calBadge.label} ({fmt(r.puntos)} pts)
+                                          {calBadge.icon} {calBadge.label} ({fmt(r.puntos)} {ta.pointsAbbrev})
                                         </span>
                                       </div>
                                       {r.fueAlArbitro ? (
                                         <div style={{ marginTop: 6, fontSize: 12, color: "#7c3aed", backgroundColor: "#f5f3ff", borderRadius: 6, padding: "6px 10px", lineHeight: 1.5 }}>
-                                          <strong>⚖️ Fue al árbitro</strong>
-                                          {r.pregunta && <div style={{ marginTop: 2 }}>Pregunta: {r.pregunta}</div>}
-                                          {r.veredictoArbitro && <div style={{ marginTop: 2 }}>Veredicto: {r.veredictoArbitro}</div>}
+                                          <strong>{ta.panWentToReferee}</strong>
+                                          {r.pregunta && <div style={{ marginTop: 2 }}>{fillArbitro(ta.panQuestionColon, { text: r.pregunta })}</div>}
+                                          {r.veredictoArbitro && <div style={{ marginTop: 2 }}>{fillArbitro(ta.panVerdictColon, { text: r.veredictoArbitro })}</div>}
                                         </div>
                                       ) : (
                                         r.pregunta && (
@@ -732,18 +750,18 @@ export default function ArbitroPanelPage() {
                     // Modo normal
                     const r = meta.respuestas as any;
                     const pregsNormal = [
-                      { label: "¿Qué aprendió?", val: r?.aprendizaje },
-                      { label: "¿Momento más difícil?", val: r?.dificultad },
-                      { label: "¿Acuerdo con el árbitro?", val: r?.preguntaPendiente },
-                      { label: "¿Qué le enseñaría a otro?", val: r?.ensenanza },
+                      { label: ta.panQ1s, val: r?.aprendizaje },
+                      { label: ta.panQ2, val: r?.dificultad },
+                      { label: ta.panQ3, val: r?.preguntaPendiente },
+                      { label: ta.panQ4s, val: r?.ensenanza },
                     ].filter(p => p.val?.trim());
 
                     return (
                       <div key={meta.id} style={{ border: "1px solid #e2e8f0", borderRadius: 12, padding: 14, backgroundColor: "#fafafa" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                          <span style={{ fontSize: 12, fontWeight: 800, color: "white", backgroundColor: "#3730a3", borderRadius: 20, padding: "2px 10px" }}>
+                          <h3 style={{ margin: 0, fontSize: 12, fontWeight: 800, color: "white", backgroundColor: "#3730a3", borderRadius: 20, padding: "2px 10px" }}>
                             #{idx + 1}
-                          </span>
+                          </h3>
                           <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>
                             {meta.nombreEquipo ? `${meta.nombreEquipo} — ` : ""}{meta.nombreAlumno}
                           </span>
@@ -765,12 +783,15 @@ export default function ArbitroPanelPage() {
 
         {/* Vista proyectable del texto base */}
         {mostrarTexto && sesionSeleccionada.textoFuente && (
-          <div data-noprint style={{
-            position: "fixed", inset: 0, backgroundColor: "white",
-            zIndex: 9999, overflow: "auto", padding: "48px 10%",
-            fontFamily: "'Georgia', serif",
-          }}>
+          <DialogoEnPagina onCerrar={() => setMostrarTexto(false)} idTitulo="panel-texto-titulo" extra={{ "data-noprint": true }}
+            style={{
+              position: "fixed", inset: 0, backgroundColor: "white",
+              zIndex: 9999, overflow: "auto", padding: "48px 10%",
+              fontFamily: "'Georgia', serif",
+            }}>
             <button
+              type="button"
+              data-autofocus
               onClick={() => setMostrarTexto(false)}
               style={{
                 position: "fixed", top: 20, right: 24,
@@ -778,28 +799,28 @@ export default function ArbitroPanelPage() {
                 border: "2px solid #e2e8f0", backgroundColor: "white",
                 fontWeight: 700, fontSize: 14, cursor: "pointer", color: "#64748b",
               }}>
-              ✕ Cerrar
+              {ta.panCloseX}
             </button>
             <div style={{ maxWidth: 800, margin: "0 auto" }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: PALETA.gris, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>
-                {sesionSeleccionada.materia} · {sesionSeleccionada.tema}
-              </div>
+              <h2 id="panel-texto-titulo" style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: PALETA.gris, textTransform: "uppercase", letterSpacing: "1px" }}>
+                {materiaDe(sesionSeleccionada.materia)} · {sesionSeleccionada.tema}
+              </h2>
               <div style={{ fontSize: 20, lineHeight: 1.9, color: "#1e293b", whiteSpace: "pre-wrap" }}>
                 {sesionSeleccionada.textoFuente}
               </div>
             </div>
-          </div>
+          </DialogoEnPagina>
         )}
-      </div>
+      </main>
     );
   }
 
   // ── Vista lista de sesiones ─────────────────────────────────────────────
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f8fafc", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
+    <main style={{ minHeight: "100vh", backgroundColor: "#f8fafc", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
       <div style={{ background: "linear-gradient(135deg,#1e3a5f,#3730a3)", padding: "24px", color: "white" }}>
-        <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 900 }}>⚖️ Panel del docente</h1>
-        <p style={{ margin: 0, fontSize: 13, opacity: 0.85 }}>Tus sesiones de árbitro de aprendizaje</p>
+        <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 900 }}>{ta.panTitle}</h1>
+        <p style={{ margin: 0, fontSize: 13 }}>{ta.panSubtitle}</p>
       </div>
 
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 20px" }}>
@@ -824,40 +845,42 @@ export default function ArbitroPanelPage() {
                 justifyContent: "center",
                 gap: 8,
               }}>
-              {loadingAdmin ? "⏳ Cargando..." : modoAdmin ? "👤 Ver solo mis sesiones" : "🔐 Ver todas las sesiones (Admin)"}
+              {loadingAdmin ? ta.panAdminLoading : modoAdmin ? ta.panAdminBack : ta.panAdminAll}
             </button>
             {modoAdmin && (
               <div style={{ fontSize: 12, color: "#7c3aed", textAlign: "center", marginTop: 4 }}>
-                Mostrando sesiones de todos los docentes
+                {ta.panAdminShowing}
               </div>
             )}
           </div>
         )}
 
-        {(loading || authLoading) && (
-          <div style={{ textAlign: "center", padding: "48px 0", color: "#64748b" }}>
-            ⏳ Cargando sesiones…
-          </div>
-        )}
+        <div role="status" aria-live="polite">
+          {(loading || authLoading) && (
+            <div style={{ textAlign: "center", padding: "48px 0", color: "#64748b" }}>
+              {ta.panLoadingSessions}
+            </div>
+          )}
+        </div>
 
         {error && (
-          <div style={{ backgroundColor: "#fef2f2", borderRadius: 12, padding: 20, border: "1px solid #fecaca" }}>
-            <p style={{ margin: 0, color: "#dc2626", fontWeight: 600 }}>⚠️ {error}</p>
+          <div role="alert" style={{ backgroundColor: "#fef2f2", borderRadius: 12, padding: 20, border: "1px solid #fecaca" }}>
+            <p style={{ margin: 0, color: "#b91c1c", fontWeight: 600 }}>⚠️ {error}</p>
           </div>
         )}
 
         {!loading && !authLoading && !error && (modoAdmin ? todasSesiones : sesiones).length === 0 && (
           <div style={{ textAlign: "center", padding: "48px 0", color: "#64748b" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
-            <p style={{ fontSize: 15, fontWeight: 600 }}>Todavía no tenés sesiones registradas.</p>
-            <p style={{ fontSize: 13 }}>Configurá un árbitro y compartilo con tus alumnos.</p>
+            <p style={{ fontSize: 15, fontWeight: 600 }}>{ta.panNoSessions}</p>
+            <p style={{ fontSize: 13 }}>{ta.panNoSessionsHint}</p>
           </div>
         )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {(modoAdmin ? todasSesiones : sesiones).map(sesion => {
             const c = coloresArea(sesion.area);
-            const fecha = new Date(sesion.creadoEn).toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" });
+            const fecha = new Date(sesion.creadoEn).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" });
             return (
               <div key={sesion.id}
                 style={{ backgroundColor: "white", borderRadius: 14, border: "1.5px solid #e2e8f0", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
@@ -866,10 +889,10 @@ export default function ArbitroPanelPage() {
                   <div style={{ flex: 1, padding: "16px 18px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div>
-                        <div style={{ fontSize: 15, fontWeight: 800, color: "#1e293b" }}>{sesion.materia}</div>
+                        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#1e293b" }}>{materiaDe(sesion.materia)}</h2>
                         <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>{sesion.tema}</div>
                         <div style={{ fontSize: 12, color: PALETA.gris, marginTop: 4 }}>
-                          {sesion.nivel} · {sesion.anio} · {fecha}
+                          {nivelDe(sesion.nivel)} · {sesion.anio} · {fecha}
                         </div>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
@@ -878,7 +901,7 @@ export default function ArbitroPanelPage() {
                             fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
                             backgroundColor: "#e0e7ff", color: "#4338ca", border: "1px solid #c7d2fe", whiteSpace: "nowrap",
                           }}>
-                            🎮 {sesion.partidasCount} partida{sesion.partidasCount === 1 ? "" : "s"}
+                            {ta.panGamesCount(sesion.partidasCount)}
                           </span>
                         )}
                         <span style={{
@@ -888,20 +911,20 @@ export default function ArbitroPanelPage() {
                           border: `1px solid ${sesion.tieneInforme ? "#86efac" : "#e2e8f0"}`,
                           whiteSpace: "nowrap",
                         }}>
-                          {sesion.tieneInforme ? "✅ Con informe" : "Sin informe aún"}
+                          {sesion.tieneInforme ? ta.panWithReport : ta.panNoReport}
                         </span>
                       </div>
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
                       {sesion.textoFuente && (
                         <button onClick={() => mostrarTextoDesdeLista(sesion)}
-                          style={{ padding: "8px 16px", borderRadius: 8, border: `2px solid ${c.primary}`, backgroundColor: `${c.primary}12`, color: c.primary, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                          📖 Lectura grupal antes de jugar
+                          style={{ padding: "8px 16px", borderRadius: 8, border: `2px solid ${c.primary}`, backgroundColor: "white", color: c.primary, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                          {ta.panGroupReading}
                         </button>
                       )}
                       <button onClick={() => verInforme(sesion)}
                         style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: c.gradient, color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                        {sesion.tieneInforme ? "Ver informe" : "Generar informe"}
+                        {sesion.tieneInforme ? ta.panViewReport : ta.panGenerateReport}
                       </button>
                     </div>
                   </div>
@@ -911,17 +934,18 @@ export default function ArbitroPanelPage() {
           })}
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
+// El título de cada tarjeta es un encabezado: h2 por defecto (los h3 de adentro, como «Partida 1», cuelgan de él).
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ backgroundColor: "white", borderRadius: 12, border: "1px solid #e2e8f0", overflow: "hidden", boxShadow: "0 2px 6px rgba(0,0,0,0.04)" }}>
+    <section style={{ backgroundColor: "white", borderRadius: 12, border: "1px solid #e2e8f0", overflow: "hidden", boxShadow: "0 2px 6px rgba(0,0,0,0.04)" }}>
       <div style={{ padding: "12px 18px", borderBottom: "1px solid #f1f5f9", backgroundColor: "#fafafa" }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{title}</div>
+        <h2 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{title}</h2>
       </div>
       <div style={{ padding: "16px 18px" }}>{children}</div>
-    </div>
+    </section>
   );
 }

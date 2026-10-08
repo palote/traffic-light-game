@@ -1,0 +1,15 @@
+/* Diseño adaptable del Árbitro: a 480 px o menos (incluye 320 px) las columnas
+   pasan a una sola. Va con !important porque las páginas ponen la grilla en línea. */
+@media (max-width: 480px) {
+  .arb-una-columna {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Foco visible en los controles que lo perdían: botones de listas con scroll,
+   donde el contorno exterior queda recortado. El contorno va hacia adentro. */
+.arb-foco:focus-visible {
+  outline: 3px solid #1e293b !important;
+  outline-offset: -3px !important;
+  box-shadow: inset 0 0 0 5px #ffffff;
+}

@@ -2,10 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useParams } from "react-router-dom";
 import { app } from "../firebase.config";
-import { useArbitroT, fillArbitro, useFormatoPuntos } from "../i18n";
-import { esIaNoDisponible, esRespuestaNoClara } from "../utils/arbitroErrores";
+import { useArbitroT, fillArbitro, useFormatoPuntos, useIdiomaSesion, useLocaleArbitro, useTituloPagina } from "../i18n";
+import { textoInformePartida } from "../utils/arbitroDocumentos";
+import { etiquetaCalificacion } from "../utils/arbitroEtiquetas";
+import { calificacionPreguntaParaServidor } from "../utils/arbitroCalificacion";
+import { esIaNoDisponible, esRespuestaNoClara, textoErrorArbitro } from "../utils/arbitroErrores";
 import { PALETA, EQUIPO_COLORES, EQUIPO_COLOR_1, EQUIPO_COLOR_2 } from "../utils/arbitroPalette";
 import { coloresArea } from "../utils/arbitroAreas";
+import { DialogoEnPagina, fieldsetReset, legendReset } from "../utils/arbitroA11y";
 import {
   leerPartida, guardarPartida, borrarPartida, purgarPartidasVencidas, sesionVencida,
   type PartidaGuardada,
@@ -24,6 +28,7 @@ interface SesionData {
   expiresAt: string;
   docenteEmail?: string;
   permitirPreguntasPropias?: boolean; // «Permitir preguntas propias»; las sesiones viejas no lo traen (= permitido)
+  idioma?: string; // 'es' | 'en'; las sesiones viejas no lo traen (= 'es')
 }
 
 interface Veredicto {
@@ -78,11 +83,20 @@ type Pantalla =
 export default function ArbitroJuegoPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const t = useArbitroT();
+  const locale = useLocaleArbitro(); // fechas y números según el idioma (es-AR / en-US)
   const fmt = useFormatoPuntos(); // solo para mostrar; lo guardado y sumado es el valor exacto
+  useTituloPagina(`${t.sesTitle} — ${t.pageTitleSuffix}`);
+  // Texto con un {team} en el medio: el nombre del equipo entra como elemento (con su color).
+  const conEquipo = (texto: string, nodo: React.ReactNode) => {
+    const [antes, despues] = texto.split("{team}");
+    return <>{antes}{nodo}{despues}</>;
+  };
 
   // ── Sesión ────────────────────────────────────────────────────────────────
   const [sesion, setSesion] = useState<SesionData | null>(null);
   const [loadingSesion, setLoadingSesion] = useState(true);
+  // El idioma de la pantalla (interfaz y <html lang>) sale de la sesión, no del navegador.
+  useIdiomaSesion(sesion?.idioma, !!sesion);
   const [sesionError, setSesionError] = useState<string | null>(null);
 
   // ── Setup de equipos ──────────────────────────────────────────────────────
@@ -268,7 +282,7 @@ export default function ArbitroJuegoPage() {
           borrarPartida(sessionId);
           setRec({ guardada: null, resuelta: true });
         }
-        setSesionError(err.message); setLoadingSesion(false);
+        setSesionError(textoErrorArbitro(err, t, err.message)); setLoadingSesion(false);
       });
   }, [sessionId]);
 
@@ -413,12 +427,6 @@ export default function ArbitroJuegoPage() {
   });
 
   // El árbitro devuelve A/B/ambas_correctas/ambas_incorrectas, no un puntaje.
-  // Lo traducimos a una calificación recomendada para mostrarla resaltada.
-  const CALIFICACION_INFO: Record<"completa" | "incompleta" | "no", { label: string; color: string }> = {
-    completa: { label: "Completa — 1 punto", color: PALETA.verde },
-    incompleta: { label: "Incompleta — 0.5 puntos", color: PALETA.ambar },
-    no: { label: "Incorrecta — 0 puntos", color: PALETA.rojo },
-  };
   const recomendacionArbitro = (v: Veredicto): "completa" | "incompleta" | "no" => {
     // El árbitro ahora recomienda el puntaje directamente (evaluando la
     // respuesta en sí misma, no solo quién ganó el desacuerdo). Si por algún
@@ -434,56 +442,17 @@ export default function ArbitroJuegoPage() {
   };
 
   // ── Informe de metacognición (copiar / descargar) ───────────────────────────
-  const generarTextoInforme = () => {
-    const lineas: string[] = [
-      `INFORME DE SESIÓN — ${sesion?.materia} · ${sesion?.tema}`,
-      `Fecha: ${new Date().toLocaleDateString("es-AR")}`,
-      "",
-    ];
-
-    equipos.forEach(eq => {
-      lineas.push(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-      lineas.push(`Equipo: ${eq.nombre} (${eq.integrantes})`);
-      lineas.push(`Puntaje final: ${fmt(eq.puntos)} puntos`);
-      lineas.push("");
-    });
-
-    const preguntasTexto = [
-      `¿Qué aprendieron hoy sobre "${sesion?.tema}"?`,
-      "¿En qué momento dudaron más? ¿Cómo lo resolvieron?",
-      "Contá una disputa donde intervino el árbitro (IA): ¿cuál era tu postura antes y cuál después?",
-      "¿Cómo le explicarían a otro compañero lo que aprendieron hoy?",
-    ];
-
-    // Equipo 1
-    lineas.push(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    lineas.push(`REFLEXIONES DE ${nombreEquipo1.toUpperCase()} (${integrantesEquipo1})`);
-    lineas.push("");
-    [meta1E1, meta2E1, meta3E1, meta4E1].forEach((resp, i) => {
-      if (resp?.trim()) {
-        lineas.push(`${i + 1}. ${preguntasTexto[i]}`);
-        lineas.push(resp.trim());
-        lineas.push("");
-      }
-    });
-
-    // Equipo 2
-    lineas.push(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    lineas.push(`REFLEXIONES DE ${nombreEquipo2.toUpperCase()} (${integrantesEquipo2})`);
-    lineas.push("");
-    [meta1E2, meta2E2, meta3E2, meta4E2].forEach((resp, i) => {
-      if (resp?.trim()) {
-        lineas.push(`${i + 1}. ${preguntasTexto[i]}`);
-        lineas.push(resp.trim());
-        lineas.push("");
-      }
-    });
-
-    lineas.push(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    lineas.push("Árbitro de Aprendizaje · eljuegodelsemaforo.com");
-
-    return lineas.join("\n");
-  };
+  // El informe exportado (copiar / .txt) sale del diccionario del idioma de la sesión (el mismo que usa esta pantalla).
+  const generarTextoInforme = () => textoInformePartida(t, {
+    materia: sesion?.materia, tema: sesion?.tema,
+    fecha: new Date().toLocaleDateString(locale),
+    equipos: equipos.map(eq => ({ nombre: eq.nombre, integrantes: eq.integrantes, puntos: eq.puntos })),
+    reflexiones: [
+      { nombre: nombreEquipo1, integrantes: integrantesEquipo1, respuestas: [meta1E1, meta2E1, meta3E1, meta4E1] },
+      { nombre: nombreEquipo2, integrantes: integrantesEquipo2, respuestas: [meta1E2, meta2E2, meta3E2, meta4E2] },
+    ],
+    formatoPuntos: fmt,
+  });
 
   const copiarInforme = async () => {
     try {
@@ -509,7 +478,7 @@ export default function ArbitroJuegoPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `informe-arbitro-${sesion?.materia}-${new Date().toLocaleDateString("es-AR").replace(/\//g, "-")}.txt`;
+    a.download = `${t.docFileName}-${sesion?.materia}-${new Date().toLocaleDateString(locale).replace(/\//g, "-")}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -522,7 +491,7 @@ export default function ArbitroJuegoPage() {
     setErrorArbitro(null);
     const timeoutId = setTimeout(() => {
       setLoadingArbitro(false);
-      setErrorArbitro("El árbitro está tardando más de lo normal. Puede ser la conexión a internet. Probá de nuevo.");
+      setErrorArbitro(t.jgSlow);
     }, 20000); // 20 segundos
 
     try {
@@ -530,9 +499,12 @@ export default function ArbitroJuegoPage() {
       const res = await fn({
         sessionId,
         modo: "juego_oral",
-        conflicto: `Pregunta: "${disputaPregunta}"\n\nRespuesta de ${equipoRespuesta.nombre}: "${disputaRespuesta}"`,
-        posicionA: `${equipoPregunta.nombre} (calificó como ${calificacionActual}): ${disputaArgEquipoPregunta}`,
-        posicionB: `${equipoRespuesta.nombre} (no acepta la calificación): ${disputaArgEquipoRespuesta}`,
+        // El texto que se manda al árbitro sale del diccionario del idioma de la sesión (el prompt del servidor está en ese idioma).
+        conflicto: fillArbitro(t.modelConflict, { pregunta: disputaPregunta, equipo: equipoRespuesta.nombre, respuesta: disputaRespuesta }),
+        // La calificación de quien preguntó viaja como dato aparte, no dentro del texto de la Posición A.
+        calificacionPregunta: calificacionPreguntaParaServidor(calificacionActual),
+        posicionA: `${equipoPregunta.nombre}: ${disputaArgEquipoPregunta}`,
+        posicionB: fillArbitro(t.modelPositionB, { equipo: equipoRespuesta.nombre, argumento: disputaArgEquipoRespuesta }),
         equipoPregunta: equipoPregunta.nombre,
         equipoResponde: equipoRespuesta.nombre,
       }) as { data: Veredicto };
@@ -677,13 +649,13 @@ export default function ArbitroJuegoPage() {
   const colors = coloresArea(sesion?.area);
 
   // ── Loading / error ───────────────────────────────────────────────────────
-  if (loadingSesion) return <FullPage><div style={{ color: "white", fontSize: 18, fontWeight: 600 }}>⏳ Cargando sesión…</div></FullPage>;
+  if (loadingSesion) return <FullPage><div role="status"><h1 style={{ margin: 0, color: "white", fontSize: 18, fontWeight: 600 }}>{t.sesLoading}</h1></div></FullPage>;
   if (sesionError || !sesion) return (
     <FullPage>
-      <div style={{ backgroundColor: "white", borderRadius: 16, padding: 32, maxWidth: 400, textAlign: "center" }}>
-        <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#1e293b" }}>Sesión no disponible</div>
-        <div style={{ fontSize: 13, color: "#64748b", marginTop: 8 }}>Verificá el link con tu profe.</div>
+      <div role="alert" style={{ backgroundColor: "white", borderRadius: 16, padding: 32, maxWidth: 400, textAlign: "center" }}>
+        <div aria-hidden="true" style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
+        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#1e293b" }}>{t.sesUnavailable}</h1>
+        <div style={{ fontSize: 13, color: "#64748b", marginTop: 8 }}>{t.jgCheckLink}</div>
       </div>
     </FullPage>
   );
@@ -693,12 +665,12 @@ export default function ArbitroJuegoPage() {
     const g = rec.guardada;
     return (
       <FullPage gradient={colors.gradient}>
-        <div style={cardWhite} role="alertdialog" aria-labelledby="resume-q">
-          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} />
+        <DialogoEnPagina style={cardWhite} onCerrar={continuarPartida} idTitulo="resume-q" idDescripcion="resume-summary">
+          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} titulo={t.gameScreenResume} />
           <div style={{ padding: "28px 24px", textAlign: "center" }}>
             <div style={{ fontSize: 44, marginBottom: 10 }} aria-hidden="true">⏸️</div>
-            <div id="resume-q" style={{ fontSize: 18, fontWeight: 800, color: PALETA.texto, marginBottom: 10, lineHeight: 1.35 }}>{t.resumeQuestion}</div>
-            <div style={{ fontSize: 14, color: PALETA.grisOscuro, marginBottom: 22, lineHeight: 1.5 }} data-testid="resume-summary">
+            <h2 id="resume-q" style={{ margin: "0 0 10px", fontSize: 18, fontWeight: 800, color: PALETA.texto, lineHeight: 1.35 }}>{t.resumeQuestion}</h2>
+            <div id="resume-summary" style={{ fontSize: 14, color: PALETA.grisOscuro, marginBottom: 22, lineHeight: 1.5 }} data-testid="resume-summary">
               {fillArbitro(t.resumeSummary, {
                 team1: g.nombreEquipo1, points1: fmt(g.puntosEquipo1),
                 team2: g.nombreEquipo2, points2: fmt(g.puntosEquipo2),
@@ -713,7 +685,7 @@ export default function ArbitroJuegoPage() {
               </button>
             </div>
           </div>
-        </div>
+        </DialogoEnPagina>
       </FullPage>
     );
   }
@@ -741,10 +713,10 @@ export default function ArbitroJuegoPage() {
     return (
       <FullPage gradient={colors.gradient}>
         <div style={cardWhite}>
-          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} />
+          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} titulo={t.gameScreenSetup} />
           <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 20 }}>
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 24, marginBottom: 4 }}>⚖️ Árbitro de Aprendizaje</div>
+              <div aria-hidden="true" style={{ fontSize: 24, marginBottom: 4 }}>⚖️ {t.sesTitle}</div>
               <div style={{ fontSize: 13, color: "#64748b" }}>{sesion.materia} · {sesion.tema}</div>
             </div>
 
@@ -752,25 +724,25 @@ export default function ArbitroJuegoPage() {
               const colorTarjeta = idx === 0 ? colorEquipo1 : colorEquipo2;
               return (
               <div key={idx} style={{ backgroundColor: `${colorTarjeta}15`, borderRadius: 16, padding: 18, border: `2px solid ${colorTarjeta}` }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: "#1e293b", marginBottom: 14 }}>
-                  Equipo {idx + 1}
-                </div>
+                <h2 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 800, color: "#1e293b" }}>
+                  {fillArbitro(t.jgTeamN, { n: idx + 1 })}
+                </h2>
                 <div style={{ marginBottom: 10 }}>
-                  <label htmlFor={`equipo-${idx + 1}-nombre`} style={lbl}>Nombre del equipo *</label>
+                  <label htmlFor={`equipo-${idx + 1}-nombre`} style={lbl}>{t.jgTeamNameLabel}</label>
                   <input id={`equipo-${idx + 1}-nombre`} type="text" value={idx === 0 ? nombreEquipo1 : nombreEquipo2}
                     onChange={e => idx === 0 ? setNombreEquipo1(e.target.value) : setNombreEquipo2(e.target.value)}
-                    placeholder="Ej: Los Narradores, Equipo A..."
+                    placeholder={t.jgTeamNamePlaceholder}
                     style={inp} />
                 </div>
                 <div style={{ marginBottom: 10 }}>
-                  <label htmlFor={`equipo-${idx + 1}-integrantes`} style={lbl}>Integrantes *</label>
+                  <label htmlFor={`equipo-${idx + 1}-integrantes`} style={lbl}>{t.jgMembersLabel}</label>
                   <input id={`equipo-${idx + 1}-integrantes`} type="text" value={idx === 0 ? integrantesEquipo1 : integrantesEquipo2}
                     onChange={e => idx === 0 ? setIntegrantesEquipo1(e.target.value) : setIntegrantesEquipo2(e.target.value)}
-                    placeholder="Ej: Juan, María, Pedro"
+                    placeholder={t.jgMembersPlaceholder}
                     style={inp} />
                 </div>
-                <div role="group" aria-label={fillArbitro(t.teamColorGroup, { team: (idx === 0 ? nombreEquipo1 : nombreEquipo2).trim() || fillArbitro(t.teamColorNumber, { n: idx + 1 }) })}>
-                  <div style={lbl}>Color del equipo</div>
+                <fieldset style={fieldsetReset}>
+                  <legend style={{ ...legendReset, ...lbl }}>{fillArbitro(t.teamColorGroup, { team: (idx === 0 ? nombreEquipo1 : nombreEquipo2).trim() || fillArbitro(t.teamColorNumber, { n: idx + 1 }) })}</legend>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {EQUIPO_COLORES.map(c => {
                       const elegido = (idx === 0 ? colorEquipo1 : colorEquipo2) === c.hex;
@@ -785,14 +757,14 @@ export default function ArbitroJuegoPage() {
                       );
                     })}
                   </div>
-                </div>
+                </fieldset>
               </div>
               );
             })}
 
-            <div>
-              <div id="vueltas-label" style={lbl}>¿Cuántas preguntas van a jugar en total?</div>
-              <div role="group" aria-labelledby="vueltas-label" style={{ display: "flex", gap: 8 }}>
+            <fieldset style={fieldsetReset}>
+              <legend style={{ ...legendReset, ...lbl }}>{t.jgHowManyQuestions}</legend>
+              <div style={{ display: "flex", gap: 8 }}>
                 {[5, 10, 15, 20, 25].map(v => (
                   <button key={v} onClick={() => setVueltasTotales(v)} aria-pressed={vueltasTotales === v}
                     style={{ flex: 1, minHeight: 44, padding: "10px 0", borderRadius: 10, border: `2px solid ${vueltasTotales === v ? colors.primary : "#e2e8f0"}`, backgroundColor: vueltasTotales === v ? `${colors.primary}15` : "white", fontWeight: 700, fontSize: 13, color: vueltasTotales === v ? colors.primary : PALETA.gris, cursor: "pointer" }}>
@@ -801,14 +773,14 @@ export default function ArbitroJuegoPage() {
                 ))}
               </div>
               <div style={{ fontSize: 12, color: PALETA.gris, marginTop: 4 }}>
-                Cantidad de preguntas en total · Podés agregar más al terminar
+                {t.jgTotalHint}
               </div>
-            </div>
+            </fieldset>
 
             <button onClick={() => setPantalla("turno_pregunta")}
               disabled={!puedeEmpezar}
               style={{ padding: "14px", fontSize: 15, fontWeight: 800, borderRadius: 12, border: "none", background: puedeEmpezar ? colors.gradient : PALETA.gris, color: "white", cursor: puedeEmpezar ? "pointer" : "not-allowed" }}>
-              ⚔️ ¡Empezar el juego!
+              {t.jgStart}
             </button>
           </div>
         </div>
@@ -826,7 +798,7 @@ export default function ArbitroJuegoPage() {
           </div>
           <div style={{ fontSize: 12, color: "#475569", marginBottom: 4 }}>{eq.integrantes}</div>
           <div style={{ fontSize: 28, fontWeight: 900, color: PALETA.texto }}>{fmt(eq.puntos)}</div>
-          <div style={{ fontSize: 12, color: "#475569" }}>puntos</div>
+          <div style={{ fontSize: 12, color: "#475569" }}>{t.pointsUnit}</div>
         </div>
       ))}
     </div>
@@ -835,7 +807,7 @@ export default function ArbitroJuegoPage() {
   // Texto gris oscuro sobre la tarjeta blanca (antes: blanco al 70 % sobre blanco).
   const InfoRonda = () => (
     <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", textAlign: "center", marginBottom: 8 }}>
-      Pregunta {preguntaNumero} de {vueltasTotales}
+      {fillArbitro(t.jgQuestionOf, { n: preguntaNumero, total: vueltasTotales })}
     </div>
   );
 
@@ -882,7 +854,7 @@ export default function ArbitroJuegoPage() {
     return (
       <FullPage gradient={colors.gradient}>
         <div style={cardWhite}>
-          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} />
+          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} titulo={t.gameScreenAsk} />
           <div style={{ padding: "20px 24px" }}>
             <InfoRonda />
             <Tablero />
@@ -890,7 +862,7 @@ export default function ArbitroJuegoPage() {
             {/* Quién pregunta a quién */}
             <div style={{ borderRadius: 16, overflow: "hidden", marginBottom: 16, border: "1.5px solid #e2e8f0" }}>
               <div style={{ backgroundColor: `${equipoPregunta.color}15`, padding: "14px 18px", borderBottom: `2px solid ${equipoPregunta.color}30` }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: PALETA.grisOscuro, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 3 }}>Pregunta</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: PALETA.grisOscuro, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 3 }}>{t.jgAsksLabel}</div>
                 <div style={{ fontSize: 18, fontWeight: 900 }}><TeamName color={equipoPregunta.color}>{equipoPregunta.nombre}</TeamName></div>
                 <div style={{ fontSize: 12, color: PALETA.grisOscuro }}>{equipoPregunta.integrantes}</div>
               </div>
@@ -898,7 +870,7 @@ export default function ArbitroJuegoPage() {
                 <div aria-hidden="true" style={{ fontSize: 16, color: PALETA.gris }}>↓</div>
               </div>
               <div style={{ backgroundColor: `${equipoRespuesta.color}15`, padding: "14px 18px", borderTop: `2px solid ${equipoRespuesta.color}30` }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: PALETA.grisOscuro, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 3 }}>Responde</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: PALETA.grisOscuro, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 3 }}>{t.jgAnswersLabel}</div>
                 <div style={{ fontSize: 18, fontWeight: 900 }}><TeamName color={equipoRespuesta.color}>{equipoRespuesta.nombre}</TeamName></div>
                 <div style={{ fontSize: 12, color: PALETA.grisOscuro }}>{equipoRespuesta.integrantes}</div>
               </div>
@@ -923,8 +895,8 @@ export default function ArbitroJuegoPage() {
                 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: tiempoVencido ? "#b91c1c" : alerta ? PALETA.naranjaOscuro : "#92400e" }}>
                     {limite > 0
-                      ? (tiempoVencido ? `⏰ ${t.timerAnnounceUp}` : alerta ? t.timerLastSeconds : "⏱️ Tiempo restante")
-                      : "⏱️ Tiempo transcurrido"}
+                      ? (tiempoVencido ? `⏰ ${t.timerAnnounceUp}` : alerta ? t.timerLastSeconds : t.jgTimeLeft)
+                      : t.jgTimeElapsed}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <div role="timer" aria-label={t.timerName} style={{
@@ -954,15 +926,16 @@ export default function ArbitroJuegoPage() {
             {/* ── Sin pregunta elegida: lista del banco ── */}
             {!preguntaActual && !escribiendoPropia && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>
-                  📋 {equipoPregunta.nombre} — elegí una pregunta de la lista:
-                </div>
+                <h2 style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "#374151" }}>
+                  {fillArbitro(t.jgPickFromList, { team: equipoPregunta.nombre })}
+                </h2>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 240, overflowY: "auto" }}>
                   {preguntasDisponibles.map((preg, i) => {
                     const usada = preguntasUsadas.has(preg.trim());
                     return (
                       <button
                         key={i}
+                        className="arb-foco"
                         onClick={() => { if (!usada) { setPreguntaActual(preg); iniciarTimer(); } }}
                         disabled={usada}
                         style={{
@@ -993,7 +966,7 @@ export default function ArbitroJuegoPage() {
                   <button
                     onClick={() => { setUsarPreguntaPropia(true); setPreguntaBorrador(""); setErrorPropia(null); }}
                     style={{ marginTop: 10, background: "none", border: "none", color: "#0369a1", fontSize: 12, fontWeight: 600, textDecoration: "underline", cursor: "pointer", padding: 0, minHeight: 44 }}>
-                    ✏️ Escribir mi propia pregunta
+                    {t.jgWriteOwn}
                   </button>
                 )}
               </div>
@@ -1003,7 +976,7 @@ export default function ArbitroJuegoPage() {
             {!preguntaActual && escribiendoPropia && (
               <div style={{ marginBottom: 16 }}>
                 <label htmlFor="pregunta-propia" style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>
-                  ✏️ {equipoPregunta.nombre} — escribí la pregunta que le van a hacer
+                  {fillArbitro(t.jgWriteOwnLabel, { team: equipoPregunta.nombre })}
                 </label>
                 <textarea
                   id="pregunta-propia"
@@ -1012,7 +985,7 @@ export default function ArbitroJuegoPage() {
                   aria-describedby={errorPropia ? "pregunta-propia-error" : undefined}
                   aria-invalid={errorPropia ? true : undefined}
                   rows={3}
-                  placeholder="Escribí la pregunta que le van a hacer..."
+                  placeholder={t.jgWriteOwnPlaceholder}
                   style={{ ...inp, resize: "none", fontFamily: "inherit" }}
                 />
                 {errorPropia && (
@@ -1020,17 +993,19 @@ export default function ArbitroJuegoPage() {
                     🚫 {errorPropia}
                   </div>
                 )}
+                {/* Aviso de espera: región siempre presente para que se anuncie */}
+                <div role="status" style={srOnly}>{validandoPropia ? t.ownQuestionChecking : ""}</div>
                 <button
                   onClick={confirmarPreguntaPropia}
                   disabled={!preguntaBorrador.trim() || validandoPropia}
                   style={{ ...btnPrimario(colors.gradient, !preguntaBorrador.trim() || validandoPropia), marginTop: 10 }}>
-                  {validandoPropia ? `⏳ ${t.ownQuestionChecking}` : "✅ Confirmar pregunta"}
+                  {validandoPropia ? `⏳ ${t.ownQuestionChecking}` : t.jgConfirmQuestion}
                 </button>
                 {preguntasDisponibles.length > 0 && (
                   <button
                     onClick={() => { setUsarPreguntaPropia(false); setPreguntaBorrador(""); setErrorPropia(null); }}
-                    style={{ marginTop: 8, background: "none", border: "none", color: "#64748b", fontSize: 12, textDecoration: "underline", cursor: "pointer", padding: 0 }}>
-                    ← Elegir de la lista
+                    style={{ marginTop: 8, background: "none", border: "none", color: "#64748b", fontSize: 12, textDecoration: "underline", cursor: "pointer", padding: 0, minHeight: 44 }}>
+                    {t.jgPickFromListBack}
                   </button>
                 )}
               </div>
@@ -1040,21 +1015,21 @@ export default function ArbitroJuegoPage() {
             {preguntaActual && (
               <>
                 <div style={{ backgroundColor: "#f0f9ff", borderRadius: 12, padding: "14px 16px", border: "1.5px solid #0ea5e9", marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
-                    📋 Pregunta elegida — leerla en voz alta
-                  </div>
+                  <h2 style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 700, color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    {t.jgChosenTitle}
+                  </h2>
                   <div style={{ fontSize: 14, color: "#0c4a6e", lineHeight: 1.6, fontWeight: 600, marginBottom: 8 }}>
                     {preguntaActual}
                   </div>
                   <button
                     onClick={volverAElegir}
                     style={{ fontSize: 12, color: "#0369a1", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: "0", minHeight: 44 }}>
-                    ← Elegir otra pregunta
+                    {t.jgChooseAnother}
                   </button>
                 </div>
 
                 <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5, marginBottom: 16, textAlign: "center" }}>
-                  <strong>{equipoRespuesta.nombre}</strong> responde en voz alta. Cuando terminen, presioná el botón.
+                  <strong>{equipoRespuesta.nombre}</strong> {t.jgAnswersAloud}
                 </div>
               </>
             )}
@@ -1063,7 +1038,7 @@ export default function ArbitroJuegoPage() {
               onClick={() => { detenerTimer(); setPantalla("calificacion"); }}
               disabled={!preguntaActual.trim()}
               style={btnPrimario(colors.gradient, !preguntaActual.trim())}>
-              ✅ El equipo ya respondió — calificar
+              {t.jgAnswered}
             </button>
 
             {preguntaActual && (
@@ -1075,7 +1050,7 @@ export default function ArbitroJuegoPage() {
                   border: "2px solid #e2e8f0", backgroundColor: "white",
                   color: "#64748b", cursor: "pointer",
                 }}>
-                ⏭️ Pasar esta pregunta (sin puntos)
+                {t.jgPass}
               </button>
             )}
 
@@ -1090,29 +1065,30 @@ export default function ArbitroJuegoPage() {
     return (
       <FullPage gradient={colors.gradient}>
         <div style={cardWhite}>
-          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} />
+          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} titulo={t.gameScreenGrade} />
           <div style={{ padding: "20px 24px" }}>
             <InfoRonda />
             <Tablero />
 
             <div style={{ backgroundColor: "#f8fafc", borderRadius: 12, padding: "14px 16px", border: "1px solid #e2e8f0", marginBottom: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 4, textTransform: "uppercase" }}>Pregunta</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 4, textTransform: "uppercase" }}>{t.jgQuestionLabel}</div>
               <div style={{ fontSize: 13, color: "#1e293b", lineHeight: 1.5 }}>{preguntaActual}</div>
             </div>
             <div style={{ backgroundColor: "#f0fdf4", borderRadius: 12, padding: "14px 16px", border: "1px solid #86efac", marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#166534", marginBottom: 4, textTransform: "uppercase" }}>Respuesta de {equipoRespuesta.nombre}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#166534", marginBottom: 4, textTransform: "uppercase" }}>{fillArbitro(t.jgAnswerOf, { team: equipoRespuesta.nombre })}</div>
               <div style={{ fontSize: 13, color: "#14532d", lineHeight: 1.5 }}>{respuestaActual}</div>
             </div>
 
-            <div style={{ fontSize: 14, fontWeight: 800, color: "#1e293b", marginBottom: 12 }}>
-              {equipoPregunta.nombre} — ¿es completa la respuesta?
-            </div>
+            <fieldset style={{ ...fieldsetReset, marginBottom: 20 }}>
+            <legend style={{ ...legendReset, fontSize: 14, fontWeight: 800, color: "#1e293b", marginBottom: 12 }}>
+              {fillArbitro(t.jgIsComplete, { team: equipoPregunta.nombre })}
+            </legend>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {([
-                { val: "completa" as const, label: "✅ Completa", desc: "1 punto", color: PALETA.verde, bg: "#f0fdf4", border: "#86efac" },
-                { val: "incompleta" as const, label: "⚡ Incompleta", desc: "0.5 puntos", color: PALETA.ambar, bg: "#fffbeb", border: "#fde68a" },
-                { val: "no" as const, label: "❌ Incorrecta", desc: "0 puntos", color: PALETA.rojo, bg: "#fef2f2", border: "#fecaca" },
+                { val: "completa" as const, label: `✅ ${t.gradeCompleta}`, desc: t.pointsText(fmt(1), 1), color: PALETA.verde, bg: "#f0fdf4", border: "#86efac" },
+                { val: "incompleta" as const, label: `⚡ ${t.gradeIncompleta}`, desc: t.pointsText(fmt(0.5), 0.5), color: PALETA.ambar, bg: "#fffbeb", border: "#fde68a" },
+                { val: "no" as const, label: `❌ ${t.gradeIncorrecta}`, desc: t.pointsText(fmt(0), 0), color: PALETA.rojo, bg: "#fef2f2", border: "#fecaca" },
               ]).map(op => (
                 <button key={op.val} onClick={() => setCalificacionActual(op.val)} aria-pressed={calificacionActual === op.val}
                   style={{ padding: "14px 18px", borderRadius: 12, border: `2px solid ${calificacionActual === op.val ? op.color : op.border}`, backgroundColor: calificacionActual === op.val ? op.bg : "white", textAlign: "left" as const, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1121,18 +1097,19 @@ export default function ArbitroJuegoPage() {
                 </button>
               ))}
             </div>
+            </fieldset>
 
             {calificacionActual && calificacionActual !== "completa" && (
               <div style={{ marginBottom: 16 }}>
                 <label htmlFor="justificacion-calificacion" style={{ ...lbl, color: PALETA.ambar }}>
-                  ✏️ {equipoPregunta.nombre} — ¿qué le faltó a la respuesta?
+                  {fillArbitro(t.jgWhatMissing, { team: equipoPregunta.nombre })}
                 </label>
                 <textarea
                   id="justificacion-calificacion"
                   value={justificacionCalificacion}
                   onChange={e => setJustificacionCalificacion(e.target.value)}
                   rows={2}
-                  placeholder="Explicá qué faltó o qué estuvo mal, con el mayor detalle posible..."
+                  placeholder={t.jgWhatMissingPlaceholder}
                   style={{ ...inp, resize: "none", fontFamily: "inherit", borderColor: "#fde68a" }}
                 />
               </div>
@@ -1141,7 +1118,7 @@ export default function ArbitroJuegoPage() {
             <button onClick={() => setPantalla("aceptacion")}
               disabled={!calificacionActual || (calificacionActual !== "completa" && !justificacionCalificacion.trim())}
               style={btnPrimario(colors.gradient, !calificacionActual || (calificacionActual !== "completa" && !justificacionCalificacion.trim()))}>
-              Continuar →
+              {t.jgContinue}
             </button>
           </div>
         </div>
@@ -1152,44 +1129,44 @@ export default function ArbitroJuegoPage() {
   // ── ACEPTACIÓN ────────────────────────────────────────────────────────────
   if (pantalla === "aceptacion") {
     const pts = puntosCalificacion(calificacionActual!);
-    const labelCal = calificacionActual === "completa" ? "completa (1 punto)" : calificacionActual === "incompleta" ? "incompleta (0.5 puntos)" : "incorrecta (0 puntos)";
+    const labelCal = `${etiquetaCalificacion(calificacionActual, t)} (${t.pointsText(fmt(pts), pts)})`;
     return (
       <FullPage gradient={colors.gradient}>
         <div style={cardWhite}>
-          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} />
+          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} titulo={t.gameScreenAccept} />
           <div style={{ padding: "20px 24px" }}>
             <InfoRonda />
             <Tablero />
 
             <div style={{ backgroundColor: "#f8fafc", borderRadius: 14, padding: 18, border: "1px solid #e2e8f0", marginBottom: 20, textAlign: "center" }}>
               <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>
-                {equipoPregunta.nombre} calificó la respuesta como
+                {fillArbitro(t.jgGradedAs, { team: equipoPregunta.nombre })}
               </div>
               <div style={{ fontSize: 18, fontWeight: 900, color: "#1e293b", marginBottom: 4 }}>
                 {labelCal}
               </div>
               <div style={{ fontSize: 13, color: "#64748b" }}>
-                Para el equipo {equipoRespuesta.nombre}
+                {fillArbitro(t.jgForTeam, { team: equipoRespuesta.nombre })}
               </div>
             </div>
 
             {justificacionCalificacion.trim() && (
               <div style={{ backgroundColor: "#fffbeb", borderRadius: 10, padding: "12px 16px", border: "1px solid #fde68a", marginBottom: 16 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 4, textTransform: "uppercase" }}>
-                  {equipoPregunta.nombre} dice que faltó:
+                  {fillArbitro(t.jgSaysMissing, { team: equipoPregunta.nombre })}
                 </div>
                 <div style={{ fontSize: 13, color: "#78350f", lineHeight: 1.5 }}>{justificacionCalificacion}</div>
               </div>
             )}
 
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#1e293b", marginBottom: 14, textAlign: "center" }}>
-              ¿{equipoRespuesta.nombre} acepta esta calificación?
-            </div>
+            <h2 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 800, color: "#1e293b", textAlign: "center" }}>
+              {fillArbitro(t.jgAccepts, { team: equipoRespuesta.nombre })}
+            </h2>
 
             <div style={{ display: "flex", gap: 12 }}>
               <button onClick={() => cerrarRonda(pts, false)}
                 style={{ flex: 1, padding: "14px", borderRadius: 12, border: "none", background: PALETA.verde, color: "white", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-                ✅ Sí, acepta
+                {t.jgYesAccept}
               </button>
               <button onClick={() => {
                 setDisputaPregunta(preguntaActual);
@@ -1197,7 +1174,7 @@ export default function ArbitroJuegoPage() {
                 setPantalla("disputa");
               }}
                 style={{ flex: 1, padding: "14px", borderRadius: 12, border: "none", background: `linear-gradient(135deg, ${PALETA.naranja}, ${PALETA.naranjaOscuro})`, color: "white", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-                ⚖️ Consultar al árbitro
+                {t.jgConsult}
               </button>
             </div>
           </div>
@@ -1216,29 +1193,29 @@ export default function ArbitroJuegoPage() {
     return (
       <FullPage gradient={colors.gradient}>
         <div style={cardWhite}>
-          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} />
+          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} titulo={t.gameScreenDispute} />
           <div style={{ padding: "20px 24px" }}>
             <InfoRonda />
             <Tablero />
 
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#1e293b", marginBottom: 4, textAlign: "center" }}>
-              ⚖️ Consulta al árbitro
-            </div>
+            <h2 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 800, color: "#1e293b", textAlign: "center" }}>
+              {t.jgDisputeTitle}
+            </h2>
             <div style={{ fontSize: 12, color: "#64748b", textAlign: "center", marginBottom: 20 }}>
-              Completá los cuatro campos para que el árbitro pueda dar un veredicto justo.
+              {t.jgDisputeHint}
             </div>
 
             {/* Pregunta */}
             <div style={{ marginBottom: 14 }}>
               <label htmlFor="disputa-pregunta" style={{ ...lbl, color: "#0369a1" }}>
-                📋 ¿Cuál fue la pregunta?
+                {t.jgWhatQuestion}
               </label>
               <textarea
                 id="disputa-pregunta"
                 value={disputaPregunta}
                 onChange={e => setDisputaPregunta(e.target.value)}
                 rows={2}
-                placeholder="Escribí la pregunta que hizo el equipo..."
+                placeholder={t.jgWhatQuestionPlaceholder}
                 style={{ ...inp, resize: "none", fontFamily: "inherit", borderColor: "#bae6fd" }}
               />
             </div>
@@ -1246,14 +1223,14 @@ export default function ArbitroJuegoPage() {
             {/* Respuesta */}
             <div style={{ marginBottom: 14 }}>
               <label htmlFor="disputa-respuesta" style={{ ...lbl, color: "#166534" }}>
-                💬 ¿Qué respondió <TeamName color={equipoRespuesta.color}>{equipoRespuesta.nombre}</TeamName>?
+                {conEquipo(t.jgWhatAnswered, <TeamName color={equipoRespuesta.color}>{equipoRespuesta.nombre}</TeamName>)}
               </label>
               <textarea
                 id="disputa-respuesta"
                 value={disputaRespuesta}
                 onChange={e => setDisputaRespuesta(e.target.value)}
                 rows={2}
-                placeholder="Resumí la respuesta del equipo..."
+                placeholder={t.jgWhatAnsweredPlaceholder}
                 style={{ ...inp, resize: "none", fontFamily: "inherit", borderColor: "#86efac" }}
               />
             </div>
@@ -1261,14 +1238,14 @@ export default function ArbitroJuegoPage() {
             {/* Argumento equipo que calificó */}
             <div style={{ marginBottom: 14 }}>
               <label htmlFor="disputa-arg-pregunta" style={lbl}>
-                🗣️ ¿Por qué <TeamName color={equipoPregunta.color}>{equipoPregunta.nombre}</TeamName> calificó así?
+                {conEquipo(t.jgWhyGraded, <TeamName color={equipoPregunta.color}>{equipoPregunta.nombre}</TeamName>)}
               </label>
               <textarea
                 id="disputa-arg-pregunta"
                 value={disputaArgEquipoPregunta}
                 onChange={e => setDisputaArgEquipoPregunta(e.target.value)}
                 rows={2}
-                placeholder={`¿Por qué ${equipoPregunta.nombre} considera que la respuesta fue ${calificacionActual === "completa" ? "completa" : calificacionActual === "incompleta" ? "incompleta" : "incorrecta"}?`}
+                placeholder={fillArbitro(t.jgWhyGradedPlaceholder, { team: equipoPregunta.nombre, grade: etiquetaCalificacion(calificacionActual, t).toLowerCase() })}
                 style={{ ...inp, resize: "none", fontFamily: "inherit", borderColor: `${equipoPregunta.color}60` }}
               />
             </div>
@@ -1276,14 +1253,14 @@ export default function ArbitroJuegoPage() {
             {/* Argumento equipo que respondió */}
             <div style={{ marginBottom: 20 }}>
               <label htmlFor="disputa-arg-respuesta" style={lbl}>
-                🗣️ ¿Por qué <TeamName color={equipoRespuesta.color}>{equipoRespuesta.nombre}</TeamName> no acepta esa calificación?
+                {conEquipo(t.jgWhyNotAccept, <TeamName color={equipoRespuesta.color}>{equipoRespuesta.nombre}</TeamName>)}
               </label>
               <textarea
                 id="disputa-arg-respuesta"
                 value={disputaArgEquipoRespuesta}
                 onChange={e => setDisputaArgEquipoRespuesta(e.target.value)}
                 rows={2}
-                placeholder={`¿Qué argumenta ${equipoRespuesta.nombre} para sostener que merece más puntos?`}
+                placeholder={fillArbitro(t.jgWhyNotAcceptPlaceholder, { team: equipoRespuesta.nombre })}
                 style={{ ...inp, resize: "none", fontFamily: "inherit", borderColor: `${equipoRespuesta.color}60` }}
               />
             </div>
@@ -1292,13 +1269,13 @@ export default function ArbitroJuegoPage() {
               <button
                 onClick={() => setPantalla("aceptacion")}
                 style={{ flex: 1, padding: "12px", borderRadius: 12, border: "2px solid #e2e8f0", backgroundColor: "white", color: "#64748b", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                ← Volver
+                {t.jgBack}
               </button>
               <button
                 onClick={() => { consultarArbitro(); setPantalla("arbitro"); }}
                 disabled={!puedeConsultar}
                 style={{ flex: 2, ...btnPrimario(colors.gradient, !puedeConsultar) }}>
-                ⚖️ Consultar al árbitro
+                {t.jgConsult}
               </button>
             </div>
           </div>
@@ -1312,14 +1289,14 @@ export default function ArbitroJuegoPage() {
     return (
       <FullPage gradient={colors.gradient}>
         <div style={cardWhite}>
-          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} />
+          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} titulo={t.gameScreenReferee} />
           <div style={{ padding: "20px 24px" }}>
             <InfoRonda />
             <Tablero />
 
             {errorArbitro ? (
-              <div style={{ textAlign: "center", padding: "24px 0" }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+              <div role="alert" style={{ textAlign: "center", padding: "24px 0" }}>
+                <div aria-hidden="true" style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>
                   {errorArbitro}
                 </div>
@@ -1327,12 +1304,12 @@ export default function ArbitroJuegoPage() {
                   <button
                     onClick={() => { setErrorArbitro(null); consultarArbitro(); }}
                     style={{ flex: 1, padding: "12px", borderRadius: 10, border: "none", background: colors.gradient, color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                    🔄 Reintentar
+                    {t.jgRetry}
                   </button>
                   <button
                     onClick={() => { setErrorArbitro(null); setPantalla("disputa"); }}
                     style={{ flex: 1, padding: "12px", borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "white", color: "#64748b", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                    ← Volver
+                    {t.jgBack}
                   </button>
                 </div>
                 <div style={{ fontSize: 12, color: PALETA.gris, marginTop: 16 }}>
@@ -1340,10 +1317,10 @@ export default function ArbitroJuegoPage() {
                 </div>
               </div>
             ) : loadingArbitro ? (
-              <div style={{ textAlign: "center", padding: "32px 0" }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>⚖️</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: "#1e293b" }}>El árbitro está analizando…</div>
-                <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>Un momento</div>
+              <div role="status" aria-live="polite" style={{ textAlign: "center", padding: "32px 0" }}>
+                <div aria-hidden="true" style={{ fontSize: 40, marginBottom: 12 }}>⚖️</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#1e293b" }}>{t.jgAnalyzing}</div>
+                <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>{t.jgOneMoment}</div>
               </div>
             ) : veredictoArbitro && veredictoArbitro.resultado === "fuera_de_tema" ? (
               <div>
@@ -1364,7 +1341,7 @@ export default function ArbitroJuegoPage() {
                 {/* Veredicto */}
                 <div style={{ backgroundColor: "#f0f9ff", borderRadius: 14, padding: "16px 18px", border: "2px solid #0ea5e9", marginBottom: 16 }}>
                   <div style={{ fontSize: 12, fontWeight: 800, color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
-                    ⚖️ Veredicto del árbitro
+                    {t.jgVerdictTitle}
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 4 }}>{veredictoArbitro.veredicto}</div>
                   <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>{veredictoArbitro.explicacion}</div>
@@ -1372,13 +1349,13 @@ export default function ArbitroJuegoPage() {
 
                 {veredictoArbitro.paraSeguirPensando && (
                   <div style={{ backgroundColor: "#fef9c3", borderRadius: 10, padding: "10px 14px", border: "1px solid #fde047", marginBottom: 16, fontSize: 12, color: "#713f12" }}>
-                    <strong>💭 Para seguir pensando:</strong> {veredictoArbitro.paraSeguirPensando}
+                    <strong>{t.jgThink}</strong> {veredictoArbitro.paraSeguirPensando}
                   </div>
                 )}
 
                 {/* Reparto visual del punto */}
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 10 }}>
-                  Así reparte el punto de esta ronda:
+                  {t.jgSplitTitle}
                 </div>
                 <div style={{ display: "flex", borderRadius: 14, overflow: "hidden", marginBottom: 8, border: "2px solid #e2e8f0" }}>
                   <div style={{
@@ -1397,7 +1374,7 @@ export default function ArbitroJuegoPage() {
                   </div>
                 </div>
                 <div style={{ fontSize: 12, color: PALETA.gris, textAlign: "center", marginBottom: 20 }}>
-                  Suma: {fmt(puntosResponde + puntosPregunta)} punto{(puntosResponde + puntosPregunta) !== 1 ? "s" : ""} de 1 en juego
+                  {t.jgSumInPlay(fmt(puntosResponde + puntosPregunta), puntosResponde + puntosPregunta)}
                 </div>
 
                 <button
@@ -1411,7 +1388,7 @@ export default function ArbitroJuegoPage() {
                     cerrarRonda(puntosResponde, true, veredictoArbitro.explicacion, true);
                   }}
                   style={btnPrimario(colors.gradient, false)}>
-                  ✅ Confirmar y continuar
+                  {t.jgConfirmContinue}
                 </button>
               </div>
               );
@@ -1430,30 +1407,30 @@ export default function ArbitroJuegoPage() {
     return (
       <FullPage gradient={colors.gradient}>
         <div style={cardWhite}>
-          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} />
+          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} titulo={t.gameScreenRound} />
           <div style={{ padding: "20px 24px" }}>
             <Tablero />
 
             {ultimoRegistro && (
               <div style={{ backgroundColor: "#f8fafc", borderRadius: 12, padding: "14px 16px", border: "1px solid #e2e8f0", marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 8, textTransform: "uppercase" }}>Última ronda</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 8, textTransform: "uppercase" }}>{t.jgLastRound}</div>
                 {ultimoRegistro.calificacion === "pasada" ? (
                   <>
                     <div style={{ fontSize: 12, color: "#1e293b", marginBottom: 4 }}>
-                      <strong>{ultimoRegistro.equipoResponde}</strong> no respondió esta pregunta.
+                      {conEquipo(t.jgDidNotAnswer, <strong>{ultimoRegistro.equipoResponde}</strong>)}
                     </div>
                     <div style={{ fontSize: 12, color: "#64748b" }}>
-                      ⏭️ Pregunta pasada — sin puntos
+                      {t.jgPassedNoPoints}
                     </div>
                   </>
                 ) : (
                   <>
                     <div style={{ fontSize: 12, color: "#1e293b", marginBottom: 4 }}>
-                      <strong>{ultimoRegistro.equipoResponde}</strong> respondió "{ultimoRegistro.respuesta.substring(0, 80)}{ultimoRegistro.respuesta.length > 80 ? "..." : ""}"
+                      <strong>{ultimoRegistro.equipoResponde}</strong> {t.jgResponded} "{ultimoRegistro.respuesta.substring(0, 80)}{ultimoRegistro.respuesta.length > 80 ? "..." : ""}"
                     </div>
                     <div style={{ fontSize: 12, color: "#64748b" }}>
-                      Calificación: <strong>{ultimoRegistro.calificacion}</strong> · {fmt(ultimoRegistro.puntos)} punto{ultimoRegistro.puntos !== 1 ? "s" : ""}
-                      {ultimoRegistro.fueAlArbitro ? " · ⚖️ Validado por árbitro" : ""}
+                      {t.jgGradeLabel} <strong>{etiquetaCalificacion(ultimoRegistro.calificacion, t)}</strong> · {t.pointsText(fmt(ultimoRegistro.puntos), ultimoRegistro.puntos)}
+                      {ultimoRegistro.fueAlArbitro ? t.jgValidatedByReferee : ""}
                     </div>
                   </>
                 )}
@@ -1464,14 +1441,14 @@ export default function ArbitroJuegoPage() {
               <div>
                 <button onClick={() => setPantalla("fin_juego")}
                   style={btnPrimario(colors.gradient, false)}>
-                  🏆 Ver resultado final
+                  {t.jgSeeFinal}
                 </button>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <button onClick={siguienteRonda}
                   style={btnPrimario(colors.gradient, false)}>
-                  {`▶️ Siguiente — pregunta ${preguntaNumero + 1} de ${vueltasTotales}`}
+                  {fillArbitro(t.jgNext, { n: preguntaNumero + 1, total: vueltasTotales })}
                 </button>
               </div>
             )}
@@ -1487,27 +1464,27 @@ export default function ArbitroJuegoPage() {
     return (
       <FullPage gradient={colors.gradient}>
         <div style={cardWhite}>
-          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} />
+          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} titulo={t.gameScreenEnd} />
           <div style={{ padding: "20px 24px" }}>
             <div style={{ textAlign: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 40, marginBottom: 8 }}>🏆</div>
               {ganador ? (
                 <>
-                  <div style={{ fontSize: 22, fontWeight: 900, display: "flex", justifyContent: "center" }}><TeamName color={ganador.color}>¡Ganó {ganador.nombre}!</TeamName></div>
+                  <div style={{ fontSize: 22, fontWeight: 900, display: "flex", justifyContent: "center" }}><TeamName color={ganador.color}>{fillArbitro(t.jgWon, { team: ganador.nombre })}</TeamName></div>
                   <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>{ganador.integrantes}</div>
                 </>
               ) : (
-                <div style={{ fontSize: 22, fontWeight: 900, color: "#1e293b" }}>¡Empate!</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: "#1e293b" }}>{t.jgTie}</div>
               )}
             </div>
 
             <Tablero />
 
             <div style={{ backgroundColor: "#f8fafc", borderRadius: 12, padding: "14px 16px", border: "1px solid #e2e8f0", marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 8 }}>Resumen de rondas</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 8 }}>{t.jgRoundSummary}</div>
               {registros.map((r, i) => (
                 <div key={i} style={{ fontSize: 12, color: "#1e293b", marginBottom: 4, paddingBottom: 4, borderBottom: "1px solid #f1f5f9" }}>
-                  Ronda {i + 1}: {r.equipoPregunta} → {r.equipoResponde} · {r.calificacion === "fuera_de_tema" ? t.offTopicLabel : r.calificacion} · {fmt(r.puntos)}pts {r.fueAlArbitro ? "⚖️" : ""}
+                  {fillArbitro(t.jgRoundLine, { n: i + 1, from: r.equipoPregunta, to: r.equipoResponde, grade: etiquetaCalificacion(r.calificacion, t), points: `${fmt(r.puntos)} ${t.pointsAbbrev}` })} {r.fueAlArbitro ? "⚖️" : ""}
                 </div>
               ))}
             </div>
@@ -1515,11 +1492,11 @@ export default function ArbitroJuegoPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <button onClick={() => { setVueltasTotales(v => v + 5); setPreguntaNumero(p => p + 1); setEquipoPreguntaIdx(equipoPreguntaIdx === 0 ? 1 : 0); setPantalla("turno_pregunta"); }}
                 style={{ padding: "12px", borderRadius: 10, border: `2px solid ${colors.primary}`, backgroundColor: "white", color: colors.primary, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                ➕ Agregar 5 preguntas más
+                {t.jgAddFive}
               </button>
               <button onClick={() => { setMetaEquipoActual(0); setPantalla("metacognicion"); }}
                 style={btnPrimario(colors.gradient, false)}>
-                ✍️ Completar informe de metacognición
+                {t.jgDoReport}
               </button>
             </div>
           </div>
@@ -1539,10 +1516,10 @@ export default function ArbitroJuegoPage() {
       : [meta1E2, meta2E2, meta3E2, meta4E2];
 
     const preguntas = [
-      { label: `¿Qué aprendieron hoy sobre "${sesion.tema}"?`, required: true },
-      { label: "¿En qué momento dudaron más? ¿Cómo lo resolvieron?", required: false },
-      { label: "Contá una disputa donde intervino el árbitro (IA): ¿cuál era tu postura antes y cuál después? ¿Estuviste de acuerdo con su veredicto, o hubo algo que no pudo evaluar bien?", required: false },
-      { label: "¿Cómo le explicarían a otro compañero lo que aprendieron hoy?", required: false },
+      { label: fillArbitro(t.jgMetaQ1, { tema: sesion.tema }), required: true },
+      { label: t.jgMetaQ2, required: false },
+      { label: t.jgMetaQ3, required: false },
+      { label: t.jgMetaQ4, required: false },
     ];
 
     const handleSiguienteEquipo = async () => {
@@ -1570,7 +1547,7 @@ export default function ArbitroJuegoPage() {
           setMetaEnviada(true);
         } catch (e: any) {
           console.error(e);
-          setMetaError(e?.message || "No se pudo enviar el informe. Revisá tu conexión e intentá de nuevo.");
+          setMetaError(textoErrorArbitro(e, t, t.jgReportSendError));
         } finally {
           setMetaEnviando(false);
         }
@@ -1581,15 +1558,15 @@ export default function ArbitroJuegoPage() {
       return (
         <FullPage gradient={colors.gradient}>
           <div style={cardWhite}>
-            <Header colors={colors} materia={sesion.materia} tema={sesion.tema} />
+            <Header colors={colors} materia={sesion.materia} tema={sesion.tema} titulo={t.gameScreenReflect} />
             <div style={{ padding: "28px 24px", textAlign: "center" }}>
 
               <div style={{ fontSize: 52, marginBottom: 12 }}>✅</div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: "#166534", marginBottom: 8 }}>
-                ¡Informe enviado!
-              </div>
+              <h2 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 900, color: "#166534" }}>
+                {t.jgReportSent}
+              </h2>
               <div style={{ fontSize: 14, color: "#64748b", marginBottom: 24, lineHeight: 1.6 }}>
-                El docente puede ver los resultados<br />y las reflexiones de ambos equipos.
+                {t.jgReportSentDesc1}<br />{t.jgReportSentDesc2}
               </div>
 
               {/* Resultado final */}
@@ -1599,7 +1576,7 @@ export default function ArbitroJuegoPage() {
                     <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", marginBottom: 4, display: "flex", justifyContent: "center" }}><TeamName color={eq.color}>{eq.nombre}</TeamName></div>
                     <div style={{ fontSize: 12, color: PALETA.grisOscuro, marginBottom: 6 }}>{eq.integrantes}</div>
                     <div style={{ fontSize: 30, fontWeight: 900, color: PALETA.texto }}>{fmt(eq.puntos)}</div>
-                    <div style={{ fontSize: 12, color: PALETA.grisOscuro }}>puntos</div>
+                    <div style={{ fontSize: 12, color: PALETA.grisOscuro }}>{t.pointsUnit}</div>
                   </div>
                 ))}
               </div>
@@ -1617,13 +1594,13 @@ export default function ArbitroJuegoPage() {
                       <>
                         <div style={{ fontSize: 20 }}>🏆</div>
                         <div style={{ fontSize: 15, fontWeight: 800, color: "#166534" }}>
-                          ¡Ganó {ganador.nombre}!
+                          {fillArbitro(t.jgWon, { team: ganador.nombre })}
                         </div>
                       </>
                     ) : (
                       <>
                         <div style={{ fontSize: 20 }}>🤝</div>
-                        <div style={{ fontSize: 15, fontWeight: 800, color: "#166534" }}>¡Empate!</div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: "#166534" }}>{t.jgTie}</div>
                       </>
                     )}
                   </div>
@@ -1632,9 +1609,9 @@ export default function ArbitroJuegoPage() {
 
               <div style={{ backgroundColor: "#f8fafc", borderRadius: 10, padding: "12px 16px", border: "1px solid #e2e8f0" }}>
                 <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.6 }}>
-                  📱 Podés cerrar esta pestaña.<br />
+                  {t.jgCloseTab}<br />
                   <span style={{ fontSize: 12, color: PALETA.gris }}>
-                    El docente verá el informe en su panel.
+                    {t.jgTeacherSees}
                   </span>
                 </div>
               </div>
@@ -1642,7 +1619,7 @@ export default function ArbitroJuegoPage() {
               {/* Opciones secundarias de entrega */}
               <div style={{ marginTop: 20 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: PALETA.gris, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
-                  También podés enviárselo al docente manualmente
+                  {t.jgSendManually}
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
@@ -1659,7 +1636,7 @@ export default function ArbitroJuegoPage() {
                       cursor: "pointer",
                       transition: "all 0.2s",
                     }}>
-                    {copiado ? "✅ ¡Copiado!" : "📋 Copiar informe"}
+                    {copiado ? t.jgCopiedShort : t.jgCopyReport}
                   </button>
                   <button
                     onClick={descargarInforme}
@@ -1674,11 +1651,11 @@ export default function ArbitroJuegoPage() {
                       fontSize: 12,
                       cursor: "pointer",
                     }}>
-                    ⬇️ Descargar .txt
+                    {t.jgDownloadTxt}
                   </button>
                 </div>
                 <div style={{ fontSize: 12, color: PALETA.gris, marginTop: 8, lineHeight: 1.5 }}>
-                  Copiá el texto y pegalo como comentario privado en la tarea de Classroom, o descargalo y mandáselo al docente.
+                  {t.jgManualHint}
                 </div>
               </div>
 
@@ -1691,10 +1668,10 @@ export default function ArbitroJuegoPage() {
     return (
       <FullPage gradient={colors.gradient}>
         <div style={cardWhite}>
-          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} />
+          <Header colors={colors} materia={sesion.materia} tema={sesion.tema} titulo={t.gameScreenReflect} />
           <div style={{ padding: "20px 24px" }}>
             <div style={{ backgroundColor: `${eq.color}15`, borderRadius: 12, padding: "12px 16px", border: `2px solid ${eq.color}`, marginBottom: 16, textAlign: "center" }}>
-              <div style={{ fontSize: 15, fontWeight: 800, display: "flex", justifyContent: "center" }}><TeamName color={eq.color}>✍️ Informe de {eq.nombre}</TeamName></div>
+              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, display: "flex", justifyContent: "center" }}><TeamName color={eq.color}>{fillArbitro(t.jgReportOf, { team: eq.nombre })}</TeamName></h2>
               <div style={{ fontSize: 12, color: PALETA.grisOscuro }}>{eq.integrantes}</div>
             </div>
 
@@ -1709,7 +1686,7 @@ export default function ArbitroJuegoPage() {
             ))}
 
             {metaError && (
-              <div style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: "#991b1b" }}>
+              <div role="alert" style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: "#991b1b" }}>
                 ⚠️ {metaError}
               </div>
             )}
@@ -1718,8 +1695,8 @@ export default function ArbitroJuegoPage() {
               disabled={!values[0].trim() || metaEnviando}
               style={btnPrimario(colors.gradient, !values[0].trim() || metaEnviando)}>
               {metaEquipoActual === 0
-                ? `Siguiente — informe de ${nombreEquipo2} →`
-                : metaEnviando ? "📤 Enviando…" : metaError ? "🔁 Reintentar envío" : "📤 Enviar informe al docente"}
+                ? fillArbitro(t.jgNextReport, { team: nombreEquipo2 })
+                : metaEnviando ? t.jgSending : metaError ? t.jgRetrySend : t.jgSendReport}
             </button>
           </div>
         </div>
@@ -1745,19 +1722,24 @@ function TeamName({ color, children }: { color: string; children: React.ReactNod
 
 function FullPage({ children, gradient }: { children: React.ReactNode; gradient?: string }) {
   return (
-    <div style={{ minHeight: "100vh", background: gradient || "linear-gradient(135deg, #1e3a5f 0%, #3730a3 100%)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
+    <main style={{ minHeight: "100vh", background: gradient || "linear-gradient(135deg, #1e3a5f 0%, #3730a3 100%)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
       {children}
-    </div>
+    </main>
   );
 }
 
-function Header({ colors, materia, tema }: { colors: { gradient: string; primary: string }; materia: string; tema: string }) {
+// El <h1> de cada pantalla: el nombre del juego (visible) más el título de la pantalla
+// (solo para lectores de pantalla), así cada pantalla tiene un h1 distinto.
+function Header({ colors, materia, tema, titulo }: { colors: { gradient: string; primary: string }; materia: string; tema: string; titulo: string }) {
+  const t = useArbitroT();
   return (
     <div style={{ background: colors.gradient, padding: "14px 20px", display: "flex", alignItems: "center", gap: 10 }}>
-      <span style={{ fontSize: 22 }}>⚔️</span>
+      <span aria-hidden="true" style={{ fontSize: 22 }}>⚔️</span>
       <div style={{ color: "white" }}>
-        <div style={{ fontSize: 14, fontWeight: 800 }}>⚖️ Árbitro de Aprendizaje</div>
-        <div style={{ fontSize: 12, opacity: 0.95 }}>{materia} · {tema}</div>
+        <h1 style={{ margin: 0, fontSize: 14, fontWeight: 800 }}>
+          <span aria-hidden="true">⚖️ </span>{t.sesTitle}<span style={srOnly}>: {titulo}</span>
+        </h1>
+        <div style={{ fontSize: 12 }}>{materia} · {tema}</div>
       </div>
     </div>
   );

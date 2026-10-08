@@ -167,4 +167,4 @@ export const PWAInstallBanner = () => {
       </div>
     </div>
   );
-};
+};

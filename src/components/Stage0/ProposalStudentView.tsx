@@ -679,4 +679,4 @@ export function ProposalStudentView({ gameId, teamId, teamName, teamEmoji }: Pro
       </div>
     </div>
   );
-}
+}

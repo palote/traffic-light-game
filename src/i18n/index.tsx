@@ -6,7 +6,8 @@ import { es } from './es';
 import { en } from './en';
 import { pt } from './pt';
 import type { TranslationKeys } from './es';
-import { esRutaArbitro } from '../utils/arbitroRoutes';
+import { esRutaArbitro, esRutaAlumnoArbitro } from '../utils/arbitroRoutes';
+import { normalizarIdiomaSesion, localeDeIdioma, type IdiomaSesion } from '../utils/idiomaSesion';
 import { formatearPuntos, type IdiomaPuntos } from '../utils/formatoPuntos';
 import { almacenLocal } from "../utils/almacenSeguro";
 
@@ -20,6 +21,10 @@ interface I18nContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   t: TranslationKeys;
+  // Idioma de la sesión del árbitro que está abierta en las pantallas de los
+  // alumnos (null = ninguna cargada todavía). Ver useIdiomaSesion.
+  sessionLanguage: IdiomaSesion | null;
+  setSessionLanguage: (lang: IdiomaSesion | null) => void;
 }
 
 // ============================================
@@ -68,8 +73,18 @@ const I18nContext = createContext<I18nContextType | null>(null);
 // HELPER: valor de <html lang> según la ruta
 // ============================================
 
-export function htmlLangForPath(pathname: string, language: Language): Language {
-  return esRutaArbitro(pathname) ? 'es' : language;
+// En las rutas de los alumnos (/sesion/*, /arbitro-juego/*) manda el idioma de la sesión
+// (español mientras no se cargó). En el resto de /arbitro* (configuración, panel, info,
+// landing) manda el idioma de la interfaz; el portugués, que no tiene textos del árbitro,
+// cae en español. Fuera del árbitro, el idioma elegido.
+export function htmlLangForPath(
+  pathname: string,
+  language: Language,
+  sessionLanguage: IdiomaSesion | null = null,
+): Language {
+  if (!esRutaArbitro(pathname)) return language;
+  if (esRutaAlumnoArbitro(pathname)) return sessionLanguage ?? 'es';
+  return language === 'en' ? 'en' : 'es';
 }
 
 // ============================================
@@ -92,17 +107,24 @@ export function I18nProvider({ children, defaultLanguage }: I18nProviderProps) {
     almacenLocal.setItem('tlg_language', lang);
   };
 
-  // En las rutas del árbitro (/arbitro*, /sesion/*) el idioma del documento es
-  // siempre "es", sin importar el del navegador. Al navegar dentro de la app lo
-  // actualiza ArbitroLangManager (App.tsx), que usa el mismo helper.
+  // Idioma de la sesión abierta en las pantallas de los alumnos (no se guarda: sale
+  // de la sesión cada vez que se carga).
+  const [sessionLanguage, setSessionLanguage] = useState<IdiomaSesion | null>(null);
+
+  // En las rutas del árbitro (/arbitro*, /sesion/*) el idioma del documento no sale
+  // del navegador: es "es", o el de la sesión en las pantallas de los alumnos. Al
+  // navegar dentro de la app lo actualiza ArbitroLangManager (App.tsx), que usa el
+  // mismo helper.
   useEffect(() => {
-    document.documentElement.lang = htmlLangForPath(window.location.pathname, language);
-  }, [language]);
+    document.documentElement.lang = htmlLangForPath(window.location.pathname, language, sessionLanguage);
+  }, [language, sessionLanguage]);
 
   const value: I18nContextType = {
     language,
     setLanguage,
     t: translations[language],
+    sessionLanguage,
+    setSessionLanguage,
   };
 
   return (
@@ -124,20 +146,56 @@ export function useI18n() {
   return context;
 }
 
-// Textos del árbitro (sección `arbitro`). En /arbitro* y /sesion/* las páginas
-// están en español, así que siempre devuelve la sección en español; fuera de
-// esas rutas (p. ej. Learning Referee) sigue el idioma elegido.
+// Textos del árbitro (sección `arbitro`). En las pantallas de los alumnos siguen el idioma
+// de la sesión; en el resto (docente) siguen el de la interfaz. El portugués no tiene
+// sección `arbitro`: usa la española.
 export function useArbitroT(): TranslationKeys['arbitro'] {
-  const { t } = useI18n();
-  return esRutaArbitro(window.location.pathname) ? es.arbitro : t.arbitro;
+  const { language, sessionLanguage } = useI18n();
+  const idioma = htmlLangForPath(window.location.pathname, language, sessionLanguage);
+  return idioma === 'en' ? en.arbitro : es.arbitro;
+}
+
+// Título de la pestaña (<title>) de la pantalla; al salir se restaura el anterior.
+export function useTituloPagina(titulo: string): void {
+  useEffect(() => {
+    const anterior = document.title;
+    document.title = titulo;
+    return () => { document.title = anterior; };
+  }, [titulo]);
+}
+
+// Las pantallas de los alumnos llaman a esto con el `idioma` que devuelve
+// getSesionArbitro. Mientras la sesión no cargó (idioma undefined) queda en español;
+// al salir de la pantalla se libera. Una sesión vieja, sin idioma, cuenta como 'es'.
+export function useIdiomaSesion(idioma: string | null | undefined, sesionCargada: boolean): void {
+  const { setSessionLanguage } = useI18n();
+  useEffect(() => {
+    if (!sesionCargada) return;
+    setSessionLanguage(normalizarIdiomaSesion(idioma));
+    return () => setSessionLanguage(null);
+  }, [idioma, sesionCargada, setSessionLanguage]);
 }
 
 // Formatea un puntaje para mostrarlo: hasta 2 decimales y coma/punto según el idioma
-// ("0,25" en español, "0.25" en inglés). En /arbitro* y /sesion/* siempre en español.
+// ("0,25" en español, "0.25" en inglés). En /arbitro* y /sesion/* sigue la misma regla
+// que el <html lang> (htmlLangForPath).
 export function useFormatoPuntos(): (valor: number) => string {
-  const { language } = useI18n();
-  const idioma = (esRutaArbitro(window.location.pathname) ? 'es' : language) as IdiomaPuntos;
+  const { language, sessionLanguage } = useI18n();
+  const idioma = htmlLangForPath(window.location.pathname, language, sessionLanguage) as IdiomaPuntos;
   return (valor: number) => formatearPuntos(valor, idioma);
+}
+
+// Configuración regional para fechas y números del árbitro ('es-AR' o 'en-US'): la misma
+// regla que el <html lang> (htmlLangForPath).
+export function useLocaleArbitro(): 'es-AR' | 'en-US' {
+  const { language, sessionLanguage } = useI18n();
+  return localeDeIdioma(htmlLangForPath(window.location.pathname, language, sessionLanguage));
+}
+
+// Diccionario del árbitro de un idioma dado (para los documentos exportados, que siguen el idioma de la SESIÓN
+// aunque la pantalla que los arma siga el de la interfaz).
+export function arbitroDic(idioma: string | null | undefined): TranslationKeys['arbitro'] {
+  return normalizarIdiomaSesion(idioma) === 'en' ? en.arbitro : es.arbitro;
 }
 
 // Reemplaza {nombre} en un texto con los valores indicados.
@@ -247,4 +305,4 @@ export function LanguageSelector({ compact = false }: { compact?: boolean }) {
 }
 
 // Re-export types
-export type { TranslationKeys };
+export type { TranslationKeys };

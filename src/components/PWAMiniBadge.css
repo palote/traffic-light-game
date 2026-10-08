@@ -1,25 +1,27 @@
 /* src/components/PWAMiniBadge.css */
-/* Versión minimalista y sutil */
+/* Versión minimalista y sutil.
+   Accesibilidad: fondo sólido con texto blanco >= 4,5:1 (#4f46e5 = 6,29:1),
+   sin texto con opacidad, botón de cerrar de 28x28 px y siempre abajo (a la derecha
+   desde 641 px, a lo ancho en teléfonos) para no tapar la cabecera de ninguna página. */
 
 .pwa-mini-badge {
   position: fixed;
   top: 16px;
   right: 16px;
-  background: rgba(100, 108, 255, 0.95);
-  backdrop-filter: blur(10px);
+  max-width: calc(100vw - 24px);
+  background: #4f46e5;
   color: white;
-  padding: 8px 16px;
+  padding: 0 4px 0 0;
   border-radius: 20px;
   font-size: 13px;
   font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 8px;
-  box-shadow: 0 2px 12px rgba(100, 108, 255, 0.3);
+  gap: 0;
+  box-shadow: 0 2px 12px rgba(79, 70, 229, 0.35);
   z-index: 9998;
   animation: slideInDown 0.3s ease-out;
-  cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s, box-shadow 0.2s;
 }
 
 @keyframes slideInDown {
@@ -33,10 +35,42 @@
   }
 }
 
+@keyframes slideInUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pwa-mini-badge {
+    animation: none;
+  }
+}
+
 .pwa-mini-badge:hover {
-  background: rgba(83, 91, 242, 0.95);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(100, 108, 255, 0.4);
+  background: #4338ca;
+  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.45);
+}
+
+/* Botón principal: ocupa todo el cuerpo del aviso, sin aspecto de botón */
+.mini-badge-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 6px 4px 16px;
+  background: none;
+  border: none;
+  border-radius: 20px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
 }
 
 .mini-badge-icon {
@@ -49,35 +83,57 @@
 }
 
 .mini-badge-platform {
-  opacity: 0.8;
   font-size: 12px;
   font-weight: 400;
 }
 
+/* Cerrar: 28x28 px (mínimo 24x24 de WCAG 2.5.8) */
 .mini-badge-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin-left: 2px;
   background: none;
   border: none;
+  border-radius: 50%;
   color: white;
   font-size: 16px;
-  cursor: pointer;
-  padding: 0 0 0 8px;
-  margin-left: 4px;
   line-height: 1;
-  opacity: 0.7;
-  transition: opacity 0.2s;
+  cursor: pointer;
 }
 
 .mini-badge-close:hover {
-  opacity: 1;
+  background: rgba(0, 0, 0, 0.25);
 }
 
-/* Mobile */
+.mini-badge-main:focus-visible,
+.mini-badge-close:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: -3px;
+  box-shadow: 0 0 0 2px #1e1b4b;
+}
+
+/* Mobile: abajo, a lo ancho. Arriba taparía el título y los botones de la
+   cabecera de las páginas, que es donde están los controles principales. */
 @media (max-width: 640px) {
   .pwa-mini-badge {
-    top: 12px;
+    top: auto;
+    bottom: 12px;
+    left: 12px;
     right: 12px;
+    max-width: none;
+    justify-content: space-between;
     font-size: 12px;
-    padding: 6px 12px;
+    animation-name: slideInUp;
+  }
+
+  .mini-badge-main {
+    flex: 1;
+    padding-left: 12px;
   }
 
   .mini-badge-icon {
@@ -86,6 +142,16 @@
 
   .mini-badge-platform {
     display: none; /* Ocultar en móvil por espacio */
+  }
+}
+
+/* Tablet y escritorio: abajo a la derecha, para no tapar la cabecera
+   (el panel del docente tiene sus botones arriba a la derecha) */
+@media (min-width: 641px) {
+  .pwa-mini-badge {
+    top: auto;
+    bottom: 16px;
+    animation-name: slideInUp;
   }
 }
 

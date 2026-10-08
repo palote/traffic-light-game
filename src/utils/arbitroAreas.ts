@@ -8,6 +8,7 @@ import { AREA_COLORS, DEFAULT_AREA_COLORS, type AreaColors } from "./arbitroPale
 
 export type AreaKey = "exactas" | "sociales" | "lenguajes" | "arte";
 
+// i18n-clave: etiquetas internas en español (las pantallas usan ta.areaNames)
 export const AREA_LABELS_ES: Record<AreaKey, string> = {
   exactas: "Ciencias Exactas y Naturales",
   sociales: "Ciencias Sociales y Humanidades",
@@ -15,6 +16,7 @@ export const AREA_LABELS_ES: Record<AreaKey, string> = {
   arte: "Arte y Expresión",
 };
 
+// i18n-clave: nombres con los que se reconoce el área (no se muestran)
 const AREA_KEY_POR_NOMBRE: Record<string, AreaKey> = {
   exactas: "exactas",
   sociales: "sociales",

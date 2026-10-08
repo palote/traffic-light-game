@@ -924,4 +924,4 @@ export function deletePreset(id: string): boolean {
   } catch {
     return false;
   }
-}
+}

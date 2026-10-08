@@ -1,0 +1,582 @@
+{
+  "filas": [
+    {
+      "id": "c01-completa-nilo",
+      "idioma": "en",
+      "corrida": 1,
+      "esperada": "completa",
+      "obtenida": "completa",
+      "coincide": true,
+      "reparto": "0/1",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c01-completa-nilo",
+      "idioma": "es",
+      "corrida": 1,
+      "esperada": "completa",
+      "obtenida": "completa",
+      "coincide": true,
+      "reparto": "0/1",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c02-completa-fotosintesis",
+      "idioma": "en",
+      "corrida": 1,
+      "esperada": "completa",
+      "obtenida": "completa",
+      "coincide": true,
+      "reparto": "0/1",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c02-completa-fotosintesis",
+      "idioma": "es",
+      "corrida": 1,
+      "esperada": "completa",
+      "obtenida": "completa",
+      "coincide": true,
+      "reparto": "0/1",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c03-completa-fracciones",
+      "idioma": "en",
+      "corrida": 1,
+      "esperada": "completa",
+      "obtenida": "completa",
+      "coincide": true,
+      "reparto": "0/1",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c03-completa-fracciones",
+      "idioma": "es",
+      "corrida": 1,
+      "esperada": "completa",
+      "obtenida": "completa",
+      "coincide": true,
+      "reparto": "0/1",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c04-completa-error-hemisferios",
+      "idioma": "en",
+      "corrida": 1,
+      "esperada": "completa",
+      "obtenida": "completa",
+      "coincide": true,
+      "reparto": "0/1",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c04-completa-error-hemisferios",
+      "idioma": "es",
+      "corrida": 1,
+      "esperada": "completa",
+      "obtenida": "completa",
+      "coincide": true,
+      "reparto": "0/1",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c05-incompleta-revolucion",
+      "idioma": "en",
+      "corrida": 1,
+      "esperada": "incompleta",
+      "obtenida": "incompleta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c05-incompleta-revolucion",
+      "idioma": "es",
+      "corrida": 1,
+      "esperada": "incompleta",
+      "obtenida": "incompleta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c06-incompleta-mitosis",
+      "idioma": "en",
+      "corrida": 1,
+      "esperada": "incompleta",
+      "obtenida": "incompleta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c06-incompleta-mitosis",
+      "idioma": "es",
+      "corrida": 1,
+      "esperada": "incompleta",
+      "obtenida": "incompleta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c07-incompleta-narrador",
+      "idioma": "en",
+      "corrida": 1,
+      "esperada": "incompleta",
+      "obtenida": "incompleta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c07-incompleta-narrador",
+      "idioma": "es",
+      "corrida": 1,
+      "esperada": "incompleta",
+      "obtenida": "incompleta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c08-incompleta-estados",
+      "idioma": "en",
+      "corrida": 1,
+      "esperada": "incompleta",
+      "obtenida": "incompleta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c08-incompleta-estados",
+      "idioma": "es",
+      "corrida": 1,
+      "esperada": "incompleta",
+      "obtenida": "incompleta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c09-incorrecta-piramide",
+      "idioma": "en",
+      "corrida": 1,
+      "esperada": "incorrecta",
+      "obtenida": "incorrecta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c09-incorrecta-piramide",
+      "idioma": "es",
+      "corrida": 1,
+      "esperada": "incorrecta",
+      "obtenida": "incorrecta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c10-incorrecta-organela",
+      "idioma": "en",
+      "corrida": 1,
+      "esperada": "incorrecta",
+      "obtenida": "incorrecta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c10-incorrecta-organela",
+      "idioma": "es",
+      "corrida": 1,
+      "esperada": "incorrecta",
+      "obtenida": "incorrecta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c11-incorrecta-suma-fracciones",
+      "idioma": "en",
+      "corrida": 1,
+      "esperada": "incorrecta",
+      "obtenida": "incorrecta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c11-incorrecta-suma-fracciones",
+      "idioma": "es",
+      "corrida": 1,
+      "esperada": "incorrecta",
+      "obtenida": "incorrecta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c12-incorrecta-estaciones",
+      "idioma": "en",
+      "corrida": 1,
+      "esperada": "incorrecta",
+      "obtenida": "incorrecta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c12-incorrecta-estaciones",
+      "idioma": "es",
+      "corrida": 1,
+      "esperada": "incorrecta",
+      "obtenida": "incorrecta",
+      "coincide": true,
+      "reparto": "1/0",
+      "idiomaSalida": "ok",
+      "error": ""
+    }
+  ],
+  "salidas": [
+    {
+      "id": "c01-completa-nilo",
+      "idioma": "en",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "The answer needed to explain the importance of the flooding for agriculture, specifically mentioning the fertile silt and the organization of the farming cycle.",
+        "calificacionRecomendada": "completa",
+        "evaluacion": "The answer correctly identifies the two main reasons for the importance of the flooding mentioned in the text: the deposit of fertile silt and the organization of the agricultural calendar.",
+        "explicacion": "The Nile flooding was like a gift for the Egyptians because it brought new, rich soil called silt to the fields. By following the timing of the flood, farmers knew exactly when to plant and harvest their crops to get the best results.",
+        "paraSeguirPensando": "If the Nile did not flood every year, how do you think the Egyptians would have had to change the way they grew their food?"
+      }
+    },
+    {
+      "id": "c01-completa-nilo",
+      "idioma": "es",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "La pregunta pide explicar la importancia de la crecida para la agricultura. Los elementos clave son: 1) el aporte de limo fértil y 2) la organización del ciclo agrícola (siembra/cosecha). La mención de los canales es una acción técnica posterior para aprovechar el agua, pero no es la causa directa de la importancia de la crecida para la fertilidad del suelo.",
+        "calificacionRecomendada": "completa",
+        "evaluacion": "La respuesta identifica correctamente los dos motivos principales por los cuales la crecida era vital para la agricultura, tal como se describe en el texto base.",
+        "explicacion": "La crecida del Nilo era como un regalo de la naturaleza porque traía un barro especial llamado limo que alimentaba la tierra. Gracias a esto, los egipcios sabían exactamente cuándo debían sembrar y cuándo cosechar para tener comida todo el año.",
+        "paraSeguirPensando": "¿Qué hubiera pasado con la vida en Egipto si el río Nilo no se hubiera desbordado nunca?"
+      }
+    },
+    {
+      "id": "c02-completa-fotosintesis",
+      "idioma": "en",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "The two raw materials (ingredients) used by plants for photosynthesis: water and carbon dioxide.",
+        "calificacionRecomendada": "completa",
+        "evaluacion": "The answer correctly identifies the two raw materials required for photosynthesis as requested by the question.",
+        "explicacion": "Plants use water from the soil and carbon dioxide from the air as the building blocks to make their food. While sunlight is very important, it acts as the energy 'engine' to make the process happen, rather than being a raw material itself.",
+        "paraSeguirPensando": "If plants need these materials to make food, what do you think would happen to a plant if we kept it in a room with no air or no water?"
+      }
+    },
+    {
+      "id": "c02-completa-fotosintesis",
+      "idioma": "es",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "La pregunta pide identificar las dos materias primas (insumos químicos) de la fotosíntesis. El equipo mencionó correctamente el agua y el dióxido de carbono.",
+        "calificacionRecomendada": "completa",
+        "evaluacion": "La respuesta es correcta porque identifica los dos componentes químicos que la planta utiliza como materia prima para fabricar su alimento.",
+        "explicacion": "Las materias primas son los ingredientes que la planta combina para fabricar su comida, como el agua que absorbe por las raíces y el dióxido de carbono que toma del aire. La luz solar es fundamental, pero funciona como la energía necesaria para que esa mezcla ocurra, no como un ingrediente material.",
+        "paraSeguirPensando": "¿Qué pasaría con la fabricación de alimento si la planta tuviera agua y dióxido de carbono, pero estuviera en total oscuridad?"
+      }
+    },
+    {
+      "id": "c03-completa-fracciones",
+      "idioma": "en",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "The calculation of the sum (7/8) and the verification that the fraction is in its simplest form.",
+        "calificacionRecomendada": "completa",
+        "evaluacion": "The answer correctly performs the addition by finding a common denominator and accurately identifies that the resulting fraction cannot be simplified further.",
+        "explicacion": "To add fractions with different denominators, we must first convert them to have a common denominator, in this case, 8. Since 7 and 8 have no common factors other than 1, the fraction 7/8 is already in its simplest form.",
+        "paraSeguirPensando": "If we had a fraction like 6/8, what steps would we take to find its simplest form, and why does that process not work for 7/8?"
+      }
+    },
+    {
+      "id": "c03-completa-fracciones",
+      "idioma": "es",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "La respuesta debía realizar la suma de fracciones (buscando denominador común) y verificar si el resultado (7/8) admite simplificación. El equipo realizó correctamente la suma y determinó que 7/8 es una fracción irreducible.",
+        "calificacionRecomendada": "completa",
+        "evaluacion": "La respuesta es correcta, ya que realiza el cálculo de forma precisa y justifica adecuadamente por qué el resultado no puede simplificarse más.",
+        "explicacion": "Para sumar fracciones con distinto denominador, es necesario encontrar un denominador común, en este caso 8, convirtiendo 3/4 en 6/8. Una vez obtenida la suma 7/8, se analiza si el numerador y el denominador comparten divisores comunes distintos de 1; como 7 es un número primo y no divide a 8, la fracción es irreducible.",
+        "paraSeguirPensando": "¿Qué sucede con el resultado si sumamos 3/4 + 1/4? ¿Por qué en ese caso sí podemos simplificar y en 7/8 no?"
+      }
+    },
+    {
+      "id": "c04-completa-error-hemisferios",
+      "idioma": "en",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "Identify that the equator divides the Earth into Northern and Southern hemispheres, not Eastern and Western.",
+        "calificacionRecomendada": "completa",
+        "evaluacion": "The answer correctly identifies the error and provides the accurate geographical division, which is exactly what the question asked for.",
+        "explicacion": "The equator is an imaginary line that goes around the middle of the Earth, splitting it into the North and South halves. The line that splits the Earth into East and West is called the prime meridian. You do not need to mention degrees of latitude to correctly identify which hemispheres the equator creates.",
+        "paraSeguirPensando": "If you were standing exactly on the equator, how would you describe your position in relation to the Northern and Southern hemispheres?"
+      }
+    },
+    {
+      "id": "c04-completa-error-hemisferios",
+      "idioma": "es",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "Identificar que el ecuador divide a la Tierra en hemisferios Norte y Sur, y no en Oriental y Occidental.",
+        "calificacionRecomendada": "completa",
+        "evaluacion": "La respuesta identifica correctamente el error y explica la división correcta de los hemisferios, cumpliendo con lo solicitado por la pregunta.",
+        "explicacion": "El ecuador es una línea imaginaria que divide al planeta en dos mitades: el hemisferio Norte y el hemisferio Sur. Por otro lado, la línea que divide a la Tierra en hemisferios Oriental y Occidental es el meridiano de Greenwich. No era necesario mencionar los grados de latitud porque la pregunta solo pedía identificar el error en la definición de los hemisferios.",
+        "paraSeguirPensando": "¿Por qué creen que es importante tener líneas imaginarias como el ecuador y el meridiano de Greenwich para ubicarnos en el mapa?"
+      }
+    },
+    {
+      "id": "c05-incompleta-revolucion",
+      "idioma": "en",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "The question explicitly requested two causes. The team provided only one: the financial crisis of the monarchy.",
+        "calificacionRecomendada": "incompleta",
+        "evaluacion": "The answer correctly identifies the financial crisis as a cause, but it fails to meet the requirement of naming two distinct causes as requested by the question.",
+        "explicacion": "The French Revolution was a complex event triggered by multiple factors working together. While the monarchy's debt was a critical issue, other important causes included social inequality between the three estates and the influence of Enlightenment ideas that challenged the absolute power of the King.",
+        "paraSeguirPensando": "If the monarchy had managed its money perfectly, do you think the French Revolution would have still happened, or were there other problems that would have caused it anyway?"
+      }
+    },
+    {
+      "id": "c05-incompleta-revolucion",
+      "idioma": "es",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "La pregunta solicitaba explícitamente dos causas. El equipo solo mencionó una: la crisis financiera de la monarquía.",
+        "calificacionRecomendada": "incompleta",
+        "evaluacion": "La respuesta es correcta en lo que menciona, pero no cumple con la consigna de nombrar dos causas, ya que solo aportó una.",
+        "explicacion": "La Revolución Francesa fue un proceso complejo provocado por múltiples factores que se combinaron. Además de la grave crisis económica y las deudas del Estado, existieron otras causas fundamentales, como las desigualdades sociales del sistema estamental y la influencia de las nuevas ideas de la Ilustración que cuestionaban el poder absoluto del Rey.",
+        "paraSeguirPensando": "¿De qué manera la crisis económica y las nuevas ideas de la Ilustración pudieron trabajar juntas para que el pueblo decidiera cambiar el sistema de gobierno?"
+      }
+    },
+    {
+      "id": "c06-incompleta-mitosis",
+      "idioma": "en",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "The answer must explain the difference between mitosis and meiosis. This requires mentioning the purpose or outcome of both processes: mitosis (identical cells for growth/repair) and meiosis (different cells for reproduction).",
+        "calificacionRecomendada": "incompleta",
+        "evaluacion": "The answer correctly describes the function and outcome of mitosis, but it completely omits any information regarding meiosis.",
+        "explicacion": "Mitosis is like a copy machine that makes two identical cells to help your body grow or fix a scrape. Meiosis is different because it creates special cells for reproduction that are not identical to the original cell.",
+        "paraSeguirPensando": "If all cells in our body were made by meiosis instead of mitosis, what do you think would happen to our ability to grow and heal?"
+      }
+    },
+    {
+      "id": "c06-incompleta-mitosis",
+      "idioma": "es",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "La pregunta pide explicar la diferencia entre mitosis y meiosis; por lo tanto, los elementos clave son: 1) describir el resultado de la mitosis (dos células idénticas), 2) describir el resultado de la meiosis (cuatro células con la mitad de información genética) y 3) mencionar la función de cada una.",
+        "calificacionRecomendada": "incompleta",
+        "evaluacion": "La respuesta es correcta en lo que dice sobre la mitosis, pero está incompleta porque no menciona la meiosis, que era la otra parte fundamental de la pregunta.",
+        "explicacion": "La mitosis es como una fotocopiadora que hace células iguales para que nuestro cuerpo crezca o sane heridas. La meiosis, en cambio, es un proceso especial que crea células para la reproducción, las cuales tienen solo la mitad de la información genética.",
+        "paraSeguirPensando": "¿Por qué creen que es importante que las células de la reproducción tengan la mitad de la información genética en lugar de ser iguales a las demás?"
+      }
+    },
+    {
+      "id": "c07-incompleta-narrador",
+      "idioma": "en",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "Identify the narrator type as first-person and explain the effect on the reader, such as creating intimacy or limiting the information to one character's perspective.",
+        "calificacionRecomendada": "incompleta",
+        "evaluacion": "The team correctly identified the first-person narrator using the pronouns 'I' and 'my' from the text, but they failed to address the second part of the question regarding the effect on the reader.",
+        "explicacion": "A narrator is the voice that tells the story. When a story uses 'I', it is a first-person narrator, which makes the reader feel closer to the character's personal thoughts and feelings.",
+        "paraSeguirPensando": "If the story were told by someone watching from outside instead of the person living it, how would that change what we know about the house?"
+      }
+    },
+    {
+      "id": "c07-incompleta-narrador",
+      "idioma": "es",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "La pregunta pide dos cosas: identificar el tipo de narrador y explicar el efecto en el lector. El equipo solo identificó el tipo de narrador (primera persona).",
+        "calificacionRecomendada": "incompleta",
+        "evaluacion": "La respuesta identifica correctamente al narrador en primera persona basándose en el uso de 'Volví' y 'yo', pero omite por completo explicar el efecto que esto produce en el lector.",
+        "explicacion": "El narrador en primera persona es aquel que cuenta la historia desde su propia experiencia, usando el 'yo'. Al usar este tipo de narrador, el lector siente que está más cerca de los sentimientos y pensamientos del personaje, como si estuviera escuchando una confesión personal.",
+        "paraSeguirPensando": "¿Cómo cambiaría lo que sentimos al leer si el narrador fuera alguien que mira todo desde afuera y no participa en la historia?"
+      }
+    },
+    {
+      "id": "c08-incompleta-estados",
+      "idioma": "en",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "The three states of matter (solid, liquid, gas) and one example for each.",
+        "calificacionRecomendada": "incompleta",
+        "evaluacion": "The answer correctly identifies two states of matter with their examples, but it fails to mention the third state as requested by the question.",
+        "explicacion": "Matter exists in three main forms: solids, liquids, and gases. A solid keeps its shape, a liquid takes the shape of its container, and a gas spreads out to fill all available space.",
+        "paraSeguirPensando": "If you have a puddle of water on the ground and it disappears on a sunny day, where did that liquid go and what state of matter is it in now?"
+      }
+    },
+    {
+      "id": "c08-incompleta-estados",
+      "idioma": "es",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "La pregunta pide tres estados de la materia y un ejemplo de cada uno. El equipo solo mencionó dos estados (sólido y líquido) con sus ejemplos, omitiendo el tercero (gaseoso) y su respectivo ejemplo.",
+        "calificacionRecomendada": "incompleta",
+        "evaluacion": "La respuesta es correcta en los dos estados que mencionó, pero está incompleta porque faltó nombrar el tercer estado de la materia y su ejemplo.",
+        "explicacion": "La materia se presenta principalmente en tres estados: sólido, líquido y gaseoso. Cada uno tiene características distintas, como la forma en que se mueven sus partículas, y es necesario conocer los tres para entender cómo se comporta todo lo que nos rodea.",
+        "paraSeguirPensando": "¿Qué le pasa al hielo si lo dejamos afuera de la heladera y qué estado nuevo aparece cuando el agua se calienta mucho?"
+      }
+    },
+    {
+      "id": "c09-incorrecta-piramide",
+      "idioma": "en",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "The name of the pharaoh (Khufu) and the approximate time period (Old Kingdom, around 2500 BC).",
+        "calificacionRecomendada": "no",
+        "evaluacion": "The answer is incorrect because it names the wrong ruler and provides an inaccurate date for the construction of the Great Pyramid.",
+        "explicacion": "The Great Pyramid was built for Pharaoh Khufu during the Old Kingdom, a very long time before Cleopatra lived. Cleopatra was one of the last rulers of Egypt, living over 2,000 years after the pyramids were already finished.",
+        "paraSeguirPensando": "Why do you think people often confuse the names of famous pharaohs like Cleopatra with the people who lived much earlier in Egyptian history?"
+      }
+    },
+    {
+      "id": "c09-incorrecta-piramide",
+      "idioma": "es",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "La respuesta debía identificar al faraón Keops (o Jufu) y situar la construcción en el Reino Antiguo (aproximadamente 2500 a. C.). El equipo respondió con un nombre y una fecha incorrectos.",
+        "calificacionRecomendada": "no",
+        "evaluacion": "La respuesta es incorrecta porque confunde al faraón Keops con Cleopatra y ubica la construcción en una época muy posterior a la real.",
+        "explicacion": "La Gran Pirámide de Giza fue construida hace muchísimo tiempo, durante el Reino Antiguo, por el faraón Keops. Cleopatra vivió miles de años después, cuando Egipto ya era un reino muy diferente y estaba cerca de ser conquistado por los romanos.",
+        "paraSeguirPensando": "¿Por qué es importante conocer el orden de los faraones y las épocas para entender la historia de Egipto?"
+      }
+    },
+    {
+      "id": "c10-incorrecta-organela",
+      "idioma": "en",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "The identification of the mitochondria as the organelle responsible for energy production.",
+        "calificacionRecomendada": "no",
+        "evaluacion": "The answer is incorrect because the nucleus is the control center of the cell, not the organelle that produces energy.",
+        "explicacion": "The nucleus acts like the brain of the cell because it holds the instructions. The mitochondria are like tiny power plants that make the energy the cell needs to work.",
+        "paraSeguirPensando": "If the nucleus is the brain and the mitochondria are the power plants, what do you think would happen to a cell if it lost its power plants?"
+      }
+    },
+    {
+      "id": "c10-incorrecta-organela",
+      "idioma": "es",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "La pregunta pide identificar la organela responsable de la producción de energía. El elemento clave es 'mitocondria'.",
+        "calificacionRecomendada": "no",
+        "evaluacion": "La respuesta es incorrecta porque confunde la función del núcleo con la de la mitocondria.",
+        "explicacion": "El núcleo funciona como el centro de control que guarda la información genética, mientras que las mitocondrias son las encargadas de fabricar la energía que la célula necesita para funcionar. Decir que el núcleo da energía es un error conceptual, ya que cada parte de la célula tiene una tarea distinta y específica.",
+        "paraSeguirPensando": "¿Por qué creen que es importante que la célula tenga diferentes partes encargadas de tareas distintas en lugar de que una sola haga todo el trabajo?"
+      }
+    },
+    {
+      "id": "c11-incorrecta-suma-fracciones",
+      "idioma": "en",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "The answer must correctly perform the addition of two fractions with different denominators, which requires finding a common denominator (12) and then adding the resulting numerators (8 + 3 = 11).",
+        "calificacionRecomendada": "no",
+        "evaluacion": "The answer is incorrect because adding numerators and denominators separately is not a valid way to add fractions.",
+        "explicacion": "To add fractions, they must speak the same language, which means having the same bottom number. We change 2/3 into 8/12 and 1/4 into 3/12 so that we can add them together to get 11/12.",
+        "paraSeguirPensando": "Why do you think we need to make the bottom numbers the same before we can add the top numbers together?"
+      }
+    },
+    {
+      "id": "c11-incorrecta-suma-fracciones",
+      "idioma": "es",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "La respuesta debía realizar la suma de fracciones con distinto denominador, lo cual requiere buscar un denominador común o usar un método equivalente para operar con partes del mismo tamaño. El equipo respondió sumando numeradores y denominadores por separado, lo cual es un error conceptual.",
+        "calificacionRecomendada": "no",
+        "evaluacion": "La respuesta es incorrecta porque no se pueden sumar fracciones sumando sus partes por separado, ya que los denominadores representan tamaños diferentes.",
+        "explicacion": "Para sumar fracciones, primero debemos asegurarnos de que las partes sean iguales, buscando un denominador común. Si sumamos los números de arriba y los de abajo por separado, estamos ignorando que cada fracción representa una porción distinta de un entero.",
+        "paraSeguirPensando": "¿Qué pasaría si intentamos sumar un cuarto de pizza con un tercio de pizza? ¿Podemos decir que tenemos dos séptimos de pizza o las porciones son de tamaños diferentes?"
+      }
+    },
+    {
+      "id": "c12-incorrecta-estaciones",
+      "idioma": "en",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "The answer must identify the tilt of the Earth's axis as the cause of the seasons.",
+        "calificacionRecomendada": "no",
+        "evaluacion": "The answer provided is incorrect because the distance between the Earth and the Sun is not what causes the seasons.",
+        "explicacion": "The Earth is tilted like a spinning top as it travels around the Sun. This tilt means that different parts of the Earth get more direct sunlight at different times of the year, which creates the seasons.",
+        "paraSeguirPensando": "If the distance to the Sun were the reason for seasons, why would it be summer in one part of the world while it is winter in another part at the same time?"
+      }
+    },
+    {
+      "id": "c12-incorrecta-estaciones",
+      "idioma": "es",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "La respuesta debía mencionar la inclinación del eje terrestre como causa principal de las estaciones; el equipo mencionó erróneamente la distancia al Sol.",
+        "calificacionRecomendada": "no",
+        "evaluacion": "La respuesta es incorrecta porque atribuye las estaciones a la distancia entre la Tierra y el Sol, cuando en realidad se deben a la inclinación del eje terrestre.",
+        "explicacion": "Las estaciones ocurren porque el eje de la Tierra está inclinado mientras el planeta gira alrededor del Sol. Esta inclinación hace que, en diferentes momentos del año, una parte del mundo reciba los rayos del Sol de forma más directa que la otra, lo que genera el calor del verano o el frío del invierno.",
+        "paraSeguirPensando": "¿Si la causa fuera la distancia al Sol, por qué cuando es verano en el hemisferio norte es invierno en el hemisferio sur al mismo tiempo?"
+      }
+    }
+  ]
+}

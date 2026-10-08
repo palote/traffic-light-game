@@ -530,14 +530,15 @@ function ManifestManager() {
   return null;
 }
 
-// 🆕 Fija <html lang="es"> en las rutas del árbitro (/arbitro*, /sesion/*),
-// sin importar el idioma del navegador; en el resto sigue el idioma elegido.
+// 🆕 Fija <html lang> en las rutas del árbitro (/arbitro*, /sesion/*) sin mirar el
+// idioma del navegador: "es", o el de la sesión en las pantallas de los alumnos.
+// En el resto sigue el idioma elegido.
 function ArbitroLangManager() {
   const location = useLocation();
-  const { language } = useI18n();
+  const { language, sessionLanguage } = useI18n();
   useEffect(() => {
-    document.documentElement.lang = htmlLangForPath(location.pathname, language);
-  }, [location.pathname, language]);
+    document.documentElement.lang = htmlLangForPath(location.pathname, language, sessionLanguage);
+  }, [location.pathname, language, sessionLanguage]);
   return null;
 }
 

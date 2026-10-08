@@ -736,7 +736,6 @@ export const pt = {
       "Copie e cole no Gemini, ChatGPT ou outro assistente de IA para gerar os prompts.",
 
     selectContent: "Selecione conteúdo para continuar",
-    portuguese: "Português",
   },
 
   // ============================================
