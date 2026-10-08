@@ -17,9 +17,11 @@
     "@sentry/tracing": "^7.120.4",
     "firebase": "^12.7.0",
     "gapi-script": "^1.2.0",
+    "mammoth": "^1.13.0",
     "papaparse": "^5.5.3",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
     "@axe-core/cli": "^4.11.1",
