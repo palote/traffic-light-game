@@ -51,13 +51,13 @@ store.set("sesiones_arbitro/SINPROPIAS", sesion({ permitirPreguntasPropias: fals
 
 const filas = [];
 const t = (caso, esperado, obtenido) => { filas.push({ caso, esperado: String(esperado), obtenido: String(obtenido) }); assert.strictEqual(String(obtenido), String(esperado), caso); };
-const veredictoJson = (o) => JSON.stringify({ resultado: "A", calificacionRecomendada: "incompleta", elementosClave: "e", veredicto: "Los Rojos tienen razón en parte.", explicacion: "Explicación.", paraSeguirPensando: "¿Qué relación hay?", ...o });
+const veredictoJson = (o) => JSON.stringify({ resultado: "A", calificacionRecomendada: "incompleta", elementosClave: "e", evaluacion: "Lo que dijeron es correcto, pero falta una parte.", explicacion: "Explicación.", paraSeguirPensando: "¿Qué relación hay?", ...o });
 const P = "partida01_abcdef"; // partidaId
 
 (async () => {
   // ════ 1) Registro y lectura de rondas ════
-  // Ronda 1: disputa. El árbitro (simulado) da tieneRazon=pregunta, parcial → Rojos 0,75 / Azules 0,25.
-  respuestaGemini = veredictoJson({ tieneRazon: "pregunta", grado: "parcial" });
+  // Ronda 1: disputa. Rojos calificaron «incompleta» y el árbitro (simulado) también → pregunta, parcial → Rojos 0,75 / Azules 0,25.
+  respuestaGemini = veredictoJson({});
   const v = await run(fns.requestVeredicto, { sessionId: "S1", modo: "juego_oral", conflicto: 'Pregunta: "¿Qué fuentes?"\n\nRespuesta de Azules: "escritas, orales, vestigios y arqueológicas"', posicionA: "Rojos (calificó como incompleta): faltó materiales.", posicionB: "Azules (no acepta la calificación): vestigios son materiales.", equipoPregunta: "Rojos", equipoResponde: "Azules" });
   assert.ok(v.ok, "veredicto"); assert.ok(v.r.consultaId, "requestVeredicto devuelve consultaId");
   t("requestVeredicto (oral) devuelve consultaId", "true", !!v.r.consultaId);
@@ -75,7 +75,7 @@ const P = "partida01_abcdef"; // partidaId
   t("  calificación", "incompleta", doc1.calificacion);
   t("  reparto tomado de la consulta del servidor (no del cliente)", "0.75/0.25", doc1.reparto.puntosPregunta + "/" + doc1.reparto.puntosResponde);
   t("  las dos posiciones", "true", doc1.disputa.posicionPregunta.includes("Rojos (calificó") && doc1.disputa.posicionResponde.includes("Azules (no acepta"));
-  t("  veredicto", "Los Rojos tienen razón en parte.", doc1.disputa.veredicto);
+  t("  veredicto (lo arma el código: frase + evaluación del modelo)", "Los dos equipos tienen parte de razón. Lo que dijeron es correcto, pero falta una parte.", doc1.disputa.veredicto);
   t("  reparto original del árbitro", "pregunta/parcial", doc1.disputa.repartoOriginal.tieneRazon + "/" + doc1.disputa.repartoOriginal.grado);
   t("  sin datos de alumnos (integrantes/email)", "false", /Ana|Leo|ana@|integrantes|email/i.test(JSON.stringify(doc1)));
   // Ronda 2: pasada. Ronda 3: sin disputa, completa. Ronda 4: fuera de tema (con consulta).

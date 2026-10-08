@@ -1,0 +1,293 @@
+{
+  "descripcion": "12 disputas de juego oral para probar al árbitro con el modelo real, en inglés (en) y su equivalente en español (es). «esperada» es la calificación que debería dar el árbitro a la respuesta: completa, incompleta o incorrecta (el código la lee como completa / incompleta / no). «calificacionPregunta» es la que puso el equipo que preguntó (puede no coincidir: justamente por eso se discute). Los textos de cada idioma son los que se mandan al modelo con ese idioma de sesión; materia y nivel son las claves en español que guarda la sesión.",
+  "casos": [
+    {
+      "id": "c01-completa-nilo",
+      "esperada": "completa",
+      "materia": "Historia",
+      "nivel": "Secundaria",
+      "anio": "3",
+      "calificacionPregunta": "incompleta",
+      "en": {
+        "tema": "Ancient Egypt",
+        "textoFuente": "The Nile flooded every year between June and September and left a layer of fertile silt on its banks. The Egyptians organized sowing and harvest around this cycle and dug canals to hold the water.",
+        "pregunta": "Why was the annual flooding of the Nile important for Egyptian agriculture?",
+        "respuesta": "It left fertile silt on the banks, so crops grew well, and the Egyptians organized the sowing and the harvest around the flood.",
+        "argumentoPregunta": "They did not mention the canals, so the answer is incomplete.",
+        "argumentoResponde": "The question asked why the flooding was important, and we explained it with the silt and the farming calendar."
+      },
+      "es": {
+        "tema": "Egipto antiguo",
+        "textoFuente": "El Nilo se desbordaba todos los años entre junio y septiembre y dejaba una capa de limo fértil en sus orillas. Los egipcios organizaban la siembra y la cosecha según este ciclo y cavaban canales para retener el agua.",
+        "pregunta": "¿Por qué era importante la crecida anual del Nilo para la agricultura egipcia?",
+        "respuesta": "Dejaba limo fértil en las orillas, así que los cultivos crecían bien, y los egipcios organizaban la siembra y la cosecha según la crecida.",
+        "argumentoPregunta": "No mencionaron los canales, así que la respuesta está incompleta.",
+        "argumentoResponde": "La pregunta pedía por qué era importante la crecida, y lo explicamos con el limo y el calendario agrícola."
+      }
+    },
+    {
+      "id": "c02-completa-fotosintesis",
+      "esperada": "completa",
+      "materia": "Biología",
+      "nivel": "Secundaria",
+      "anio": "2",
+      "calificacionPregunta": "incompleta",
+      "en": {
+        "tema": "Photosynthesis",
+        "textoFuente": "",
+        "pregunta": "Name the two raw materials that plants take in to carry out photosynthesis.",
+        "respuesta": "Water and carbon dioxide.",
+        "argumentoPregunta": "They forgot light, so it is incomplete.",
+        "argumentoResponde": "Light is the energy source, not a raw material. The question asked for the raw materials, and those are water and carbon dioxide."
+      },
+      "es": {
+        "tema": "Fotosíntesis",
+        "textoFuente": "",
+        "pregunta": "Nombrá las dos materias primas que las plantas toman para hacer la fotosíntesis.",
+        "respuesta": "Agua y dióxido de carbono.",
+        "argumentoPregunta": "Se olvidaron de la luz, así que está incompleta.",
+        "argumentoResponde": "La luz es la fuente de energía, no una materia prima. La pregunta pedía las materias primas, y son el agua y el dióxido de carbono."
+      }
+    },
+    {
+      "id": "c03-completa-fracciones",
+      "esperada": "completa",
+      "materia": "Matemática",
+      "nivel": "Primaria",
+      "anio": "5",
+      "calificacionPregunta": "incompleta",
+      "en": {
+        "tema": "Fractions",
+        "textoFuente": "",
+        "pregunta": "Calculate 3/4 + 1/8 and give the result as a simplified fraction.",
+        "respuesta": "3/4 is the same as 6/8, and 6/8 plus 1/8 is 7/8. It cannot be simplified.",
+        "argumentoPregunta": "They did not simplify the result.",
+        "argumentoResponde": "7/8 is already in its simplest form, because 7 and 8 share no common factor."
+      },
+      "es": {
+        "tema": "Fracciones",
+        "textoFuente": "",
+        "pregunta": "Calculá 3/4 + 1/8 y da el resultado como fracción simplificada.",
+        "respuesta": "3/4 es lo mismo que 6/8, y 6/8 más 1/8 da 7/8. No se puede simplificar.",
+        "argumentoPregunta": "No simplificaron el resultado.",
+        "argumentoResponde": "7/8 ya está simplificada, porque 7 y 8 no tienen ningún factor en común."
+      }
+    },
+    {
+      "id": "c04-completa-error-hemisferios",
+      "esperada": "completa",
+      "materia": "Geografía",
+      "nivel": "Secundaria",
+      "anio": "1",
+      "calificacionPregunta": "incorrecta",
+      "en": {
+        "tema": "Coordinates and hemispheres",
+        "textoFuente": "",
+        "pregunta": "Identify the error in this sentence: «The equator is the line that divides the Earth into the Eastern and Western hemispheres.»",
+        "respuesta": "The error is that the equator divides the Earth into the Northern and Southern hemispheres. The line that separates East from West is the prime meridian.",
+        "argumentoPregunta": "They did not say how many degrees of latitude the equator is at.",
+        "argumentoResponde": "The question only asked us to identify the error, and we did: the equator separates North from South."
+      },
+      "es": {
+        "tema": "Coordenadas y hemisferios",
+        "textoFuente": "",
+        "pregunta": "Identificá el error en esta oración: «El ecuador es la línea que divide la Tierra en los hemisferios Oriental y Occidental.»",
+        "respuesta": "El error es que el ecuador divide la Tierra en los hemisferios Norte y Sur. La línea que separa el Este del Oeste es el meridiano de Greenwich.",
+        "argumentoPregunta": "No dijeron en qué grado de latitud está el ecuador.",
+        "argumentoResponde": "La pregunta solo pedía identificar el error, y lo hicimos: el ecuador separa el Norte del Sur."
+      }
+    },
+    {
+      "id": "c05-incompleta-revolucion",
+      "esperada": "incompleta",
+      "materia": "Historia",
+      "nivel": "Secundaria",
+      "anio": "4",
+      "calificacionPregunta": "completa",
+      "en": {
+        "tema": "French Revolution",
+        "textoFuente": "",
+        "pregunta": "Name two causes of the French Revolution.",
+        "respuesta": "The financial crisis of the monarchy, which was deeply in debt.",
+        "argumentoPregunta": "The question asked for two causes and they gave only one, so it is incomplete.",
+        "argumentoResponde": "The financial crisis is the main cause, so our answer is correct."
+      },
+      "es": {
+        "tema": "Revolución Francesa",
+        "textoFuente": "",
+        "pregunta": "Nombrá dos causas de la Revolución Francesa.",
+        "respuesta": "La crisis financiera de la monarquía, que estaba muy endeudada.",
+        "argumentoPregunta": "La pregunta pedía dos causas y dieron una sola, así que está incompleta.",
+        "argumentoResponde": "La crisis financiera es la causa principal, así que nuestra respuesta es correcta."
+      }
+    },
+    {
+      "id": "c06-incompleta-mitosis",
+      "esperada": "incompleta",
+      "materia": "Biología",
+      "nivel": "Secundaria",
+      "anio": "3",
+      "calificacionPregunta": "completa",
+      "en": {
+        "tema": "Cell division",
+        "textoFuente": "",
+        "pregunta": "Explain the difference between mitosis and meiosis.",
+        "respuesta": "Mitosis produces two daughter cells that are identical to the original, and it is used for growth and for repairing tissues.",
+        "argumentoPregunta": "They only talked about mitosis and said nothing about meiosis.",
+        "argumentoResponde": "What we said about mitosis is correct, so the answer is fine."
+      },
+      "es": {
+        "tema": "División celular",
+        "textoFuente": "",
+        "pregunta": "Explicá la diferencia entre mitosis y meiosis.",
+        "respuesta": "La mitosis produce dos células hijas idénticas a la original, y sirve para el crecimiento y para reparar tejidos.",
+        "argumentoPregunta": "Solo hablaron de la mitosis y no dijeron nada de la meiosis.",
+        "argumentoResponde": "Lo que dijimos de la mitosis es correcto, así que la respuesta está bien."
+      }
+    },
+    {
+      "id": "c07-incompleta-narrador",
+      "esperada": "incompleta",
+      "materia": "Lengua y Literatura",
+      "nivel": "Secundaria",
+      "anio": "2",
+      "calificacionPregunta": "completa",
+      "en": {
+        "tema": "The narrator",
+        "textoFuente": "\"I walked home that night without looking back. I did not know then that the house would never be the same, nor that I would be the only one to remember it.\"",
+        "pregunta": "Which type of narrator is used in the text, and what effect does it have on the reader?",
+        "respuesta": "It is told in the first person.",
+        "argumentoPregunta": "They did not explain the effect on the reader.",
+        "argumentoResponde": "We identified the narrator correctly, which is the main thing."
+      },
+      "es": {
+        "tema": "El narrador",
+        "textoFuente": "\"Volví a casa esa noche sin mirar atrás. No sabía entonces que la casa nunca volvería a ser la misma, ni que yo sería el único en recordarla.\"",
+        "pregunta": "¿Qué tipo de narrador usa el texto y qué efecto produce en el lector?",
+        "respuesta": "Está contado en primera persona.",
+        "argumentoPregunta": "No explicaron el efecto en el lector.",
+        "argumentoResponde": "Identificamos bien al narrador, que es lo principal."
+      }
+    },
+    {
+      "id": "c08-incompleta-estados",
+      "esperada": "incompleta",
+      "materia": "Química",
+      "nivel": "Secundaria",
+      "anio": "2",
+      "calificacionPregunta": "completa",
+      "en": {
+        "tema": "States of matter",
+        "textoFuente": "",
+        "pregunta": "Name the three states of matter and give one example of each.",
+        "respuesta": "Solid, like ice, and liquid, like water.",
+        "argumentoPregunta": "They are missing the third state.",
+        "argumentoResponde": "We named two states with their examples and both are correct."
+      },
+      "es": {
+        "tema": "Estados de la materia",
+        "textoFuente": "",
+        "pregunta": "Nombrá los tres estados de la materia y da un ejemplo de cada uno.",
+        "respuesta": "Sólido, como el hielo, y líquido, como el agua.",
+        "argumentoPregunta": "Les falta el tercer estado.",
+        "argumentoResponde": "Nombramos dos estados con sus ejemplos y los dos están bien."
+      }
+    },
+    {
+      "id": "c09-incorrecta-piramide",
+      "esperada": "incorrecta",
+      "materia": "Historia",
+      "nivel": "Secundaria",
+      "anio": "3",
+      "calificacionPregunta": "incompleta",
+      "en": {
+        "tema": "Ancient Egypt",
+        "textoFuente": "",
+        "pregunta": "Who ordered the Great Pyramid of Giza to be built, and in which period?",
+        "respuesta": "Cleopatra, around the year 1000 BC.",
+        "argumentoPregunta": "The pharaoh who ordered it was Khufu, not Cleopatra, and it was about 2500 BC.",
+        "argumentoResponde": "Cleopatra is the most famous Egyptian ruler, so she must have built it."
+      },
+      "es": {
+        "tema": "Egipto antiguo",
+        "textoFuente": "",
+        "pregunta": "¿Quién mandó construir la Gran Pirámide de Giza y en qué período?",
+        "respuesta": "Cleopatra, alrededor del año 1000 a. C.",
+        "argumentoPregunta": "El faraón que la mandó construir fue Keops, no Cleopatra, y fue hacia el 2500 a. C.",
+        "argumentoResponde": "Cleopatra es la gobernante egipcia más famosa, así que tiene que haberla construido ella."
+      }
+    },
+    {
+      "id": "c10-incorrecta-organela",
+      "esperada": "incorrecta",
+      "materia": "Biología",
+      "nivel": "Secundaria",
+      "anio": "1",
+      "calificacionPregunta": "incompleta",
+      "en": {
+        "tema": "The cell",
+        "textoFuente": "",
+        "pregunta": "Which organelle produces most of the energy of the cell?",
+        "respuesta": "The nucleus.",
+        "argumentoPregunta": "The nucleus holds the DNA. The energy comes from the mitochondria.",
+        "argumentoResponde": "The nucleus is the most important part of the cell, so it gives the energy."
+      },
+      "es": {
+        "tema": "La célula",
+        "textoFuente": "",
+        "pregunta": "¿Qué organela produce la mayor parte de la energía de la célula?",
+        "respuesta": "El núcleo.",
+        "argumentoPregunta": "El núcleo guarda el ADN. La energía la producen las mitocondrias.",
+        "argumentoResponde": "El núcleo es la parte más importante de la célula, así que es el que da la energía."
+      }
+    },
+    {
+      "id": "c11-incorrecta-suma-fracciones",
+      "esperada": "incorrecta",
+      "materia": "Matemática",
+      "nivel": "Secundaria",
+      "anio": "1",
+      "calificacionPregunta": "incompleta",
+      "en": {
+        "tema": "Fractions",
+        "textoFuente": "",
+        "pregunta": "Calculate 2/3 + 1/4.",
+        "respuesta": "3/7, because 2 plus 1 is 3 and 3 plus 4 is 7.",
+        "argumentoPregunta": "You cannot add the numerators and the denominators separately. The result is 11/12.",
+        "argumentoResponde": "We added the tops and the bottoms, which is a way of adding fractions."
+      },
+      "es": {
+        "tema": "Fracciones",
+        "textoFuente": "",
+        "pregunta": "Calculá 2/3 + 1/4.",
+        "respuesta": "3/7, porque 2 más 1 es 3 y 3 más 4 es 7.",
+        "argumentoPregunta": "No se pueden sumar por separado los numeradores y los denominadores. El resultado es 11/12.",
+        "argumentoResponde": "Sumamos los de arriba y los de abajo, que es una forma de sumar fracciones."
+      }
+    },
+    {
+      "id": "c12-incorrecta-estaciones",
+      "esperada": "incorrecta",
+      "materia": "Geografía",
+      "nivel": "Secundaria",
+      "anio": "2",
+      "calificacionPregunta": "incompleta",
+      "en": {
+        "tema": "Seasons",
+        "textoFuente": "",
+        "pregunta": "Why do we have seasons on Earth?",
+        "respuesta": "Because the Earth is closer to the Sun in summer and farther away in winter.",
+        "argumentoPregunta": "That is a common mistake. The seasons happen because of the tilt of the Earth's axis.",
+        "argumentoResponde": "The Sun is hotter when we are closer to it, so it makes sense."
+      },
+      "es": {
+        "tema": "Las estaciones",
+        "textoFuente": "",
+        "pregunta": "¿Por qué hay estaciones en la Tierra?",
+        "respuesta": "Porque la Tierra está más cerca del Sol en verano y más lejos en invierno.",
+        "argumentoPregunta": "Es un error muy común. Las estaciones se deben a la inclinación del eje de la Tierra.",
+        "argumentoResponde": "El Sol calienta más cuando estamos más cerca, así que tiene sentido."
+      }
+    }
+  ]
+}

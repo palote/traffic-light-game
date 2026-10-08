@@ -11,9 +11,10 @@ import fetch from "node-fetch";
 import type ExcelJS from "exceljs";
 import type PptxGenJS from "pptxgenjs";
 import { generarTextoGemini } from "./gemini";
-import { repartirPunto, resultadoDesdeTieneRazon } from "./arbitroReparto";
+import { resolverRondaOral } from "./arbitroReparto";
 import * as admin from "firebase-admin";
-import { buildArbitroPrompt, buildPromptPreguntaPropia, normalizarAreaKey, AREA_LABEL_ES } from "./arbitroPrompt";
+import { buildArbitroPrompt, buildPromptPreguntaPropia, buildPromptConsignas, buildPromptConsigna, buildPromptInforme, normalizarAreaKey } from "./arbitroPrompt";
+import { normalizarIdiomaSesion, advertirIdiomaSalida } from "./arbitroIdioma";
 import { validarEntradaRonda, construirRonda, idDeRonda, aplicarCorreccion, calcularTotales, OPCIONES_REPARTO } from "./arbitroRondas";
 
 // Inicializar Firebase Admin UNA SOLA VEZ
@@ -1310,13 +1311,13 @@ async function exigirDocenteDeSesion(
   sessionId: string,
 ): Promise<FirebaseFirestore.DocumentData> {
   if (!auth?.uid) {
-    throw new HttpsError("unauthenticated", "Tenés que iniciar sesión para ver esta información.");
+    throw new HttpsError("unauthenticated", "Tenés que iniciar sesión para ver esta información.", { motivo: "login_requerido" });
   }
   const doc = await db.collection("sesiones_arbitro").doc(sessionId).get();
-  if (!doc.exists) throw new HttpsError("not-found", "Sesión no encontrada.");
+  if (!doc.exists) throw new HttpsError("not-found", "Sesión no encontrada.", { motivo: "sesion_no_encontrada" });
   const data = doc.data()!;
   if (data.docenteUid !== auth.uid && auth.uid !== ADMIN_UID_ARBITRO) {
-    throw new HttpsError("permission-denied", "Esta sesión pertenece a otro docente.");
+    throw new HttpsError("permission-denied", "Esta sesión pertenece a otro docente.", { motivo: "sesion_de_otro_docente" });
   }
   return data;
 }
@@ -1334,9 +1335,9 @@ export const crearSesionArbitro = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 60 },
   async (request) => {
     try {
-      const { area, materia, nivel, anio, tema, subtema, ejercicio, duracion = "clase", tiempoPregunta, textoFuente, permitirPreguntasPropias } = request.data;
+      const { area, materia, nivel, anio, tema, subtema, ejercicio, duracion = "clase", tiempoPregunta, textoFuente, permitirPreguntasPropias, idioma } = request.data;
       if (!materia || !nivel || !anio || !tema) {
-        throw new HttpsError("invalid-argument", "Faltan campos obligatorios: materia, nivel, año y tema");
+        throw new HttpsError("invalid-argument", "Faltan campos obligatorios: materia, nivel, año y tema", { motivo: "datos_incompletos" });
       }
       const sessionId = generateSessionId();
       const expiresAt = new Date();
@@ -1357,6 +1358,8 @@ export const crearSesionArbitro = onCall(
         textoFuente: textoFuente || "",
         // «Permitir preguntas propias»: activada por defecto (solo se desactiva con false explícito).
         permitirPreguntasPropias: permitirPreguntasPropias !== false,
+        // Idioma de la sesión: 'es' | 'en'. Cualquier otro valor (o ninguno) cuenta como 'es'.
+        idioma: normalizarIdiomaSesion(idioma),
         docenteUid: request.auth?.uid ?? null,
         docenteEmail: request.auth?.token?.email ?? null,
       });
@@ -1367,7 +1370,8 @@ export const crearSesionArbitro = onCall(
       };
     } catch (error: any) {
       console.error("Error en crearSesionArbitro:", error);
-      throw new HttpsError("internal", error.message || "Error desconocido al crear sesión");
+      if (error instanceof HttpsError) throw error; // los de validación conservan su código y su motivo
+      throw new HttpsError("internal", error.message || "Error desconocido al crear sesión", { motivo: "error_interno" });
     }
   }
 );
@@ -1376,12 +1380,12 @@ export const getSesionArbitro = onCall(
   { invoker: "public", timeoutSeconds: 10 },
   async (request) => {
     const { sessionId } = request.data;
-    if (!sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.");
+    if (!sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.", { motivo: "datos_incompletos" });
     const doc = await db.collection("sesiones_arbitro").doc(sessionId).get();
-    if (!doc.exists) throw new HttpsError("not-found", "Sesión no encontrada.");
+    if (!doc.exists) throw new HttpsError("not-found", "Sesión no encontrada.", { motivo: "sesion_no_encontrada" });
     const data = doc.data()!;
     if (new Date(data.expiresAt) < new Date()) {
-      throw new HttpsError("deadline-exceeded", "Sesión expirada.");
+      throw new HttpsError("deadline-exceeded", "Sesión expirada.", { motivo: "sesion_expirada" });
     }
     return {
       area: normalizarAreaKey(data.area),
@@ -1394,6 +1398,7 @@ export const getSesionArbitro = onCall(
       tiempoPregunta: data.tiempoPregunta ?? 0,
       textoFuente: data.textoFuente || "",
       permitirPreguntasPropias: data.permitirPreguntasPropias !== false, // las sesiones viejas no tienen el campo: permitido
+      idioma: normalizarIdiomaSesion(data.idioma), // las sesiones viejas no tienen el campo: 'es'
       expiresAt: data.expiresAt,
       docenteEmail: data.docenteEmail || "",
     };
@@ -1412,19 +1417,21 @@ async function runArbitro(params: {
   esJuegoOral?: boolean;
   equipoPregunta?: string;
   equipoResponde?: string;
+  /** Calificación del equipo que preguntó, como dato aparte: "completa" | "incompleta" | "incorrecta". */
+  calificacionPregunta?: unknown;
 }): Promise<object> {
   const { sessionId, desacuerdo, posicionA, posicionB, esJuegoOral } = params;
   const nombreEquipo = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 60) : "");
 
   const sessionDoc = await db.collection("sesiones_arbitro").doc(sessionId).get();
-  if (!sessionDoc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró.");
+  if (!sessionDoc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró.", { motivo: "sesion_no_encontrada" });
   const session = sessionDoc.data()!;
   if (new Date(session.expiresAt) < new Date()) {
-    throw new HttpsError("failed-precondition", "La sesión ha expirado.");
+    throw new HttpsError("failed-precondition", "La sesión ha expirado.", { motivo: "sesion_expirada" });
   }
 
   const apiKey = GEMINI_KEY.value();
-  if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada.");
+  if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada.", { motivo: "ia_no_configurada" });
 
   // Sin `contexto`: el prompt de producción no lleva línea de área/materia/criterio.
   // Para activarlas: contexto: { area: AREA_LABEL_ES[k], materia, criterio: criterioDeArea(session.area) }.
@@ -1442,6 +1449,8 @@ async function runArbitro(params: {
     esJuegoOral,
     equipoPregunta: esJuegoOral ? nombreEquipo(params.equipoPregunta) : "",
     equipoResponde: esJuegoOral ? nombreEquipo(params.equipoResponde) : "",
+    idioma: normalizarIdiomaSesion(session.idioma),
+    // El prompt recibe la Posición A SIN «(calificó como …)»: la calificación de quien preguntó la lee solo el código.
   });
 
   const textoGemini = await generarTextoGemini(apiKey, {
@@ -1462,27 +1471,32 @@ async function runArbitro(params: {
     console.error("runArbitro: Gemini devolvió algo que no es JSON:", raw.slice(0, 500));
     throw new HttpsError("unavailable", "El árbitro no pudo dar una respuesta clara. Probá de nuevo.", { motivo: "respuesta_no_clara" });
   }
-  if (esJuegoOral && parsed?.resultado === "fuera_de_tema") {
-    // Pregunta fuera del texto/tema: no hay disputa que repartir. Reparto 0/0, sin «Reintentar»;
-    // el juego avisa que elijan otra pregunta. La consulta igual se registra (resultado fuera_de_tema).
-    parsed.tieneRazon = "ninguno";
-    parsed.grado = "parcial";
-    parsed.puntosPregunta = 0;
-    parsed.puntosResponde = 0;
-  } else if (esJuegoOral) {
-    // El reparto lo calcula el código a partir de tieneRazon + grado; el modelo no escribe puntajes.
-    // Si faltan o traen valores fuera de las opciones, camino de «Reintentar» (no se suma nada).
-    const reparto = repartirPunto(parsed?.tieneRazon, parsed?.grado);
-    if (!reparto) {
-      console.error("runArbitro: tieneRazon/grado ausentes o fuera de las opciones:", JSON.stringify({ tieneRazon: parsed?.tieneRazon, grado: parsed?.grado }));
+  // El modelo tiene que responder en el idioma de la sesión: si no lo parece, se registra una advertencia (no se bloquea nada).
+  advertirIdiomaSalida("runArbitro", normalizarIdiomaSesion(session.idioma), {
+    evaluacion: parsed?.evaluacion, veredicto: parsed?.veredicto, explicacion: parsed?.explicacion, paraSeguirPensando: parsed?.paraSeguirPensando,
+  }, { sessionId });
+  if (esJuegoOral) {
+    // El modelo decide SOLO "calificacionRecomendada" (y escribe la evaluación, sin decir quién tiene razón). El reparto lo
+    // deduce el CÓDIGO comparándola con la calificación que puso el equipo que preguntó (tabla en arbitroReparto.ts; esa
+    // calificación llega en `calificacionPregunta` y NO viaja al prompt; si falta, se lee de la Posición A); si el modelo manda "tieneRazon", "grado" o puntajes, se ignoran. "fuera_de_tema" no tiene disputa que repartir: 0/0.
+    // Si falta la calificación de quien preguntó o la del árbitro no es válida: camino de «Reintentar»
+    // (no se suma nada ni se registra la consulta).
+    const r = resolverRondaOral(parsed, posicionA, nombreEquipo(params.equipoPregunta), nombreEquipo(params.equipoResponde), params.calificacionPregunta, normalizarIdiomaSesion(session.idioma));
+    if (!r.ok) {
+      console.error("runArbitro: no se pudo deducir el reparto:", JSON.stringify({ motivo: r.motivo, calificacionRecomendada: parsed?.calificacionRecomendada ?? null }));
       throw new HttpsError("unavailable", "El árbitro no pudo dar una respuesta clara. Probá de nuevo.", { motivo: "respuesta_no_clara" });
     }
-    parsed.tieneRazon = String(parsed.tieneRazon).trim().toLowerCase();
-    if (parsed.grado !== undefined && parsed.grado !== null && parsed.grado !== "") parsed.grado = String(parsed.grado).trim().toLowerCase();
-    parsed.puntosPregunta = reparto.puntosPregunta;
-    parsed.puntosResponde = reparto.puntosResponde;
-    // "resultado" siempre coherente con tieneRazon (salvo fuera_de_tema, que se respeta).
-    if (parsed.resultado !== "fuera_de_tema") parsed.resultado = resultadoDesdeTieneRazon(parsed.tieneRazon) ?? parsed.resultado;
+    const v = r.valor;
+    parsed.tieneRazon = v.tieneRazon;
+    parsed.grado = v.grado;
+    parsed.puntosPregunta = v.reparto.puntosPregunta;
+    parsed.puntosResponde = v.reparto.puntosResponde;
+    parsed.resultado = v.resultado;
+    if (v.calificacionArbitro) parsed.calificacionRecomendada = v.calificacionArbitro; // "incorrecta" → "no"
+    parsed.calificacionPregunta = v.calificacionPregunta;
+    // El veredicto lo arma el CÓDIGO («Tiene razón el equipo X» + la evaluación del modelo): el modelo no dice quién tiene razón.
+    if (v.veredicto) parsed.veredicto = v.veredicto; else if (!v.fueraDeTema) delete parsed.veredicto;
+    delete parsed.evaluacion;
   }
 
   // Registrar consulta (incluye resultado fuera_de_tema para análisis)
@@ -1496,6 +1510,8 @@ async function runArbitro(params: {
     ...(esJuegoOral ? {
       equipoPregunta: nombreEquipo(params.equipoPregunta),
       equipoResponde: nombreEquipo(params.equipoResponde),
+      calificacionPregunta: parsed.calificacionPregunta ?? null,
+      calificacionRecomendada: typeof parsed.calificacionRecomendada === "string" ? parsed.calificacionRecomendada : null,
       tieneRazon: parsed.tieneRazon ?? null,
       grado: parsed.grado ?? null,
       puntosPregunta: typeof parsed.puntosPregunta === "number" ? parsed.puntosPregunta : null,
@@ -1514,11 +1530,11 @@ async function runArbitro(params: {
 export const arbitrarDesacuerdo = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 90, memory: "256MiB" },
   async (request) => {
-    const { sessionId, desacuerdo, posicionA, posicionB } = request.data;
+    const { sessionId, desacuerdo, posicionA, posicionB, calificacionPregunta } = request.data;
     if (!sessionId || !desacuerdo || !posicionA || !posicionB) {
-      throw new HttpsError("invalid-argument", "Faltan datos del desacuerdo.");
+      throw new HttpsError("invalid-argument", "Faltan datos del desacuerdo.", { motivo: "datos_incompletos" });
     }
-    return runArbitro({ sessionId, desacuerdo, posicionA, posicionB });
+    return runArbitro({ sessionId, desacuerdo, posicionA, posicionB, calificacionPregunta });
   }
 );
 
@@ -1527,12 +1543,12 @@ export const arbitrarDesacuerdo = onCall(
 export const requestVeredicto = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 90, memory: "256MiB" },
   async (request) => {
-    const { sessionId, conflicto, desacuerdo, posicionA, posicionB, modo, equipoPregunta, equipoResponde } = request.data;
+    const { sessionId, conflicto, desacuerdo, posicionA, posicionB, modo, equipoPregunta, equipoResponde, calificacionPregunta } = request.data;
     const texto = conflicto || desacuerdo;
     if (!sessionId || !texto || !posicionA || !posicionB) {
-      throw new HttpsError("invalid-argument", "Faltan campos: sessionId, conflicto, posicionA, posicionB.");
+      throw new HttpsError("invalid-argument", "Faltan campos: sessionId, conflicto, posicionA, posicionB.", { motivo: "datos_incompletos" });
     }
-    return runArbitro({ sessionId, desacuerdo: texto, posicionA, posicionB, esJuegoOral: modo === "juego_oral", equipoPregunta, equipoResponde });
+    return runArbitro({ sessionId, desacuerdo: texto, posicionA, posicionB, esJuegoOral: modo === "juego_oral", equipoPregunta, equipoResponde, calificacionPregunta });
   }
 );
 
@@ -1543,63 +1559,29 @@ export const generarConsignasArbitro = onCall(
   async (request) => {
     // Función abierta (invoker público) que gasta Gemini: solo docentes con sesión.
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Iniciá sesión con Google para generar preguntas.");
+      throw new HttpsError("unauthenticated", "Iniciá sesión con Google para generar preguntas.", { motivo: "login_requerido" });
     }
-    const { materia, nivel, anio, tema, subtema, cantidad, tipoPreguntas, textoFuente } = request.data as {
+    const { materia, nivel, anio, tema, subtema, cantidad, tipoPreguntas, textoFuente, idioma: idiomaPedido } = request.data as {
       materia: string; nivel: string; anio: string; tema: string; subtema?: string; cantidad?: number;
+      idioma?: string; // 'es' | 'en': el de la sesión que se está configurando
       tipoPreguntas?: "memoristica" | "mixta" | "capacidades";
       textoFuente?: string;
     };
     if (!materia || !nivel || !anio || !tema) {
-      throw new HttpsError("invalid-argument", "Faltan datos obligatorios.");
+      throw new HttpsError("invalid-argument", "Faltan datos obligatorios.", { motivo: "datos_incompletos" });
     }
     // La cantidad la elige el docente en la configuración de la sesión; la acotamos
     // a un rango razonable (3 a 30) para no generar listas inmanejables durante el juego.
     const n = Math.min(30, Math.max(3, Math.round(cantidad || 6)));
+    const idioma = normalizarIdiomaSesion(idiomaPedido);
     const tipo = tipoPreguntas === "memoristica" || tipoPreguntas === "capacidades" ? tipoPreguntas : "mixta";
     const apiKey = GEMINI_KEY.value();
-    if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada");
+    if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada", { motivo: "ia_no_configurada" });
 
-    // Operaciones de pensamiento que buscan desarrollar capacidades (pensamiento
-    // crítico, argumentación) en vez de pura memoria — versión curada para preguntas
-    // orales breves, alineada con las mismas capacidades que usa el Juego del Semáforo.
-    const OPERACIONES_CAPACIDADES = [
-      "Comparar: presentar dos interpretaciones, posturas o elementos del tema y pedir cuál es más sólido y por qué.",
-      "Detectar un error: plantear una afirmación con un error conceptual sobre el tema y pedir que lo identifiquen y corrijan.",
-      "Argumentar una posición: pedir que defiendan una postura discutible sobre el tema con al menos dos razones.",
-      "Cuestionar un supuesto: presentar una idea muy extendida sobre el tema y pedir que evalúen si es así o no, y por qué.",
-      "Relacionar conceptos: pedir que expliquen la conexión entre dos elementos del tema.",
-    ];
-
-    const bloqueTipo = tipo === "memoristica"
-      ? `Priorizá preguntas de dato concreto: nombres, fechas, definiciones, hechos puntuales del tema.`
-      : tipo === "capacidades"
-      ? `La gran mayoría de las preguntas (al menos 8 de cada 10) tienen que pedir alguna de estas operaciones de pensamiento en vez de un dato suelto, para que ayuden a desarrollar capacidades y no solo memoria:
-${OPERACIONES_CAPACIDADES.map((o) => `- ${o}`).join("\n")}
-Estas preguntas siguen necesitando una respuesta verificable y justificable con el tema — no es opinión libre, es razonamiento que el árbitro pueda evaluar.`
-      : `Combiná dos tipos de preguntas en partes similares: la mitad de dato concreto (nombres, fechas, definiciones) y la otra mitad que pida alguna de estas operaciones de pensamiento, para que ayuden a desarrollar capacidades y no solo memoria:
-${OPERACIONES_CAPACIDADES.map((o) => `- ${o}`).join("\n")}
-Estas últimas también necesitan una respuesta verificable y justificable con el tema — no es opinión libre, es razonamiento que el árbitro pueda evaluar.`;
-
-    const bloqueTexto = textoFuente && textoFuente.trim()
-      ? `\nTEXTO BASE QUE LOS ALUMNOS VAN A LEER ANTES DEL JUEGO:\n"""\n${textoFuente.trim().substring(0, 8000)}\n"""\n\nMUY IMPORTANTE: las preguntas tienen que poder responderse a partir de este texto. No inventes preguntas sobre aspectos del tema que el texto no cubre, aunque los conozcas de otras fuentes. Priorizá lo que el texto realmente dice, para que el árbitro después pueda evaluar las respuestas citándolo.\n`
-      : `\nNo hay un texto base cargado todavía, así que generá las preguntas con tu conocimiento general del tema.\n`;
-
-    const prompt = `Sos un docente experto en ${materia} para ${nivel} ${anio} en Argentina.
-Generá exactamente ${n} preguntas sobre el tema: "${tema}"${subtema ? ` (específicamente: ${subtema})` : ""}.
-${bloqueTexto}
-Estas preguntas se van a usar en un juego oral por equipos: un equipo le hace la pregunta en voz alta
-a otro, que debe responder también en voz alta, y un árbitro (o el docente) evalúa si la respuesta es
-completa, incompleta o incorrecta. Por eso cada pregunta debe:
-- Tener una respuesta verificable, que el árbitro pueda evaluar como correcta, incompleta o incorrecta (evitar preguntas de opinión libre sin ningún criterio posible).
-- Ser breve y clara para decirla en voz alta.
-- Variar en dificultad (algunas más simples, otras más desafiantes).
-- No le pidas al alumno que cite, nombre o argumente "según" un autor o experto mencionado en el texto (aunque el texto sí lo nombre). Si el texto expone una idea de un autor, formulá la pregunta sobre esa idea en sí misma, sin exigir que el alumno recuerde o mencione de quién es. Ejemplo: en vez de "¿cómo argumentarías esto basándote en las ideas de [autor]?", preguntá "¿por qué el texto sostiene que [idea]? ¿estás de acuerdo?".
-
-${bloqueTipo}
-
-Numerá las preguntas del 1 al ${n}. Respondé SOLO con las preguntas numeradas, sin introducción ni cierre.`;
-    return { consignas: (await generarTextoGemini(apiKey, prompt)).trim() };
+    const prompt = buildPromptConsignas({ materia, nivel, anio, tema, subtema, n, tipo, textoFuente, idioma });
+    const consignas = (await generarTextoGemini(apiKey, prompt)).trim();
+    advertirIdiomaSalida("generarConsignasArbitro", idioma, { consignas });
+    return { consignas };
   }
 );
 
@@ -1609,22 +1591,24 @@ export const requestConsigna = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 60 },
   async (request) => {
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Iniciá sesión con Google para generar preguntas.");
+      throw new HttpsError("unauthenticated", "Iniciá sesión con Google para generar preguntas.", { motivo: "login_requerido" });
     }
     const { sessionId } = request.data as { sessionId: string };
-    if (!sessionId) throw new HttpsError("invalid-argument", "sessionId es requerido.");
+    if (!sessionId) throw new HttpsError("invalid-argument", "sessionId es requerido.", { motivo: "datos_incompletos" });
     const sessionDoc = await db.collection("sesiones_arbitro").doc(sessionId).get();
-    if (!sessionDoc.exists) throw new HttpsError("not-found", "Sesión no encontrada.");
+    if (!sessionDoc.exists) throw new HttpsError("not-found", "Sesión no encontrada.", { motivo: "sesion_no_encontrada" });
     const session = sessionDoc.data()!;
     if (new Date(session.expiresAt) < new Date()) {
-      throw new HttpsError("failed-precondition", "La sesión ha expirado.");
+      throw new HttpsError("failed-precondition", "La sesión ha expirado.", { motivo: "sesion_expirada" });
     }
     const { materia, nivel, anio, tema, subtema } = session;
+    const idioma = normalizarIdiomaSesion(session.idioma);
     const apiKey = GEMINI_KEY.value();
-    if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada");
-    const prompt = `Generá UNA SOLA pregunta de debate para alumnos de ${materia}, ${nivel} ${anio}, tema: "${tema}"${subtema ? ` (${subtema})` : ""}.
-No debe ser de sí/no. Máximo 2 líneas. Respondé SOLO con la pregunta.`;
-    return { consigna: (await generarTextoGemini(apiKey, prompt)).trim() };
+    if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada", { motivo: "ia_no_configurada" });
+    const prompt = buildPromptConsigna({ materia, nivel, anio, tema, subtema, idioma });
+    const consigna = (await generarTextoGemini(apiKey, prompt)).trim();
+    advertirIdiomaSalida("requestConsigna", idioma, { consigna }, { sessionId });
+    return { consigna };
   }
 );
 
@@ -1795,7 +1779,7 @@ export const generarInformeSesion = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 120, memory: "256MiB" },
   async (request) => {
     const { sessionId, forceRegenerar } = request.data as { sessionId: string; forceRegenerar?: boolean };
-    if (!sessionId) throw new HttpsError("invalid-argument", "sessionId es requerido.");
+    if (!sessionId) throw new HttpsError("invalid-argument", "sessionId es requerido.", { motivo: "datos_incompletos" });
 
     // Cargar sesión — solo el docente dueño (o el admin) puede generar o ver el informe
     const session = await exigirDocenteDeSesion(request.auth, sessionId);
@@ -1809,7 +1793,7 @@ export const generarInformeSesion = onCall(
       .get();
 
     if (consultasSnap.empty) {
-      throw new HttpsError("failed-precondition", "La sesión no tiene consultas registradas aún.");
+      throw new HttpsError("failed-precondition", "La sesión no tiene consultas registradas aún.", { motivo: "sin_consultas" });
     }
 
     const consultas = consultasSnap.docs.map((d) => d.data());
@@ -1853,24 +1837,9 @@ export const generarInformeSesion = onCall(
     }
 
     const apiKey = GEMINI_KEY.value();
-    if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada.");
+    if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada.", { motivo: "ia_no_configurada" });
 
     // Construir resumen de consultas para el prompt
-    const resumenConsultas = consultas.map((c, i) => {
-      const resultadoLabel: Record<string, string> = {
-        A: "Posición A correcta",
-        B: "Posición B correcta",
-        ambas_correctas: "Ambas correctas",
-        ambas_incorrectas: "Ambas incorrectas",
-        fuera_de_tema: "Fuera de tema",
-      };
-      return `Consulta ${i + 1}:
-  Desacuerdo: ${c.desacuerdo}
-  Posición A: ${c.posicionA}
-  Posición B: ${c.posicionB}
-  Resultado: ${resultadoLabel[c.resultado] ?? c.resultado}`;
-    }).join("\n\n");
-
     const totalConsultas = consultas.length;
     const fueraDeTema = consultas.filter((c) => c.resultado === "ambas_incorrectas" || c.resultado === "fuera_de_tema").length;
     const correctasA = consultas.filter((c) => c.resultado === "A").length;
@@ -1878,40 +1847,8 @@ export const generarInformeSesion = onCall(
     const ambasCorrectas = consultas.filter((c) => c.resultado === "ambas_correctas").length;
     const ambasIncorrectas = consultas.filter((c) => c.resultado === "ambas_incorrectas").length;
 
-    // Las preguntas pasadas se excluyen del análisis pedagógico pero se listan
-    // aparte: son señal de dificultad y el docente tiene que verlas.
-    const rondasPasadasSection = rondasPasadas.length > 0
-      ? `\n\nPREGUNTAS PASADAS (NO las incluyas en el análisis pedagógico — no cuentan como debate ni como error; listalas solo para que el docente las vea):\n${
-          rondasPasadas.map((r, i) => `${i + 1}. "${r.pregunta || "(sin texto)"}" — pasada por ${r.equipoPregunta || "un equipo"}`).join("\n")
-        }`
-      : "";
-
-    const prompt = `Sos un asistente pedagógico especializado en análisis de aprendizaje colaborativo.
-Analizá la siguiente sesión de debate arbitrado y generá un informe para el docente.
-
-DATOS DE LA SESIÓN:
-- Materia: ${session.materia}
-- Área: ${(() => { const k = normalizarAreaKey(session.area); return k ? AREA_LABEL_ES[k] : "No especificada"; })()}
-- Nivel: ${session.nivel} — ${session.anio}° año
-- Tema: ${session.tema}
-${session.subtema ? `- Subtema: ${session.subtema}` : ""}
-- Total de consultas al árbitro: ${totalConsultas}
-- Resultados: A correcta: ${correctasA} | B correcta: ${correctasB} | Ambas correctas: ${ambasCorrectas} | Ambas incorrectas: ${ambasIncorrectas} | Fuera de tema: ${fueraDeTema}
-
-DETALLE DE CONSULTAS:
-${resumenConsultas}
-
-Respondé ÚNICAMENTE con JSON válido sin backticks ni texto adicional:
-{
-  "resumenEjecutivo": "2-3 oraciones que resumen el desempeño general del grupo",
-  "conceptosDebatidos": ["lista de conceptos o ideas centrales que aparecieron en las consultas"],
-  "fortalezas": "párrafo describiendo lo que el grupo comprendió bien o debatió con profundidad",
-  "areasDeOportunidad": "párrafo describiendo los conceptos donde hubo más confusión o errores",
-  "patronesObservados": "párrafo describiendo patrones: si hubo debate genuino, si las posiciones eran polarizadas, si las preguntas eran superficiales o profundas",
-  "recomendacionesDocente": ["3-4 recomendaciones concretas para el docente para la próxima clase"],
-  "preguntasParaRetomar": ["2-3 preguntas que quedaron sin resolver o merecen ser retomadas en clase"],
-  "nivelDebate": "superficial" | "adecuado" | "profundo"
-}${rondasPasadasSection}`;
+    const idioma = normalizarIdiomaSesion(session.idioma);
+    const prompt = buildPromptInforme({ session: session as any, consultas, rondasPasadas, idioma });
 
     const textoGemini = await generarTextoGemini(apiKey, {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -1925,7 +1862,7 @@ Respondé ÚNICAMENTE con JSON válido sin backticks ni texto adicional:
       informe = JSON.parse(raw);
     } catch {
       informe = {
-        resumenEjecutivo: "No se pudo generar el análisis completo.",
+        resumenEjecutivo: idioma === "en" ? "The full analysis could not be generated." : "No se pudo generar el análisis completo.",
         conceptosDebatidos: [],
         fortalezas: raw.slice(0, 400),
         areasDeOportunidad: "",
@@ -1935,6 +1872,11 @@ Respondé ÚNICAMENTE con JSON válido sin backticks ni texto adicional:
         nivelDebate: "adecuado",
       };
     }
+
+    // Idioma de la salida: advertencia (no bloquea) si el informe no parece estar en el idioma de la sesión.
+    advertirIdiomaSalida("generarInformeSesion", idioma, {
+      resumenEjecutivo: informe.resumenEjecutivo, fortalezas: informe.fortalezas, areasDeOportunidad: informe.areasDeOportunidad, patronesObservados: informe.patronesObservados,
+    }, { sessionId });
 
     // Enriquecer con metadatos
     informe.generadoEn = new Date().toISOString();
@@ -1957,7 +1899,7 @@ export const listarSesionesDocente = onCall(
     // navegador: antes cualquiera podía listar las sesiones de otro docente
     // pasando su uid.
     const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError("unauthenticated", "Tenés que iniciar sesión para ver tus sesiones.");
+    if (!uid) throw new HttpsError("unauthenticated", "Tenés que iniciar sesión para ver tus sesiones.", { motivo: "login_requerido" });
     const { limit: lim } = request.data as { limit?: number };
 
     const snap = await db
@@ -1990,11 +1932,11 @@ export const listarSesionesDocente = onCall(
 // Igual que las demás funciones de alumnos: la sesión tiene que existir y no estar vencida.
 async function exigirSesionVigente(sessionId: unknown) {
   if (typeof sessionId !== "string" || !/^[A-Za-z0-9_-]{2,60}$/.test(sessionId)) {
-    throw new HttpsError("invalid-argument", "sessionId inválido.");
+    throw new HttpsError("invalid-argument", "sessionId inválido.", { motivo: "sesion_id_invalido" });
   }
   const doc = await db.collection("sesiones_arbitro").doc(sessionId).get();
-  if (!doc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró.");
-  if (new Date(doc.data()!.expiresAt) < new Date()) throw new HttpsError("failed-precondition", "La sesión ha expirado.");
+  if (!doc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró.", { motivo: "sesion_no_encontrada" });
+  if (new Date(doc.data()!.expiresAt) < new Date()) throw new HttpsError("failed-precondition", "La sesión ha expirado.", { motivo: "sesion_expirada" });
 }
 
 export const guardarInformeArbitro = onCall(
@@ -2006,7 +1948,7 @@ export const guardarInformeArbitro = onCall(
     if (data.modo === "competitivo" && data.equipos) {
       const { sessionId, equipos, registros } = data;
       if (!sessionId || !equipos?.length) {
-        throw new HttpsError("invalid-argument", "sessionId y equipos son requeridos para el modo competitivo");
+        throw new HttpsError("invalid-argument", "sessionId y equipos son requeridos para el modo competitivo", { motivo: "datos_incompletos" });
       }
       await exigirSesionVigente(sessionId);
       // Id de la partida (lo genera el juego): une este informe con las rondas registradas por registrarRonda.
@@ -2031,7 +1973,7 @@ export const guardarInformeArbitro = onCall(
     // ── Modo normal: { sessionId, nombreAlumno, nombreEquipo, respuestas } ──
     const { sessionId, nombreAlumno, nombreEquipo, respuestas } = data;
     if (!sessionId || !nombreAlumno) {
-      throw new HttpsError("invalid-argument", "sessionId y nombreAlumno son requeridos");
+      throw new HttpsError("invalid-argument", "sessionId y nombreAlumno son requeridos", { motivo: "datos_incompletos" });
     }
     await exigirSesionVigente(sessionId);
     const informeRef = db
@@ -2057,7 +1999,7 @@ export const getInformesMetacognicion = onCall(
   async (request) => {
     const { sessionId } = request.data;
     if (!sessionId) {
-      throw new HttpsError("invalid-argument", "sessionId es requerido");
+      throw new HttpsError("invalid-argument", "sessionId es requerido", { motivo: "datos_incompletos" });
     }
     await exigirDocenteDeSesion(request.auth, sessionId);
 
@@ -2088,16 +2030,16 @@ export const registrarRonda = onCall(
   async (request) => {
     const sessionId = request.data?.sessionId;
     if (typeof sessionId !== "string" || !/^[A-Za-z0-9_-]{2,40}$/.test(sessionId)) {
-      throw new HttpsError("invalid-argument", "sessionId requerido.");
+      throw new HttpsError("invalid-argument", "sessionId requerido.", { motivo: "datos_incompletos" });
     }
     const entrada = validarEntradaRonda(request.data);
 
     // Misma validación que las demás funciones de alumnos: la sesión existe y no venció.
     const sessionRef = db.collection("sesiones_arbitro").doc(sessionId);
     const sessionDoc = await sessionRef.get();
-    if (!sessionDoc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró.");
+    if (!sessionDoc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró.", { motivo: "sesion_no_encontrada" });
     if (new Date(sessionDoc.data()!.expiresAt) < new Date()) {
-      throw new HttpsError("failed-precondition", "La sesión ha expirado.");
+      throw new HttpsError("failed-precondition", "La sesión ha expirado.", { motivo: "sesion_expirada" });
     }
 
     let consulta: Record<string, any> | null = null;
@@ -2142,7 +2084,7 @@ export const listarRondasSesion = onCall(
   { invoker: "public", timeoutSeconds: 30 },
   async (request) => {
     const sessionId = request.data?.sessionId;
-    if (typeof sessionId !== "string" || !sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.");
+    if (typeof sessionId !== "string" || !sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.", { motivo: "datos_incompletos" });
     const session = await exigirDocenteDeSesion(request.auth, sessionId);
     const datos = await leerRondasYTotales(sessionId);
     return {
@@ -2160,20 +2102,20 @@ export const corregirRonda = onCall(
   { invoker: "public", timeoutSeconds: 30 },
   async (request) => {
     const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError("unauthenticated", "Tenés que iniciar sesión para corregir una ronda.");
+    if (!uid) throw new HttpsError("unauthenticated", "Tenés que iniciar sesión para corregir una ronda.", { motivo: "login_requerido" });
     const { sessionId, rondaId, tieneRazon, grado } = (request.data || {}) as Record<string, unknown>;
-    if (typeof sessionId !== "string" || !sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.");
-    if (typeof rondaId !== "string" || !/^[A-Za-z0-9_-]{8,60}$/.test(rondaId)) throw new HttpsError("invalid-argument", "rondaId inválido.");
+    if (typeof sessionId !== "string" || !sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.", { motivo: "datos_incompletos" });
+    if (typeof rondaId !== "string" || !/^[A-Za-z0-9_-]{8,60}$/.test(rondaId)) throw new HttpsError("invalid-argument", "rondaId inválido.", { motivo: "datos_incompletos" });
 
     const sessionRef = db.collection("sesiones_arbitro").doc(sessionId);
     const sessionDoc = await sessionRef.get();
-    if (!sessionDoc.exists) throw new HttpsError("not-found", "Sesión no encontrada.");
+    if (!sessionDoc.exists) throw new HttpsError("not-found", "Sesión no encontrada.", { motivo: "sesion_no_encontrada" });
     if (sessionDoc.data()!.docenteUid !== uid) {
-      throw new HttpsError("permission-denied", "Solo el docente dueño de la sesión puede corregir sus rondas.");
+      throw new HttpsError("permission-denied", "Solo el docente dueño de la sesión puede corregir sus rondas.", { motivo: "sesion_de_otro_docente" });
     }
     const ref = sessionRef.collection("rondas").doc(rondaId);
     const snap = await ref.get();
-    if (!snap.exists) throw new HttpsError("not-found", "Ronda no encontrada.");
+    if (!snap.exists) throw new HttpsError("not-found", "Ronda no encontrada.", { motivo: "ronda_no_encontrada" });
 
     const ahora = new Date().toISOString();
     const resultado = aplicarCorreccion(snap.data() as Record<string, any>, tieneRazon, grado, uid, ahora);
@@ -2196,15 +2138,15 @@ export const validarPreguntaPropia = onCall(
   async (request) => {
     const sessionId = request.data?.sessionId;
     const pregunta = typeof request.data?.pregunta === "string" ? request.data.pregunta.trim() : "";
-    if (typeof sessionId !== "string" || !sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.");
-    if (pregunta.length < 3 || pregunta.length > 500) throw new HttpsError("invalid-argument", "La pregunta tiene que tener entre 3 y 500 caracteres.");
+    if (typeof sessionId !== "string" || !sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.", { motivo: "datos_incompletos" });
+    if (pregunta.length < 3 || pregunta.length > 500) throw new HttpsError("invalid-argument", "La pregunta tiene que tener entre 3 y 500 caracteres.", { motivo: "pregunta_longitud" });
 
     const sessionDoc = await db.collection("sesiones_arbitro").doc(sessionId).get();
-    if (!sessionDoc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró.");
+    if (!sessionDoc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró.", { motivo: "sesion_no_encontrada" });
     const session = sessionDoc.data()!;
-    if (new Date(session.expiresAt) < new Date()) throw new HttpsError("failed-precondition", "La sesión ha expirado.");
+    if (new Date(session.expiresAt) < new Date()) throw new HttpsError("failed-precondition", "La sesión ha expirado.", { motivo: "sesion_expirada" });
     if (session.permitirPreguntasPropias === false) {
-      throw new HttpsError("failed-precondition", "En esta sesión no se permiten preguntas propias.");
+      throw new HttpsError("failed-precondition", "En esta sesión no se permiten preguntas propias.", { motivo: "preguntas_propias_desactivadas" });
     }
 
     // Tope de validaciones por sesión (cuenta en el documento de la sesión): esta función es pública y
@@ -2218,11 +2160,12 @@ export const validarPreguntaPropia = onCall(
     await sessionDoc.ref.update({ validacionesPropias: admin.firestore.FieldValue.increment(1) });
 
     const apiKey = GEMINI_KEY.value();
-    if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada.");
+    if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada.", { motivo: "ia_no_configurada" });
 
     const prompt = buildPromptPreguntaPropia({
       materia: session.materia, nivel: session.nivel, anio: session.anio, tema: session.tema,
       subtema: session.subtema || "", textoFuente: session.textoFuente || "", pregunta,
+      idioma: normalizarIdiomaSesion(session.idioma),
     });
     const crudo = await generarTextoGemini(apiKey, {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -2238,6 +2181,7 @@ export const validarPreguntaPropia = onCall(
     if (typeof parsed?.pertinente !== "boolean") {
       throw new HttpsError("unavailable", "No se pudo validar la pregunta.", { motivo: "respuesta_no_clara" });
     }
+    advertirIdiomaSalida("validarPreguntaPropia", normalizarIdiomaSesion(session.idioma), { motivo: parsed.motivo }, { sessionId });
     return { pertinente: parsed.pertinente, motivo: typeof parsed.motivo === "string" ? parsed.motivo.slice(0, 200) : "" };
   }
 );
@@ -2248,7 +2192,7 @@ export const listarTodasSesionesAdmin = onCall(
   { region: "us-central1" },
   async (request) => {
     if (request.auth?.uid !== ADMIN_UID_ARBITRO) {
-      throw new HttpsError("permission-denied", "Solo el administrador puede acceder a esta función.");
+      throw new HttpsError("permission-denied", "Solo el administrador puede acceder a esta función.", { motivo: "solo_admin" });
     }
 
     const snap = await db

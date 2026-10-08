@@ -66,7 +66,7 @@ async function llamar(fn, auth, data) {
   try { const r = await fns[fn].run({ auth, data, rawRequest: {}, acceptsStreaming: false }); return { ok: true, r }; }
   catch (e) { return { ok: false, code: e.code, message: e.message, details: e.details }; }
 }
-const datosVeredicto = { sessionId: "S1", conflicto: `Pregunta de prueba ${SECRETO_ALUMNO}`, posicionA: `A dice ${SECRETO_ALUMNO}`, posicionB: `B dice ${SECRETO_ALUMNO}`, modo: "juego_oral" };
+const datosVeredicto = { sessionId: "S1", conflicto: `Pregunta de prueba ${SECRETO_ALUMNO}`, posicionA: `Rojos (calificó como incompleta): ${SECRETO_ALUMNO}`, posicionB: `B dice ${SECRETO_ALUMNO}`, modo: "juego_oral" };
 const filas = [];
 const fila = (caso, esperado, obtenido) => { filas.push({ caso, esperado, obtenido }); assert.strictEqual(obtenido, esperado, `${caso}: esperado ${esperado}, dio ${obtenido}`); };
 const logsGemini = () => logs.filter((l) => l.via === "logger.error");
@@ -135,14 +135,14 @@ const logsGemini = () => logs.filter((l) => l.via === "logger.error");
   fila("respuesta no JSON · marcada como respuesta_no_clara", "respuesta_no_clara", nj.details && nj.details.motivo);
   fila("respuesta no JSON · no se registra la consulta", "0", String(consultasAgregadas));
   fila("respuesta no JSON · no es 'error de servicio' (sin logger.error)", "0", String(logsGemini().length));
-  comportamientoGemini = async () => JSON.stringify({ resultado: "A", calificacionRecomendada: "completa", veredicto: "v", explicacion: "e" }); // oral sin tieneRazon/grado
+  comportamientoGemini = async () => JSON.stringify({ resultado: "A", tieneRazon: "pregunta", grado: "total", veredicto: "v", explicacion: "e" }); // oral sin calificacionRecomendada (el reparto ya no sale de tieneRazon/grado)
   const sr = await llamar("requestVeredicto", undefined, datosVeredicto);
-  fila("juego oral sin tieneRazon/grado · mismo camino", "respuesta_no_clara", sr.details && sr.details.motivo);
+  fila("juego oral sin calificacionRecomendada · mismo camino", "respuesta_no_clara", sr.details && sr.details.motivo);
   // JSON válido sigue andando
-  comportamientoGemini = async () => JSON.stringify({ resultado: "B", calificacionRecomendada: "completa", tieneRazon: "responde", grado: "parcial", veredicto: "v", explicacion: "e", paraSeguirPensando: "p" });
+  comportamientoGemini = async () => JSON.stringify({ resultado: "A", calificacionRecomendada: "completa", veredicto: "v", explicacion: "e", paraSeguirPensando: "p" });
   consultasAgregadas = 0;
   const okr = await llamar("requestVeredicto", undefined, datosVeredicto);
-  fila("JSON válido · devuelve el veredicto", "B", okr.ok && okr.r.resultado); fila("JSON válido · reparto calculado por el código (responde parcial → 0,25/0,75)", "0.25/0.75", okr.ok && `${okr.r.puntosPregunta}/${okr.r.puntosResponde}`); fila("JSON válido · se registra la consulta", "1", String(consultasAgregadas));
+  fila("JSON válido · devuelve el veredicto", "B", okr.ok && okr.r.resultado); fila("JSON válido · reparto calculado por el código (quien preguntó puso «incompleta», el árbitro «completa» → responde, total → 0/1)", "0/1", okr.ok && `${okr.r.puntosPregunta}/${okr.r.puntosResponde}`); fila("JSON válido · se registra la consulta", "1", String(consultasAgregadas));
   // Informe con respuesta no JSON: informe de respaldo, como siempre
   comportamientoGemini = async () => "texto que no es json";
   const inf = await llamar("generarInformeSesion", au(DUENO), { sessionId: "S1", forceRegenerar: true });

@@ -1,0 +1,54 @@
+{
+  "filas": [
+    {
+      "id": "c01-completa-nilo",
+      "idioma": "en",
+      "corrida": 1,
+      "esperada": "completa",
+      "obtenida": "completa",
+      "coincide": true,
+      "reparto": "0/1",
+      "idiomaSalida": "ok",
+      "error": ""
+    },
+    {
+      "id": "c01-completa-nilo",
+      "idioma": "es",
+      "corrida": 1,
+      "esperada": "completa",
+      "obtenida": "completa",
+      "coincide": true,
+      "reparto": "0/1",
+      "idiomaSalida": "⚠ en",
+      "error": ""
+    }
+  ],
+  "salidas": [
+    {
+      "id": "c01-completa-nilo",
+      "idioma": "en",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "e",
+        "calificacionRecomendada": "completa",
+        "evaluacion": "The answer is correct and covers what the question asked for.",
+        "explicacion": "The answer shows the concept and it is explained clearly for the group.",
+        "paraSeguirPensando": "Why does this concept matter for the topic?"
+      }
+    },
+    {
+      "id": "c01-completa-nilo",
+      "idioma": "es",
+      "corrida": 1,
+      "salida": {
+        "resultado": "A",
+        "elementosClave": "e",
+        "calificacionRecomendada": "completa",
+        "evaluacion": "The answer is correct and covers what the question asked for.",
+        "explicacion": "The answer shows the concept and it is explained clearly for the group.",
+        "paraSeguirPensando": "Why does this concept matter for the topic?"
+      }
+    }
+  ]
+}

@@ -1,6 +1,10 @@
 // Prompt del árbitro y claves de área. Vive en un módulo aparte para poder
 // probarlo y compararlo sin cargar todas las funciones (ver scripts/comparar-prompts.mjs).
 
+import { quitarEtiquetaCalificacion } from "./arbitroReparto";
+import type { IdiomaSesion } from "./arbitroIdioma";
+import { buildArbitroPromptEn, buildPromptPreguntaPropiaEn, buildPromptConsignasEn, buildPromptConsignaEn, buildPromptInformeEn } from "./arbitroPromptEn";
+
 // ── Claves de área ────────────────────────────────────────────────────────────
 // Las sesiones nuevas guardan la clave corta ("exactas", "sociales",
 // "lenguajes", "arte"). Las viejas guardaron el nombre completo en español (o en
@@ -76,7 +80,10 @@ export function reglaPertinencia(params: { materia: string; tema: string; hayTex
 // Prompt corto para validar una pregunta propia ANTES de pasársela al otro equipo.
 export function buildPromptPreguntaPropia(params: {
   materia: string; nivel: string; anio: string; tema: string; subtema?: string; textoFuente?: string; pregunta: string;
+  // Idioma de la sesión: "en" usa la versión en inglés (arbitroPromptEn.ts); cualquier otro valor, el texto original en español.
+  idioma?: IdiomaSesion;
 }): string {
+  if (params.idioma === "en") return buildPromptPreguntaPropiaEn(params);
   const { materia, nivel, anio, tema, subtema, textoFuente, pregunta } = params;
   const regla = reglaPertinencia({ materia, tema, hayTexto: !!textoFuente });
   const texto = textoFuente ? `\nTEXTO BASE DE LA SESIÓN:\n"""\n${textoFuente.substring(0, 8000)}\n"""\n` : "";
@@ -126,7 +133,10 @@ export function buildArbitroPrompt(params: {
   equipoPregunta?: string;
   equipoResponde?: string;
   contexto?: ContextoArbitroOpcional;
+  // Idioma de la sesión: "en" usa la versión en inglés (arbitroPromptEn.ts); cualquier otro valor, el texto original en español.
+  idioma?: IdiomaSesion;
 }): string {
+  if (params.idioma === "en") return buildArbitroPromptEn(params);
   const { materia, nivel, anio, tema, subtema, ejercicio, textoFuente, desacuerdo, posicionA, posicionB, esJuegoOral, contexto } = params;
   const limpiarNombre = (n?: string) => (n || "").replace(/["\r\n]+/g, " ").trim().slice(0, 60);
   const nombrePregunta = limpiarNombre(params.equipoPregunta);
@@ -151,31 +161,29 @@ export function buildArbitroPrompt(params: {
   // Lo carga el docente al crear la sesión y viaja en el documento de Firestore,
   // no desde el cliente. Se recorta a 8000 caracteres para acotar el prompt.
   const textoFuenteBlock = textoFuente
-    ? `\nTEXTO BASE DE LA SESIÓN:\n"""\n${textoFuente.substring(0, 8000)}\n"""\n\nFundamentá tu veredicto señalando qué parte del texto sostiene cada posición. Si el texto no alcanza para decidir entre las dos, decilo explícitamente en vez de inventar un fundamento. El texto sirve para verificar conceptos: no exijas que la respuesta repita sus palabras.\n`
+    ? `\nTEXTO BASE DE LA SESIÓN:\n"""\n${textoFuente.substring(0, 8000)}\n"""\n\n${esJuegoOral ? "Fundamentá tu evaluación señalando qué parte del texto sostiene o contradice la respuesta. Si el texto no alcanza para decidir, decilo explícitamente en vez de inventar un fundamento." : "Fundamentá tu veredicto señalando qué parte del texto sostiene cada posición. Si el texto no alcanza para decidir entre las dos, decilo explícitamente en vez de inventar un fundamento."} El texto sirve para verificar conceptos: no exijas que la respuesta repita sus palabras.\n`
     : "";
 
   // ── Formato de respuesta JSON (compartido) ────────────────────────────────
   const jsonFormat = `Respondé ÚNICAMENTE con JSON válido sin backticks ni texto extra:
 {
   "resultado": "A",
-  "elementosClave": "qué elementos específicos necesitaría una respuesta completa a ESTA pregunta puntual (uno solo, o varios si la pregunta lo requiere), y cuáles de esos mencionó el equipo de forma concreta y no genérica (aunque lo haya dicho con otras palabras)",
-  "calificacionRecomendada": "completa",${esJuegoOral ? `
-  "tieneRazon": "pregunta" | "responde" | "ambos" | "ninguno",
-  "grado": "total" | "parcial",` : ""}
-  "veredicto": "${esJuegoOral ? "una oración que dice quién tiene razón, nombrando al equipo, coherente con tieneRazon" : "una oración que resume quién tiene razón"}",
+  "elementosClave": "qué elementos específicos necesitaría una respuesta completa a ESTA pregunta puntual (uno solo, o varios si la pregunta lo requiere), y cuáles de esos mencionó el equipo de forma concreta y no genérica (aunque lo haya dicho con otras palabras). Incluí solo lo que la consigna pide expresamente: si pide «identificá el error», alcanza con señalar cuál es; no sumes corregirlo, explicarlo ni justificarlo salvo que la consigna lo pida",
+  "calificacionRecomendada": "completa",
+  ${esJuegoOral ? `"evaluacion": "una oración que evalúa la respuesta en sí misma: qué tiene de correcta y, si corresponde, qué le falta o qué está mal. NO digas quién tiene razón ni nombres a un equipo como ganador"` : `"veredicto": "una oración que resume quién tiene razón"`},
   "explicacion": "2-3 oraciones explicando el concepto de forma pedagógica",
   "paraSeguirPensando": "una pregunta que invite al grupo a seguir reflexionando sobre la comprensión del concepto (por qué, cómo, con qué se relaciona), nunca sobre la terminología literal"
 }
 
 El campo "elementosClave" es un paso de análisis obligatorio que tenés que resolver ANTES de decidir "calificacionRecomendada": pensá primero qué necesitaría decir una respuesta completa a esta pregunta puntual, y compará eso con lo que el equipo realmente dijo. No lo saltees — la categoría de abajo tiene que salir de esa comparación, no de una impresión general.
 
-REGLA DE COMPLETITUD: las partes que hacen completa una respuesta se sacan de lo que PIDE LA PREGUNTA, no de todo lo que se podría decir sobre el tema. Una respuesta es completa si da lo que la pregunta pide, aunque quede información relevante sin mencionar. Si la sesión tiene TEXTO BASE, usalo para verificar que lo que dijo el equipo es correcto; NO lo uses para exigir información que la pregunta no pidió. Ejemplos: si la pregunta pide «identificá el error», la respuesta es completa si identifica el error y lo corrige (no hace falta que además explique cómo o por qué se produjo); si pide «nombrá dos causas», es completa con dos causas correctas.
+REGLA DE COMPLETITUD: las partes que hacen completa una respuesta se sacan de lo que PIDE LA PREGUNTA, no de todo lo que se podría decir sobre el tema. Una respuesta es completa si da lo que la pregunta pide, aunque quede información relevante sin mencionar. Si la sesión tiene TEXTO BASE, usalo para verificar que lo que dijo el equipo es correcto; NO lo uses para exigir información que la pregunta no pidió. Ejemplos: si la consigna pide «identificá el error», la respuesta es completa si señala cuál es el error; corregirlo solo se exige si la consigna lo pide explícitamente (por ejemplo, «identificá y corregí»), y tampoco hace falta que explique cómo o por qué se produjo; si pide «nombrá dos causas», es completa con dos causas correctas. Con el procedimiento pasa lo mismo: mostrar la cuenta o justificar solo se exige si la consigna lo pide explícitamente (por ejemplo, «calculá y mostrá la cuenta», «justificá»).
 
 EVALUÁ EL CONCEPTO, NO LAS PALABRAS: una respuesta es correcta si expresa el concepto correcto, aunque lo diga con otras palabras que las del texto base o las de quien preguntó. Los sinónimos, las paráfrasis y los términos equivalentes valen igual: por ejemplo, «vestigios» o «restos arqueológicos» corresponden a «fuentes materiales». NUNCA marques una respuesta como incorrecta o incompleta solo porque no usó las palabras exactas del texto, y no le des peso a un argumento que se reduzca a «no dijo la palabra». Para cada elemento de "elementosClave" preguntate si el equipo lo expresó como concepto, con las palabras que fueran. En "paraSeguirPensando" apuntá a la comprensión del concepto (por qué, cómo, con qué se relaciona), nunca a recordar la palabra exacta del texto.${esJuegoOral ? `
 
-Los campos "tieneRazon" y "grado" dicen quién tiene razón en la disputa y en qué medida (se explican más abajo). Vos NO escribís puntajes: el sistema calcula el reparto del punto a partir de esos dos campos. "tieneRazon" debe ser exactamente uno de: "pregunta", "responde", "ambos", "ninguno". "grado" debe ser exactamente uno de: "total", "parcial".` : ""}
+Vos NO escribís puntajes ni decidís quién tiene razón: eso lo hace el sistema a partir de tu "calificacionRecomendada" (ver "CÓMO DECIDIR LA CALIFICACIÓN" más abajo).` : ""}
 
-El campo "resultado" debe ser exactamente uno de: "A", "B", "ambas_correctas", "ambas_incorrectas".${esJuegoOral ? ` En esta ronda, "resultado" tiene que ser coherente con "tieneRazon": "A" si tiene razón quien preguntó, "B" si tiene razón quien respondió, "ambas_correctas" si "ambos", "ambas_incorrectas" si "ninguno".` : ""}
+El campo "resultado" debe ser exactamente uno de: "A", "B", "ambas_correctas", "ambas_incorrectas".${esJuegoOral ? ` En esta ronda, "resultado" lo calcula el sistema a partir de tu calificación: escribí "A", salvo que corresponda "fuera_de_tema".` : ""}
 
 El campo "calificacionRecomendada" es INDEPENDIENTE de "resultado": indica qué puntaje merece la respuesta del equipo EN SÍ MISMA, evaluada por vos con tu propio conocimiento de la materia — no solo comparando qué posición del desacuerdo "ganó". Debe ser exactamente uno de:
 - "completa": la respuesta es correcta y cubre los elementos específicos que hacían falta para esta pregunta puntual.
@@ -204,13 +212,10 @@ La pregunta de "paraSeguirPensando" tiene que servir para los DOS equipos por ig
 
 QUIÉN ES QUIÉN: ${nombrePregunta && nombreResponde ? `el equipo que PREGUNTÓ es "${nombrePregunta}" (es la Posición A) y el equipo que RESPONDIÓ es "${nombreResponde}" (es la Posición B).` : "el equipo que PREGUNTÓ es el de la Posición A y el equipo que RESPONDIÓ es el de la Posición B."}
 
-Además de "calificacionRecomendada", tenés que decir quién tiene razón en la disputa con dos campos, "tieneRazon" y "grado". El punto de la ronda lo reparte el sistema a partir de ellos; vos no escribas puntajes en ningún campo.
-- "tieneRazon": "pregunta" si tiene razón el equipo que preguntó (la calificación que le puso a la respuesta se sostiene); "responde" si tiene razón el equipo que respondió (la calificación era injusta: su respuesta merecía más); "ambos" si los dos tienen parte de razón; "ninguno" si ninguna de las dos posiciones se sostiene con el texto o el tema.
-- "grado": "total" si quien tiene razón la tiene por completo; "parcial" si la tiene solo en parte. Con "ambos" o "ninguno" poné "parcial".
-El "veredicto" tiene que decir lo mismo que "tieneRazon": si es "pregunta", tiene razón ${nombrePregunta ? `"${nombrePregunta}"` : "el equipo que preguntó"}; si es "responde", tiene razón ${nombreResponde ? `"${nombreResponde}"` : "el equipo que respondió"}; si es "ambos" o "ninguno", el veredicto lo dice así. Nunca nombres a un equipo como ganador si "tieneRazon" apunta al otro.
-COHERENCIA CON "grado": el texto de "veredicto" y de "explicacion" tiene que decir lo mismo que "tieneRazon" y "grado". Si "grado" es "parcial", NO puede decir que la respuesta es incorrecta, errónea o está mal: tiene que decir qué parte es correcta y qué parte falta o es discutible. Reservá la palabra «incorrecta» para un error conceptual o factual real, y en ese caso corresponde "grado": "total" a favor de quien lo señala.
+CÓMO DECIDIR LA CALIFICACIÓN: vos NO escribís puntajes ni decidís quién tiene razón; eso lo hace el sistema a partir de tu "calificacionRecomendada". Decidila evaluando la respuesta contra la consigna (la pregunta) y, si la sesión tiene TEXTO BASE, contra ese texto. Los argumentos escritos de los dos equipos (Posición A y Posición B) sirven para que los CONSIDERES, no para que los ADOPTES: pueden señalarte algo que conviene mirar, pero verificalo vos, y no te dejes llevar por quien escribió con más seguridad o con más palabras.
+La "evaluacion", la "explicacion" y "paraSeguirPensando" NO dicen quién tiene razón ni nombran a un equipo como ganador: esa frase la agrega el sistema. Tienen que ser coherentes con tu "calificacionRecomendada" y no pueden contradecirse con ella. Si tu calificación es "incompleta", NO digas que la respuesta es incorrecta ni errónea: decí qué parte es correcta y qué falta. Reservá la palabra «incorrecta» para cuando "calificacionRecomendada" es "no".
 
-Muy importante: evaluá el mérito real de cada argumento, no quién escribió más o con más convicción. Si el equipo que preguntó solo dijo "está incompleta" sin explicar qué falta, eso pesa poco frente a una respuesta bien fundamentada — en ese caso inclinate por "responde".
+Muy importante: evaluá el mérito real de la respuesta, no quién argumentó con más convicción ni quién escribió más.
 ` : "";
 
   // ── Prompt único ──────────────────────────────────────────────────────────
@@ -244,6 +249,131 @@ Reglas:
 
 ${textoFuenteBlock}
 Desacuerdo: ${desacuerdo}
-Posición A: ${posicionA}
+Posición A: ${esJuegoOral ? quitarEtiquetaCalificacion(posicionA, params.equipoPregunta) : posicionA}
 Posición B: ${posicionB}`;
+}
+
+
+// ── Generador de preguntas (consignas) ────────────────────────────────────────
+// El texto en español es el que estaba en index.ts (generarConsignasArbitro), sin cambios.
+export function buildPromptConsignas(params: {
+  materia: string; nivel: string; anio: string; tema: string; subtema?: string; n: number;
+  tipo: "memoristica" | "mixta" | "capacidades"; textoFuente?: string; idioma?: IdiomaSesion;
+}): string {
+  if (params.idioma === "en") return buildPromptConsignasEn(params);
+  const { materia, nivel, anio, tema, subtema, n, tipo, textoFuente } = params;
+    const OPERACIONES_CAPACIDADES = [
+      "Comparar: presentar dos interpretaciones, posturas o elementos del tema y pedir cuál es más sólido y por qué.",
+      "Detectar un error: plantear una afirmación con un error conceptual sobre el tema y pedir que lo identifiquen y corrijan.",
+      "Argumentar una posición: pedir que defiendan una postura discutible sobre el tema con al menos dos razones.",
+      "Cuestionar un supuesto: presentar una idea muy extendida sobre el tema y pedir que evalúen si es así o no, y por qué.",
+      "Relacionar conceptos: pedir que expliquen la conexión entre dos elementos del tema.",
+    ];
+
+    const bloqueTipo = tipo === "memoristica"
+      ? `Priorizá preguntas de dato concreto: nombres, fechas, definiciones, hechos puntuales del tema.`
+      : tipo === "capacidades"
+      ? `La gran mayoría de las preguntas (al menos 8 de cada 10) tienen que pedir alguna de estas operaciones de pensamiento en vez de un dato suelto, para que ayuden a desarrollar capacidades y no solo memoria:
+${OPERACIONES_CAPACIDADES.map((o) => `- ${o}`).join("\n")}
+Estas preguntas siguen necesitando una respuesta verificable y justificable con el tema — no es opinión libre, es razonamiento que el árbitro pueda evaluar.`
+      : `Combiná dos tipos de preguntas en partes similares: la mitad de dato concreto (nombres, fechas, definiciones) y la otra mitad que pida alguna de estas operaciones de pensamiento, para que ayuden a desarrollar capacidades y no solo memoria:
+${OPERACIONES_CAPACIDADES.map((o) => `- ${o}`).join("\n")}
+Estas últimas también necesitan una respuesta verificable y justificable con el tema — no es opinión libre, es razonamiento que el árbitro pueda evaluar.`;
+
+    const bloqueTexto = textoFuente && textoFuente.trim()
+      ? `\nTEXTO BASE QUE LOS ALUMNOS VAN A LEER ANTES DEL JUEGO:\n"""\n${textoFuente.trim().substring(0, 8000)}\n"""\n\nMUY IMPORTANTE: las preguntas tienen que poder responderse a partir de este texto. No inventes preguntas sobre aspectos del tema que el texto no cubre, aunque los conozcas de otras fuentes. Priorizá lo que el texto realmente dice, para que el árbitro después pueda evaluar las respuestas citándolo.\n`
+      : `\nNo hay un texto base cargado todavía, así que generá las preguntas con tu conocimiento general del tema.\n`;
+
+    const prompt = `Sos un docente experto en ${materia} para ${nivel} ${anio} en Argentina.
+Generá exactamente ${n} preguntas sobre el tema: "${tema}"${subtema ? ` (específicamente: ${subtema})` : ""}.
+${bloqueTexto}
+Estas preguntas se van a usar en un juego oral por equipos: un equipo le hace la pregunta en voz alta
+a otro, que debe responder también en voz alta, y un árbitro (o el docente) evalúa si la respuesta es
+completa, incompleta o incorrecta. Por eso cada pregunta debe:
+- Tener una respuesta verificable, que el árbitro pueda evaluar como correcta, incompleta o incorrecta (evitar preguntas de opinión libre sin ningún criterio posible).
+- Ser breve y clara para decirla en voz alta.
+- Variar en dificultad (algunas más simples, otras más desafiantes).
+- No le pidas al alumno que cite, nombre o argumente "según" un autor o experto mencionado en el texto (aunque el texto sí lo nombre). Si el texto expone una idea de un autor, formulá la pregunta sobre esa idea en sí misma, sin exigir que el alumno recuerde o mencione de quién es. Ejemplo: en vez de "¿cómo argumentarías esto basándote en las ideas de [autor]?", preguntá "¿por qué el texto sostiene que [idea]? ¿estás de acuerdo?".
+
+${bloqueTipo}
+
+Numerá las preguntas del 1 al ${n}. Respondé SOLO con las preguntas numeradas, sin introducción ni cierre.`;
+  return prompt;
+}
+
+// ── Una sola pregunta de debate (requestConsigna) ─────────────────────────────
+export function buildPromptConsigna(params: { materia: string; nivel: string; anio: string; tema: string; subtema?: string; idioma?: IdiomaSesion }): string {
+  if (params.idioma === "en") return buildPromptConsignaEn(params);
+  const { materia, nivel, anio, tema, subtema } = params;
+    const prompt = `Generá UNA SOLA pregunta de debate para alumnos de ${materia}, ${nivel} ${anio}, tema: "${tema}"${subtema ? ` (${subtema})` : ""}.
+No debe ser de sí/no. Máximo 2 líneas. Respondé SOLO con la pregunta.`;
+  return prompt;
+}
+
+// ── Informe de la sesión (generarInformeSesion) ───────────────────────────────
+export function buildPromptInforme(params: {
+  session: { materia: string; area?: unknown; nivel: string; anio: string; tema: string; subtema?: string };
+  consultas: any[]; rondasPasadas: any[]; idioma?: IdiomaSesion;
+}): string {
+  const { session, consultas, rondasPasadas } = params;
+  if (params.idioma === "en") {
+    return buildPromptInformeEn({ materia: session.materia, areaKey: normalizarAreaKey(session.area), nivel: session.nivel, anio: session.anio, tema: session.tema, subtema: session.subtema, consultas, rondasPasadas });
+  }
+    const resumenConsultas = consultas.map((c, i) => {
+      const resultadoLabel: Record<string, string> = {
+        A: "Posición A correcta",
+        B: "Posición B correcta",
+        ambas_correctas: "Ambas correctas",
+        ambas_incorrectas: "Ambas incorrectas",
+        fuera_de_tema: "Fuera de tema",
+      };
+      return `Consulta ${i + 1}:
+  Desacuerdo: ${c.desacuerdo}
+  Posición A: ${c.posicionA}
+  Posición B: ${c.posicionB}
+  Resultado: ${resultadoLabel[c.resultado] ?? c.resultado}`;
+    }).join("\n\n");
+
+    const totalConsultas = consultas.length;
+    const fueraDeTema = consultas.filter((c) => c.resultado === "ambas_incorrectas" || c.resultado === "fuera_de_tema").length;
+    const correctasA = consultas.filter((c) => c.resultado === "A").length;
+    const correctasB = consultas.filter((c) => c.resultado === "B").length;
+    const ambasCorrectas = consultas.filter((c) => c.resultado === "ambas_correctas").length;
+    const ambasIncorrectas = consultas.filter((c) => c.resultado === "ambas_incorrectas").length;
+
+    // Las preguntas pasadas se excluyen del análisis pedagógico pero se listan
+    // aparte: son señal de dificultad y el docente tiene que verlas.
+    const rondasPasadasSection = rondasPasadas.length > 0
+      ? `\n\nPREGUNTAS PASADAS (NO las incluyas en el análisis pedagógico — no cuentan como debate ni como error; listalas solo para que el docente las vea):\n${
+          rondasPasadas.map((r, i) => `${i + 1}. "${r.pregunta || "(sin texto)"}" — pasada por ${r.equipoPregunta || "un equipo"}`).join("\n")
+        }`
+      : "";
+
+    const prompt = `Sos un asistente pedagógico especializado en análisis de aprendizaje colaborativo.
+Analizá la siguiente sesión de debate arbitrado y generá un informe para el docente.
+
+DATOS DE LA SESIÓN:
+- Materia: ${session.materia}
+- Área: ${(() => { const k = normalizarAreaKey(session.area); return k ? AREA_LABEL_ES[k] : "No especificada"; })()}
+- Nivel: ${session.nivel} — ${session.anio}° año
+- Tema: ${session.tema}
+${session.subtema ? `- Subtema: ${session.subtema}` : ""}
+- Total de consultas al árbitro: ${totalConsultas}
+- Resultados: A correcta: ${correctasA} | B correcta: ${correctasB} | Ambas correctas: ${ambasCorrectas} | Ambas incorrectas: ${ambasIncorrectas} | Fuera de tema: ${fueraDeTema}
+
+DETALLE DE CONSULTAS:
+${resumenConsultas}
+
+Respondé ÚNICAMENTE con JSON válido sin backticks ni texto adicional:
+{
+  "resumenEjecutivo": "2-3 oraciones que resumen el desempeño general del grupo",
+  "conceptosDebatidos": ["lista de conceptos o ideas centrales que aparecieron en las consultas"],
+  "fortalezas": "párrafo describiendo lo que el grupo comprendió bien o debatió con profundidad",
+  "areasDeOportunidad": "párrafo describiendo los conceptos donde hubo más confusión o errores",
+  "patronesObservados": "párrafo describiendo patrones: si hubo debate genuino, si las posiciones eran polarizadas, si las preguntas eran superficiales o profundas",
+  "recomendacionesDocente": ["3-4 recomendaciones concretas para el docente para la próxima clase"],
+  "preguntasParaRetomar": ["2-3 preguntas que quedaron sin resolver o merecen ser retomadas en clase"],
+  "nivelDebate": "superficial" | "adecuado" | "profundo"
+}${rondasPasadasSection}`;
+  return prompt;
 }

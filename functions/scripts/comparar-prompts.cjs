@@ -1,3 +1,6 @@
+// ⚠️ OBSOLETO (7/10/2026): el prompt nuevo ya no le pide «tieneRazon» ni «grado» al modelo (el reparto se deduce de su
+// «calificacionRecomendada»), así que este script ya no mide lo que decía. Usá scripts/comparar-modelos.cjs, que compara
+// el prompt actual desplegado contra el nuevo. Se conserva solo como registro de la comparación anterior.
 // Compara el prompt ACTUAL del árbitro (el de producción original: el modelo escribe
 // puntosPregunta / puntosResponde) contra el prompt NUEVO (el modelo dice tieneRazon + grado y el
 // CÓDIGO calcula el reparto), con las mismas disputas, 3 repeticiones por prompt, y verifica en cada

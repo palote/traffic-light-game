@@ -1,0 +1,1445 @@
+{
+  "modeloA": "gemini-3.1-flash-lite-preview",
+  "modeloB": "gemini-3.1-flash-lite",
+  "textoReconstruido": true,
+  "casos": [
+    {
+      "id": "fuentes-sinonimos",
+      "tipo": "sinónimos",
+      "esperado": {
+        "razon": "pregunta",
+        "grado": "parcial"
+      }
+    },
+    {
+      "id": "cuneiforme-bien",
+      "tipo": "error bien identificado",
+      "esperado": {
+        "razon": "responde",
+        "grado": null
+      }
+    },
+    {
+      "id": "piramides-esclavos",
+      "tipo": "dato falso",
+      "esperado": {
+        "razon": "pregunta",
+        "grado": "total"
+      }
+    },
+    {
+      "id": "fuera-de-tema",
+      "tipo": "fuera de tema",
+      "esperado": {
+        "fueraDeTema": true
+      }
+    },
+    {
+      "id": "lengua-borderline",
+      "tipo": "caso límite",
+      "esperado": null
+    },
+    {
+      "id": "lengua-error-dato",
+      "tipo": "error de dato",
+      "esperado": {
+        "razon": "pregunta",
+        "grado": "total"
+      }
+    },
+    {
+      "id": "historia-borderline",
+      "tipo": "caso límite",
+      "esperado": null
+    },
+    {
+      "id": "historia-error-dato",
+      "tipo": "error de dato",
+      "esperado": {
+        "razon": "pregunta",
+        "grado": "total"
+      }
+    }
+  ],
+  "resultados": {
+    "fuentes-sinonimos": {
+      "A": [
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide las cuatro categorías de fuentes: escritas, materiales, imágenes y orales. Los Azules mencionaron escritas, orales, y usaron términos equivalentes para materiales (vestigios y arqueológicas), pero omitieron las fuentes de imágenes.\",\n  \"calificacionRecomendada\": \"incompleta\",\n  \"tieneRazon\": \"ambos\",\n  \"grado\": \"parcial\",\n  \"veredicto\": \"Ambos equipos tienen parte de razón en su postura.\",\n  \"explicacion\": \"Los Azules tienen razón al usar sinónimos como 'vestigios' para referirse a las fuentes materiales, ya que el concepto es correcto. Sin embargo, los Rojos tienen razón al señalar que la respuesta está incompleta, porque faltó mencionar una de las cuatro categorías: las fuentes de imágenes.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que los historiadores necesitan usar diferentes tipos de fuentes, como imágenes y objetos, en lugar de confiar solo en los documentos escritos?\"\n}",
+          "ms": 1415,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "ambos",
+          "grado": "parcial",
+          "reparto": {
+            "puntosPregunta": 0.5,
+            "puntosResponde": 0.5
+          },
+          "acierta": false,
+          "repartoOk": false,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide las cuatro categorías de fuentes: escritas, materiales, imágenes y orales. Los Azules mencionaron escritas, orales, y usaron términos equivalentes para materiales (vestigios y arqueológicas), pero omitieron las fuentes de imágenes.",
+            "calificacionRecomendada": "incompleta",
+            "tieneRazon": "ambos",
+            "grado": "parcial",
+            "veredicto": "Ambos equipos tienen parte de razón en su postura.",
+            "explicacion": "Los Azules tienen razón al usar sinónimos como 'vestigios' para referirse a las fuentes materiales, ya que el concepto es correcto. Sin embargo, los Rojos tienen razón al señalar que la respuesta está incompleta, porque faltó mencionar una de las cuatro categorías: las fuentes de imágenes.",
+            "paraSeguirPensando": "¿Por qué creen que los historiadores necesitan usar diferentes tipos de fuentes, como imágenes y objetos, en lugar de confiar solo en los documentos escritos?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide las cuatro categorías de fuentes: escritas, materiales, imágenes y orales. Azules mencionó: escritas, orales, vestigios (materiales) y arqueológicas (materiales).\",\n  \"calificacionRecomendada\": \"incompleta\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"parcial\",\n  \"veredicto\": \"El equipo de los Azules tiene razón en parte, ya que identificó correctamente las fuentes materiales con otros nombres, pero omitió las fuentes de imágenes.\",\n  \"explicacion\": \"Los Azules demostraron entender que los restos arqueológicos son fuentes materiales, lo cual es correcto. Sin embargo, la respuesta está incompleta porque el texto base menciona cuatro categorías y ellos olvidaron incluir las fuentes de imágenes, como pinturas o relieves.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que los historiadores necesitan usar diferentes tipos de fuentes, como imágenes y objetos, en lugar de confiar solo en lo que está escrito?\"\n}",
+          "ms": 1638,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "parcial",
+          "reparto": {
+            "puntosPregunta": 0.25,
+            "puntosResponde": 0.75
+          },
+          "acierta": false,
+          "repartoOk": false,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide las cuatro categorías de fuentes: escritas, materiales, imágenes y orales. Azules mencionó: escritas, orales, vestigios (materiales) y arqueológicas (materiales).",
+            "calificacionRecomendada": "incompleta",
+            "tieneRazon": "responde",
+            "grado": "parcial",
+            "veredicto": "El equipo de los Azules tiene razón en parte, ya que identificó correctamente las fuentes materiales con otros nombres, pero omitió las fuentes de imágenes.",
+            "explicacion": "Los Azules demostraron entender que los restos arqueológicos son fuentes materiales, lo cual es correcto. Sin embargo, la respuesta está incompleta porque el texto base menciona cuatro categorías y ellos olvidaron incluir las fuentes de imágenes, como pinturas o relieves.",
+            "paraSeguirPensando": "¿Por qué creen que los historiadores necesitan usar diferentes tipos de fuentes, como imágenes y objetos, en lugar de confiar solo en lo que está escrito?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide las cuatro categorías de fuentes: escritas, materiales, imágenes y orales. Azules mencionó: escritas, orales, vestigios (materiales) y arqueológicas (materiales).\",\n  \"calificacionRecomendada\": \"incompleta\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"parcial\",\n  \"veredicto\": \"El equipo de los Azules tiene razón en parte, ya que identificó correctamente las fuentes materiales con otros nombres, pero omitió las fuentes de imágenes.\",\n  \"explicacion\": \"Los historiadores usan cuatro tipos de fuentes para estudiar el pasado: escritas, materiales, imágenes y orales. Si bien 'vestigios' y 'restos arqueológicos' son formas correctas de llamar a las fuentes materiales, el equipo olvidó mencionar las fuentes de imágenes, como pinturas o relieves.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que los historiadores necesitan usar diferentes tipos de fuentes y no solo una para conocer cómo vivía la gente en Egipto y Mesopotamia?\"\n}",
+          "ms": 1614,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "parcial",
+          "reparto": {
+            "puntosPregunta": 0.25,
+            "puntosResponde": 0.75
+          },
+          "acierta": false,
+          "repartoOk": false,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide las cuatro categorías de fuentes: escritas, materiales, imágenes y orales. Azules mencionó: escritas, orales, vestigios (materiales) y arqueológicas (materiales).",
+            "calificacionRecomendada": "incompleta",
+            "tieneRazon": "responde",
+            "grado": "parcial",
+            "veredicto": "El equipo de los Azules tiene razón en parte, ya que identificó correctamente las fuentes materiales con otros nombres, pero omitió las fuentes de imágenes.",
+            "explicacion": "Los historiadores usan cuatro tipos de fuentes para estudiar el pasado: escritas, materiales, imágenes y orales. Si bien 'vestigios' y 'restos arqueológicos' son formas correctas de llamar a las fuentes materiales, el equipo olvidó mencionar las fuentes de imágenes, como pinturas o relieves.",
+            "paraSeguirPensando": "¿Por qué creen que los historiadores necesitan usar diferentes tipos de fuentes y no solo una para conocer cómo vivía la gente en Egipto y Mesopotamia?"
+          },
+          "motivo": null
+        }
+      ],
+      "B": [
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide las cuatro categorías de fuentes: escritas, materiales, imágenes y orales. Los Azules mencionaron: escritas, orales, vestigios (materiales) y arqueológicas (materiales).\",\n  \"calificacionRecomendada\": \"incompleta\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"parcial\",\n  \"veredicto\": \"El equipo de los Azules tiene razón en parte, ya que identificaron correctamente las fuentes materiales con otros nombres, pero omitieron las fuentes de imágenes.\",\n  \"explicacion\": \"Los Azules acertaron al explicar que los vestigios y restos arqueológicos son lo mismo que las fuentes materiales mencionadas en el texto. Sin embargo, la respuesta está incompleta porque olvidaron mencionar las fuentes de imágenes, que son fundamentales para conocer cómo vivían estas civilizaciones.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que los historiadores necesitan usar diferentes tipos de fuentes, como imágenes y objetos, en lugar de confiar solo en lo que está escrito?\"\n}",
+          "ms": 1444,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "parcial",
+          "reparto": {
+            "puntosPregunta": 0.25,
+            "puntosResponde": 0.75
+          },
+          "acierta": false,
+          "repartoOk": false,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide las cuatro categorías de fuentes: escritas, materiales, imágenes y orales. Los Azules mencionaron: escritas, orales, vestigios (materiales) y arqueológicas (materiales).",
+            "calificacionRecomendada": "incompleta",
+            "tieneRazon": "responde",
+            "grado": "parcial",
+            "veredicto": "El equipo de los Azules tiene razón en parte, ya que identificaron correctamente las fuentes materiales con otros nombres, pero omitieron las fuentes de imágenes.",
+            "explicacion": "Los Azules acertaron al explicar que los vestigios y restos arqueológicos son lo mismo que las fuentes materiales mencionadas en el texto. Sin embargo, la respuesta está incompleta porque olvidaron mencionar las fuentes de imágenes, que son fundamentales para conocer cómo vivían estas civilizaciones.",
+            "paraSeguirPensando": "¿Por qué creen que los historiadores necesitan usar diferentes tipos de fuentes, como imágenes y objetos, en lugar de confiar solo en lo que está escrito?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide las cuatro categorías de fuentes: escritas, materiales, imágenes y orales. Los Azules mencionaron 'escritas' y 'orales' correctamente, y usaron 'vestigios' y 'arqueológicas' como sinónimos de 'fuentes materiales'.\",\n  \"calificacionRecomendada\": \"incompleta\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"parcial\",\n  \"veredicto\": \"El equipo de los Azules tiene razón en parte, ya que sus términos son correctos, pero la respuesta sigue siendo incompleta porque omitieron una de las cuatro categorías.\",\n  \"explicacion\": \"Los Azules usaron correctamente sinónimos para referirse a las fuentes materiales, lo cual es válido. Sin embargo, la respuesta no está completa porque el texto base menciona cuatro categorías y ellos solo nombraron tres, olvidando las fuentes de imágenes.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que los historiadores necesitan usar diferentes tipos de fuentes, como imágenes o restos materiales, en lugar de confiar solo en los documentos escritos?\"\n}",
+          "ms": 1466,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "parcial",
+          "reparto": {
+            "puntosPregunta": 0.25,
+            "puntosResponde": 0.75
+          },
+          "acierta": false,
+          "repartoOk": false,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide las cuatro categorías de fuentes: escritas, materiales, imágenes y orales. Los Azules mencionaron 'escritas' y 'orales' correctamente, y usaron 'vestigios' y 'arqueológicas' como sinónimos de 'fuentes materiales'.",
+            "calificacionRecomendada": "incompleta",
+            "tieneRazon": "responde",
+            "grado": "parcial",
+            "veredicto": "El equipo de los Azules tiene razón en parte, ya que sus términos son correctos, pero la respuesta sigue siendo incompleta porque omitieron una de las cuatro categorías.",
+            "explicacion": "Los Azules usaron correctamente sinónimos para referirse a las fuentes materiales, lo cual es válido. Sin embargo, la respuesta no está completa porque el texto base menciona cuatro categorías y ellos solo nombraron tres, olvidando las fuentes de imágenes.",
+            "paraSeguirPensando": "¿Por qué creen que los historiadores necesitan usar diferentes tipos de fuentes, como imágenes o restos materiales, en lugar de confiar solo en los documentos escritos?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide las cuatro categorías de fuentes: escritas, materiales, imágenes y orales. Azules mencionó: escritas, orales, vestigios (materiales) y arqueológicas (materiales).\",\n  \"calificacionRecomendada\": \"incompleta\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"parcial\",\n  \"veredicto\": \"El equipo de los Azules tiene razón en parte, ya que identificaron correctamente las fuentes materiales con otros nombres, pero omitieron las fuentes de imágenes.\",\n  \"explicacion\": \"Los Azules demostraron entender que los 'vestigios' y 'restos arqueológicos' son lo mismo que las fuentes materiales que menciona el texto. Sin embargo, la respuesta está incompleta porque olvidaron mencionar las fuentes de imágenes, que son fundamentales para conocer cómo vivían estas civilizaciones.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que los historiadores necesitan usar diferentes tipos de fuentes, como imágenes y objetos, en lugar de confiar solo en lo que está escrito?\"\n}",
+          "ms": 1495,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "parcial",
+          "reparto": {
+            "puntosPregunta": 0.25,
+            "puntosResponde": 0.75
+          },
+          "acierta": false,
+          "repartoOk": false,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide las cuatro categorías de fuentes: escritas, materiales, imágenes y orales. Azules mencionó: escritas, orales, vestigios (materiales) y arqueológicas (materiales).",
+            "calificacionRecomendada": "incompleta",
+            "tieneRazon": "responde",
+            "grado": "parcial",
+            "veredicto": "El equipo de los Azules tiene razón en parte, ya que identificaron correctamente las fuentes materiales con otros nombres, pero omitieron las fuentes de imágenes.",
+            "explicacion": "Los Azules demostraron entender que los 'vestigios' y 'restos arqueológicos' son lo mismo que las fuentes materiales que menciona el texto. Sin embargo, la respuesta está incompleta porque olvidaron mencionar las fuentes de imágenes, que son fundamentales para conocer cómo vivían estas civilizaciones.",
+            "paraSeguirPensando": "¿Por qué creen que los historiadores necesitan usar diferentes tipos de fuentes, como imágenes y objetos, en lugar de confiar solo en lo que está escrito?"
+          },
+          "motivo": null
+        }
+      ]
+    },
+    "cuneiforme-bien": {
+      "A": [
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pedía identificar el error en la afirmación dada. El elemento clave es señalar que la escritura cuneiforme no pertenece a Egipto. Los Rojos identificaron correctamente que la escritura cuneiforme no es egipcia, cumpliendo con lo solicitado.\",\n  \"calificacionRecomendada\": \"completa\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"total\",\n  \"veredicto\": \"El equipo de los Rojos tiene razón porque cumplió con lo que la pregunta pedía.\",\n  \"explicacion\": \"La consigna solicitaba identificar el error en la frase. Al señalar que la escritura cuneiforme no es egipcia, el equipo respondió correctamente a la tarea. No era obligatorio mencionar el nombre de la escritura egipcia para que la identificación del error fuera válida.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que es importante saber qué tipo de materiales usaba cada civilización para escribir sus documentos?\"\n}",
+          "ms": 1432,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 1
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pedía identificar el error en la afirmación dada. El elemento clave es señalar que la escritura cuneiforme no pertenece a Egipto. Los Rojos identificaron correctamente que la escritura cuneiforme no es egipcia, cumpliendo con lo solicitado.",
+            "calificacionRecomendada": "completa",
+            "tieneRazon": "responde",
+            "grado": "total",
+            "veredicto": "El equipo de los Rojos tiene razón porque cumplió con lo que la pregunta pedía.",
+            "explicacion": "La consigna solicitaba identificar el error en la frase. Al señalar que la escritura cuneiforme no es egipcia, el equipo respondió correctamente a la tarea. No era obligatorio mencionar el nombre de la escritura egipcia para que la identificación del error fuera válida.",
+            "paraSeguirPensando": "¿Por qué creen que es importante saber qué tipo de materiales usaba cada civilización para escribir sus documentos?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pedía identificar el error en la afirmación dada. El equipo Rojos identificó correctamente que la escritura cuneiforme no pertenece a Egipto, lo cual es el error central de la frase.\",\n  \"calificacionRecomendada\": \"completa\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"total\",\n  \"veredicto\": \"El equipo Rojos tiene razón porque cumplió con la consigna de identificar el error específico en la afirmación.\",\n  \"explicacion\": \"La pregunta pedía señalar qué estaba mal en la frase. Al decir que la escritura cuneiforme no es egipcia, el equipo Rojos detectó el error principal. No era necesario explicar qué escritura usaban los egipcios para que la respuesta fuera correcta, ya que la consigna no lo solicitaba.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que es importante saber qué tipo de materiales usaba cada civilización para escribir, como el papiro o la arcilla?\"\n}",
+          "ms": 1395,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 1
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pedía identificar el error en la afirmación dada. El equipo Rojos identificó correctamente que la escritura cuneiforme no pertenece a Egipto, lo cual es el error central de la frase.",
+            "calificacionRecomendada": "completa",
+            "tieneRazon": "responde",
+            "grado": "total",
+            "veredicto": "El equipo Rojos tiene razón porque cumplió con la consigna de identificar el error específico en la afirmación.",
+            "explicacion": "La pregunta pedía señalar qué estaba mal en la frase. Al decir que la escritura cuneiforme no es egipcia, el equipo Rojos detectó el error principal. No era necesario explicar qué escritura usaban los egipcios para que la respuesta fuera correcta, ya que la consigna no lo solicitaba.",
+            "paraSeguirPensando": "¿Por qué creen que es importante saber qué tipo de materiales usaba cada civilización para escribir, como el papiro o la arcilla?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pedía identificar el error en la afirmación dada. El equipo identificó correctamente que la escritura cuneiforme no pertenece a Egipto, cumpliendo con la consigna de señalar el error.\",\n  \"calificacionRecomendada\": \"completa\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"total\",\n  \"veredicto\": \"El equipo de Rojos tiene razón porque cumplió exactamente con lo que la pregunta pedía.\",\n  \"explicacion\": \"La consigna solicitaba identificar el error en la frase y el equipo lo hizo correctamente al señalar que el cuneiforme no es egipcio. No era obligatorio mencionar la escritura jeroglífica para que la respuesta fuera considerada completa, ya que la pregunta no pedía corregir la afirmación, sino solo identificar el error.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que es importante saber qué tipo de materiales usaba cada civilización para escribir sus documentos?\"\n}",
+          "ms": 1482,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 1
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pedía identificar el error en la afirmación dada. El equipo identificó correctamente que la escritura cuneiforme no pertenece a Egipto, cumpliendo con la consigna de señalar el error.",
+            "calificacionRecomendada": "completa",
+            "tieneRazon": "responde",
+            "grado": "total",
+            "veredicto": "El equipo de Rojos tiene razón porque cumplió exactamente con lo que la pregunta pedía.",
+            "explicacion": "La consigna solicitaba identificar el error en la frase y el equipo lo hizo correctamente al señalar que el cuneiforme no es egipcio. No era obligatorio mencionar la escritura jeroglífica para que la respuesta fuera considerada completa, ya que la pregunta no pedía corregir la afirmación, sino solo identificar el error.",
+            "paraSeguirPensando": "¿Por qué creen que es importante saber qué tipo de materiales usaba cada civilización para escribir sus documentos?"
+          },
+          "motivo": null
+        }
+      ],
+      "B": [
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pedía identificar el error en la afirmación dada. El equipo identificó correctamente que la escritura cuneiforme no pertenece a Egipto, cumpliendo con lo solicitado.\",\n  \"calificacionRecomendada\": \"completa\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"total\",\n  \"veredicto\": \"El equipo de Rojos tiene razón porque cumplió con lo que la pregunta pedía.\",\n  \"explicacion\": \"La consigna solicitaba identificar el error en la frase. Al señalar que la escritura cuneiforme no es egipcia, el equipo detectó la falla correctamente. No era obligatorio mencionar la escritura jeroglífica para que la respuesta fuera considerada completa.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que es importante saber qué tipo de materiales usaba cada civilización para escribir sus documentos?\"\n}",
+          "ms": 1545,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 1
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pedía identificar el error en la afirmación dada. El equipo identificó correctamente que la escritura cuneiforme no pertenece a Egipto, cumpliendo con lo solicitado.",
+            "calificacionRecomendada": "completa",
+            "tieneRazon": "responde",
+            "grado": "total",
+            "veredicto": "El equipo de Rojos tiene razón porque cumplió con lo que la pregunta pedía.",
+            "explicacion": "La consigna solicitaba identificar el error en la frase. Al señalar que la escritura cuneiforme no es egipcia, el equipo detectó la falla correctamente. No era obligatorio mencionar la escritura jeroglífica para que la respuesta fuera considerada completa.",
+            "paraSeguirPensando": "¿Por qué creen que es importante saber qué tipo de materiales usaba cada civilización para escribir sus documentos?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pedía identificar el error en la afirmación dada. El equipo identificó correctamente que la escritura cuneiforme no pertenece a Egipto, cumpliendo con la consigna de señalar el error.\",\n  \"calificacionRecomendada\": \"completa\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"total\",\n  \"veredicto\": \"El equipo de Rojos tiene razón porque cumplió con la consigna de identificar el error específico solicitado.\",\n  \"explicacion\": \"La pregunta pedía identificar el error en la frase, y el equipo lo hizo correctamente al señalar que la escritura cuneiforme no es egipcia. No era obligatorio mencionar la escritura jeroglífica para que la respuesta fuera correcta, ya que la consigna no pedía corregir la frase completa, sino solo identificar el error.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que es importante saber qué tipo de materiales usaba cada civilización para escribir, como el papiro o la arcilla?\"\n}",
+          "ms": 1387,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 1
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pedía identificar el error en la afirmación dada. El equipo identificó correctamente que la escritura cuneiforme no pertenece a Egipto, cumpliendo con la consigna de señalar el error.",
+            "calificacionRecomendada": "completa",
+            "tieneRazon": "responde",
+            "grado": "total",
+            "veredicto": "El equipo de Rojos tiene razón porque cumplió con la consigna de identificar el error específico solicitado.",
+            "explicacion": "La pregunta pedía identificar el error en la frase, y el equipo lo hizo correctamente al señalar que la escritura cuneiforme no es egipcia. No era obligatorio mencionar la escritura jeroglífica para que la respuesta fuera correcta, ya que la consigna no pedía corregir la frase completa, sino solo identificar el error.",
+            "paraSeguirPensando": "¿Por qué creen que es importante saber qué tipo de materiales usaba cada civilización para escribir, como el papiro o la arcilla?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide identificar el error en la afirmación dada. El elemento clave es señalar que la escritura cuneiforme no pertenece a Egipto. Los Rojos identificaron correctamente que el cuneiforme no es egipcio, cumpliendo con lo solicitado.\",\n  \"calificacionRecomendada\": \"completa\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"total\",\n  \"veredicto\": \"El equipo de los Rojos tiene razón porque cumplió con lo que la pregunta pedía.\",\n  \"explicacion\": \"La pregunta pedía identificar el error en la frase, y el equipo lo hizo correctamente al señalar que la escritura cuneiforme no es de Egipto. No era obligatorio mencionar la escritura jeroglífica para que la respuesta fuera correcta, ya que la consigna solo pedía detectar el error.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que es importante saber qué tipo de materiales usaba cada civilización para escribir sus documentos?\"\n}",
+          "ms": 1785,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 1
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide identificar el error en la afirmación dada. El elemento clave es señalar que la escritura cuneiforme no pertenece a Egipto. Los Rojos identificaron correctamente que el cuneiforme no es egipcio, cumpliendo con lo solicitado.",
+            "calificacionRecomendada": "completa",
+            "tieneRazon": "responde",
+            "grado": "total",
+            "veredicto": "El equipo de los Rojos tiene razón porque cumplió con lo que la pregunta pedía.",
+            "explicacion": "La pregunta pedía identificar el error en la frase, y el equipo lo hizo correctamente al señalar que la escritura cuneiforme no es de Egipto. No era obligatorio mencionar la escritura jeroglífica para que la respuesta fuera correcta, ya que la consigna solo pedía detectar el error.",
+            "paraSeguirPensando": "¿Por qué creen que es importante saber qué tipo de materiales usaba cada civilización para escribir sus documentos?"
+          },
+          "motivo": null
+        }
+      ]
+    },
+    "piramides-esclavos": {
+      "A": [
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La pregunta pide identificar quiénes construyeron las pirámides. El texto base especifica que fueron 'miles de trabajadores egipcios, organizados por el Estado, que recibían alimento y vivienda'. La respuesta de Azules menciona 'esclavos', lo cual contradice la información del texto.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"El equipo de los Rojos tiene razón porque la respuesta de los Azules contradice la información histórica del texto base.\",\n  \"explicacion\": \"El texto es muy claro al decir que las pirámides fueron construidas por trabajadores organizados por el Estado que recibían comida y un lugar donde vivir. Decir que fueron esclavos es un error histórico, ya que los trabajadores eran personas libres que cumplían con una tarea para su reino.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que es importante revisar lo que dicen los libros de historia en lugar de guiarnos solo por lo que vemos en las películas?\"\n}",
+          "ms": 1582,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La pregunta pide identificar quiénes construyeron las pirámides. El texto base especifica que fueron 'miles de trabajadores egipcios, organizados por el Estado, que recibían alimento y vivienda'. La respuesta de Azules menciona 'esclavos', lo cual contradice la información del texto.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "El equipo de los Rojos tiene razón porque la respuesta de los Azules contradice la información histórica del texto base.",
+            "explicacion": "El texto es muy claro al decir que las pirámides fueron construidas por trabajadores organizados por el Estado que recibían comida y un lugar donde vivir. Decir que fueron esclavos es un error histórico, ya que los trabajadores eran personas libres que cumplían con una tarea para su reino.",
+            "paraSeguirPensando": "¿Por qué creen que es importante revisar lo que dicen los libros de historia en lugar de guiarnos solo por lo que vemos en las películas?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La pregunta pide identificar a los constructores de las pirámides. El texto base especifica que fueron 'miles de trabajadores egipcios, organizados por el Estado, que recibían alimento y vivienda'. La respuesta de Azules menciona 'esclavos', lo cual contradice la información del texto.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"El equipo Rojos tiene razón al señalar que la respuesta de Azules es incorrecta según el texto base.\",\n  \"explicacion\": \"El texto es muy claro al decir que las pirámides fueron construidas por trabajadores organizados por el Estado que recibían comida y un lugar donde vivir. Decir que fueron esclavos es un error histórico, ya que el texto nos muestra que era una tarea organizada por el gobierno de Egipto.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que es importante revisar lo que dicen los libros de historia en lugar de guiarnos solo por lo que vemos en las películas?\"\n}",
+          "ms": 1935,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La pregunta pide identificar a los constructores de las pirámides. El texto base especifica que fueron 'miles de trabajadores egipcios, organizados por el Estado, que recibían alimento y vivienda'. La respuesta de Azules menciona 'esclavos', lo cual contradice la información del texto.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "El equipo Rojos tiene razón al señalar que la respuesta de Azules es incorrecta según el texto base.",
+            "explicacion": "El texto es muy claro al decir que las pirámides fueron construidas por trabajadores organizados por el Estado que recibían comida y un lugar donde vivir. Decir que fueron esclavos es un error histórico, ya que el texto nos muestra que era una tarea organizada por el gobierno de Egipto.",
+            "paraSeguirPensando": "¿Por qué creen que es importante revisar lo que dicen los libros de historia en lugar de guiarnos solo por lo que vemos en las películas?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La pregunta pide identificar quiénes construyeron las pirámides. El texto base especifica que fueron 'miles de trabajadores egipcios, organizados por el Estado, que recibían alimento y vivienda'. La respuesta de Azules menciona 'esclavos', lo cual contradice la información del texto.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"El equipo de Rojos tiene razón porque la respuesta de Azules contradice la información histórica del texto base.\",\n  \"explicacion\": \"El texto base explica claramente que las pirámides fueron construidas por trabajadores organizados por el Estado que recibían alimento y vivienda, no por esclavos. Es importante basarse en las fuentes históricas y no en lo que vemos en las películas, ya que el cine a veces cambia los hechos para que las historias sean más emocionantes.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que es importante investigar cómo vivían y trabajaban realmente las personas en las civilizaciones antiguas en lugar de confiar solo en lo que vemos en las películas?\"\n}",
+          "ms": 1453,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La pregunta pide identificar quiénes construyeron las pirámides. El texto base especifica que fueron 'miles de trabajadores egipcios, organizados por el Estado, que recibían alimento y vivienda'. La respuesta de Azules menciona 'esclavos', lo cual contradice la información del texto.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "El equipo de Rojos tiene razón porque la respuesta de Azules contradice la información histórica del texto base.",
+            "explicacion": "El texto base explica claramente que las pirámides fueron construidas por trabajadores organizados por el Estado que recibían alimento y vivienda, no por esclavos. Es importante basarse en las fuentes históricas y no en lo que vemos en las películas, ya que el cine a veces cambia los hechos para que las historias sean más emocionantes.",
+            "paraSeguirPensando": "¿Por qué creen que es importante investigar cómo vivían y trabajaban realmente las personas en las civilizaciones antiguas en lugar de confiar solo en lo que vemos en las películas?"
+          },
+          "motivo": null
+        }
+      ],
+      "B": [
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La pregunta pide identificar quiénes construyeron las pirámides. El texto base especifica que fueron 'miles de trabajadores egipcios, organizados por el Estado, que recibían alimento y vivienda'. La respuesta de Azules menciona 'esclavos', lo cual contradice la información del texto.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"El equipo de los Rojos tiene razón porque la respuesta de los Azules contradice la información histórica del texto base.\",\n  \"explicacion\": \"El texto base es muy claro al explicar que las pirámides fueron construidas por trabajadores organizados por el Estado que recibían comida y un lugar donde vivir. Decir que fueron esclavos es un error, ya que el texto nos muestra que era una tarea organizada por el gobierno de Egipto.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que es importante revisar lo que dicen los libros de historia en lugar de confiar solo en lo que vemos en las películas?\"\n}",
+          "ms": 1933,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La pregunta pide identificar quiénes construyeron las pirámides. El texto base especifica que fueron 'miles de trabajadores egipcios, organizados por el Estado, que recibían alimento y vivienda'. La respuesta de Azules menciona 'esclavos', lo cual contradice la información del texto.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "El equipo de los Rojos tiene razón porque la respuesta de los Azules contradice la información histórica del texto base.",
+            "explicacion": "El texto base es muy claro al explicar que las pirámides fueron construidas por trabajadores organizados por el Estado que recibían comida y un lugar donde vivir. Decir que fueron esclavos es un error, ya que el texto nos muestra que era una tarea organizada por el gobierno de Egipto.",
+            "paraSeguirPensando": "¿Por qué creen que es importante revisar lo que dicen los libros de historia en lugar de confiar solo en lo que vemos en las películas?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La pregunta pide identificar quiénes construyeron las pirámides. El texto base especifica que fueron 'miles de trabajadores egipcios, organizados por el Estado, que recibían alimento y vivienda'. La respuesta de Azules menciona 'esclavos', lo cual contradice la información del texto.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"El equipo de Rojos tiene razón porque la respuesta de Azules contradice la información histórica del texto base.\",\n  \"explicacion\": \"El texto nos enseña que las pirámides fueron construidas por trabajadores organizados por el Estado, quienes recibían comida y un lugar donde vivir a cambio de su trabajo. Decir que fueron esclavos es un error histórico, ya que el texto aclara que eran trabajadores que recibían un pago en forma de alimento y vivienda.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que es importante revisar lo que dicen los libros de historia en lugar de guiarnos solo por lo que vemos en las películas?\"\n}",
+          "ms": 1602,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La pregunta pide identificar quiénes construyeron las pirámides. El texto base especifica que fueron 'miles de trabajadores egipcios, organizados por el Estado, que recibían alimento y vivienda'. La respuesta de Azules menciona 'esclavos', lo cual contradice la información del texto.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "El equipo de Rojos tiene razón porque la respuesta de Azules contradice la información histórica del texto base.",
+            "explicacion": "El texto nos enseña que las pirámides fueron construidas por trabajadores organizados por el Estado, quienes recibían comida y un lugar donde vivir a cambio de su trabajo. Decir que fueron esclavos es un error histórico, ya que el texto aclara que eran trabajadores que recibían un pago en forma de alimento y vivienda.",
+            "paraSeguirPensando": "¿Por qué creen que es importante revisar lo que dicen los libros de historia en lugar de guiarnos solo por lo que vemos en las películas?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La pregunta pide identificar quiénes construyeron las pirámides. El texto base especifica que fueron 'miles de trabajadores egipcios, organizados por el Estado, que recibían alimento y vivienda'. La respuesta de Azules menciona 'esclavos', lo cual contradice la información del texto.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"El equipo de los Rojos tiene razón al señalar que la respuesta de los Azules es incorrecta según el texto base.\",\n  \"explicacion\": \"El texto base es muy claro al explicar que las pirámides fueron construidas por trabajadores organizados por el Estado que recibían comida y un lugar donde vivir. Decir que fueron esclavos es un error histórico según nuestra fuente, ya que el trabajo era una forma de organizar a la población del reino.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que es importante revisar lo que dicen los textos históricos en lugar de guiarnos solo por lo que vemos en las películas o lo que escuchamos habitualmente?\"\n}",
+          "ms": 1723,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La pregunta pide identificar quiénes construyeron las pirámides. El texto base especifica que fueron 'miles de trabajadores egipcios, organizados por el Estado, que recibían alimento y vivienda'. La respuesta de Azules menciona 'esclavos', lo cual contradice la información del texto.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "El equipo de los Rojos tiene razón al señalar que la respuesta de los Azules es incorrecta según el texto base.",
+            "explicacion": "El texto base es muy claro al explicar que las pirámides fueron construidas por trabajadores organizados por el Estado que recibían comida y un lugar donde vivir. Decir que fueron esclavos es un error histórico según nuestra fuente, ya que el trabajo era una forma de organizar a la población del reino.",
+            "paraSeguirPensando": "¿Por qué creen que es importante revisar lo que dicen los textos históricos en lugar de guiarnos solo por lo que vemos en las películas o lo que escuchamos habitualmente?"
+          },
+          "motivo": null
+        }
+      ]
+    },
+    "fuera-de-tema": {
+      "A": [
+        {
+          "texto": "{\n  \"resultado\": \"fuera_de_tema\",\n  \"elementosClave\": \"N/A\",\n  \"calificacionRecomendada\": \"no\",\n  \"veredicto\": \"Este desacuerdo no corresponde al tema de la sesión.\",\n  \"explicacion\": \"El árbitro solo puede intervenir en desacuerdos sobre Historia — tema: Egipto y Mesopotamia. Como la pregunta no corresponde al tema, no corresponde puntaje por esta respuesta.\",\n  \"paraSeguirPensando\": \"¿La pregunta que querían plantear sí tiene que ver con Egipto y Mesopotamia?\"\n}",
+          "ms": 852,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": true,
+          "razon": "fuera_de_tema",
+          "grado": null,
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "fuera_de_tema",
+            "elementosClave": "N/A",
+            "calificacionRecomendada": "no",
+            "veredicto": "Este desacuerdo no corresponde al tema de la sesión.",
+            "explicacion": "El árbitro solo puede intervenir en desacuerdos sobre Historia — tema: Egipto y Mesopotamia. Como la pregunta no corresponde al tema, no corresponde puntaje por esta respuesta.",
+            "paraSeguirPensando": "¿La pregunta que querían plantear sí tiene que ver con Egipto y Mesopotamia?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"fuera_de_tema\",\n  \"elementosClave\": \"N/A\",\n  \"calificacionRecomendada\": \"no\",\n  \"veredicto\": \"Este desacuerdo no corresponde al tema de la sesión.\",\n  \"explicacion\": \"El árbitro solo puede intervenir en desacuerdos sobre Historia — tema: Egipto y Mesopotamia. Como la pregunta no corresponde al tema, no corresponde puntaje por esta respuesta.\",\n  \"paraSeguirPensando\": \"¿La pregunta que querían plantear sí tiene que ver con Egipto y Mesopotamia?\"\n}",
+          "ms": 1156,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": true,
+          "razon": "fuera_de_tema",
+          "grado": null,
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "fuera_de_tema",
+            "elementosClave": "N/A",
+            "calificacionRecomendada": "no",
+            "veredicto": "Este desacuerdo no corresponde al tema de la sesión.",
+            "explicacion": "El árbitro solo puede intervenir en desacuerdos sobre Historia — tema: Egipto y Mesopotamia. Como la pregunta no corresponde al tema, no corresponde puntaje por esta respuesta.",
+            "paraSeguirPensando": "¿La pregunta que querían plantear sí tiene que ver con Egipto y Mesopotamia?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\"resultado\":\"fuera_de_tema\",\"calificacionRecomendada\":\"no\",\"veredicto\":\"Este desacuerdo no corresponde al tema de la sesión.\",\"explicacion\":\"El \\u00e1rbitro solo puede intervenir en desacuerdos sobre Historia \\u2014 tema: Egipto y Mesopotamia. Como la pregunta no corresponde al tema, no corresponde puntaje por esta respuesta.\",\"paraSeguirPensando\":\"\\u00bfLa pregunta que quer\\u00edan plantear s\\u00ed tiene que ver con Egipto y Mesopotamia?\"}",
+          "ms": 1047,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": true,
+          "razon": "fuera_de_tema",
+          "grado": null,
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "fuera_de_tema",
+            "calificacionRecomendada": "no",
+            "veredicto": "Este desacuerdo no corresponde al tema de la sesión.",
+            "explicacion": "El árbitro solo puede intervenir en desacuerdos sobre Historia — tema: Egipto y Mesopotamia. Como la pregunta no corresponde al tema, no corresponde puntaje por esta respuesta.",
+            "paraSeguirPensando": "¿La pregunta que querían plantear sí tiene que ver con Egipto y Mesopotamia?"
+          },
+          "motivo": null
+        }
+      ],
+      "B": [
+        {
+          "texto": "{\n  \"resultado\": \"fuera_de_tema\",\n  \"elementosClave\": \"N/A\",\n  \"calificacionRecomendada\": \"no\",\n  \"veredicto\": \"Este desacuerdo no corresponde al tema de la sesión.\",\n  \"explicacion\": \"El árbitro solo puede intervenir en desacuerdos sobre Historia — tema: Egipto y Mesopotamia. Como la pregunta no corresponde al tema, no corresponde puntaje por esta respuesta.\",\n  \"paraSeguirPensando\": \"¿La pregunta que querían plantear sí tiene que ver con Egipto y Mesopotamia?\"\n}",
+          "ms": 1108,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": true,
+          "razon": "fuera_de_tema",
+          "grado": null,
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "fuera_de_tema",
+            "elementosClave": "N/A",
+            "calificacionRecomendada": "no",
+            "veredicto": "Este desacuerdo no corresponde al tema de la sesión.",
+            "explicacion": "El árbitro solo puede intervenir en desacuerdos sobre Historia — tema: Egipto y Mesopotamia. Como la pregunta no corresponde al tema, no corresponde puntaje por esta respuesta.",
+            "paraSeguirPensando": "¿La pregunta que querían plantear sí tiene que ver con Egipto y Mesopotamia?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"fuera_de_tema\",\n  \"elementosClave\": \"N/A\",\n  \"calificacionRecomendada\": \"no\",\n  \"veredicto\": \"Este desacuerdo no corresponde al tema de la sesión.\",\n  \"explicacion\": \"El árbitro solo puede intervenir en desacuerdos sobre Historia — tema: Egipto y Mesopotamia. Como la pregunta no corresponde al tema, no corresponde puntaje por esta respuesta.\",\n  \"paraSeguirPensando\": \"¿La pregunta que querían plantear sí tiene que ver con Egipto y Mesopotamia?\"\n}",
+          "ms": 1211,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": true,
+          "razon": "fuera_de_tema",
+          "grado": null,
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "fuera_de_tema",
+            "elementosClave": "N/A",
+            "calificacionRecomendada": "no",
+            "veredicto": "Este desacuerdo no corresponde al tema de la sesión.",
+            "explicacion": "El árbitro solo puede intervenir en desacuerdos sobre Historia — tema: Egipto y Mesopotamia. Como la pregunta no corresponde al tema, no corresponde puntaje por esta respuesta.",
+            "paraSeguirPensando": "¿La pregunta que querían plantear sí tiene que ver con Egipto y Mesopotamia?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"fuera_de_tema\",\n  \"elementosClave\": \"N/A\",\n  \"calificacionRecomendada\": \"no\",\n  \"veredicto\": \"Este desacuerdo no corresponde al tema de la sesión.\",\n  \"explicacion\": \"El árbitro solo puede intervenir en desacuerdos sobre Historia — tema: Egipto y Mesopotamia. Como la pregunta no corresponde al tema, no corresponde puntaje por esta respuesta.\",\n  \"paraSeguirPensando\": \"¿La pregunta que querían plantear sí tiene que ver con Egipto y Mesopotamia?\"\n}",
+          "ms": 1158,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": true,
+          "razon": "fuera_de_tema",
+          "grado": null,
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "fuera_de_tema",
+            "elementosClave": "N/A",
+            "calificacionRecomendada": "no",
+            "veredicto": "Este desacuerdo no corresponde al tema de la sesión.",
+            "explicacion": "El árbitro solo puede intervenir en desacuerdos sobre Historia — tema: Egipto y Mesopotamia. Como la pregunta no corresponde al tema, no corresponde puntaje por esta respuesta.",
+            "paraSeguirPensando": "¿La pregunta que querían plantear sí tiene que ver con Egipto y Mesopotamia?"
+          },
+          "motivo": null
+        }
+      ]
+    },
+    "lengua-borderline": {
+      "A": [
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide el motivo de la escritura de la obra. Los elementos clave son: 1) denunciar los abusos contra los indígenas y 2) el destinatario (el rey) para pedir que se frenen dichos abusos. El equipo mencionó el motivo principal de forma clara y directa.\",\n  \"calificacionRecomendada\": \"completa\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Cronistas tienen razón, ya que su respuesta explica correctamente el motivo principal de la obra según el texto.\",\n  \"explicacion\": \"La respuesta de Los Cronistas es correcta porque identifica el propósito central del texto: la denuncia de los abusos. Aunque mencionar al rey y el pedido de frenar la situación aporta más contexto, la respuesta dada responde con precisión a la pregunta sobre el 'por qué' se escribió el relato.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que era importante para un fraile como Bartolomé de las Casas escribirle directamente al rey en lugar de hablar solo con los conquistadores?\"\n}",
+          "ms": 1805,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 1
+          },
+          "acierta": null,
+          "repartoOk": null,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide el motivo de la escritura de la obra. Los elementos clave son: 1) denunciar los abusos contra los indígenas y 2) el destinatario (el rey) para pedir que se frenen dichos abusos. El equipo mencionó el motivo principal de forma clara y directa.",
+            "calificacionRecomendada": "completa",
+            "tieneRazon": "responde",
+            "grado": "total",
+            "veredicto": "Los Cronistas tienen razón, ya que su respuesta explica correctamente el motivo principal de la obra según el texto.",
+            "explicacion": "La respuesta de Los Cronistas es correcta porque identifica el propósito central del texto: la denuncia de los abusos. Aunque mencionar al rey y el pedido de frenar la situación aporta más contexto, la respuesta dada responde con precisión a la pregunta sobre el 'por qué' se escribió el relato.",
+            "paraSeguirPensando": "¿Por qué creen que era importante para un fraile como Bartolomé de las Casas escribirle directamente al rey en lugar de hablar solo con los conquistadores?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide el motivo de la escritura de la obra. Los elementos clave son: 1) denunciar los abusos contra los indígenas y 2) el destinatario (el rey) para pedir que se frenen. El equipo mencionó el motivo principal de forma clara y precisa.\",\n  \"calificacionRecomendada\": \"completa\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Cronistas tienen razón porque su respuesta identifica correctamente el motivo central de la obra según el texto.\",\n  \"explicacion\": \"La respuesta de Los Cronistas es correcta y directa. Aunque mencionar al rey y el pedido de freno añade contexto, la denuncia de los abusos es el núcleo del motivo por el cual se escribió el texto. No es necesario repetir toda la oración del texto para que la respuesta sea considerada completa.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que era tan importante para un fraile como Bartolomé de las Casas escribirle directamente al rey en lugar de contárselo a otras personas?\"\n}",
+          "ms": 1569,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 1
+          },
+          "acierta": null,
+          "repartoOk": null,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide el motivo de la escritura de la obra. Los elementos clave son: 1) denunciar los abusos contra los indígenas y 2) el destinatario (el rey) para pedir que se frenen. El equipo mencionó el motivo principal de forma clara y precisa.",
+            "calificacionRecomendada": "completa",
+            "tieneRazon": "responde",
+            "grado": "total",
+            "veredicto": "Los Cronistas tienen razón porque su respuesta identifica correctamente el motivo central de la obra según el texto.",
+            "explicacion": "La respuesta de Los Cronistas es correcta y directa. Aunque mencionar al rey y el pedido de freno añade contexto, la denuncia de los abusos es el núcleo del motivo por el cual se escribió el texto. No es necesario repetir toda la oración del texto para que la respuesta sea considerada completa.",
+            "paraSeguirPensando": "¿Por qué creen que era tan importante para un fraile como Bartolomé de las Casas escribirle directamente al rey en lugar de contárselo a otras personas?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide el motivo de la escritura de la obra. Los elementos clave son: 1) denunciar los abusos contra los indígenas y 2) el destinatario (el rey) para pedir que se frenen. El equipo mencionó el punto 1 de forma clara y precisa.\",\n  \"calificacionRecomendada\": \"completa\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Cronistas tienen razón porque su respuesta identifica correctamente el motivo central de la obra según el texto.\",\n  \"explicacion\": \"La respuesta de Los Cronistas es correcta y precisa. Aunque mencionar al rey y el pedido de freno añade contexto, la denuncia de los abusos es el núcleo del motivo por el cual se escribió el texto, tal como indica el texto base.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que para Bartolomé de las Casas era importante denunciar estos hechos específicamente ante el rey y no ante otras personas?\"\n}",
+          "ms": 1643,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 1
+          },
+          "acierta": null,
+          "repartoOk": null,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide el motivo de la escritura de la obra. Los elementos clave son: 1) denunciar los abusos contra los indígenas y 2) el destinatario (el rey) para pedir que se frenen. El equipo mencionó el punto 1 de forma clara y precisa.",
+            "calificacionRecomendada": "completa",
+            "tieneRazon": "responde",
+            "grado": "total",
+            "veredicto": "Los Cronistas tienen razón porque su respuesta identifica correctamente el motivo central de la obra según el texto.",
+            "explicacion": "La respuesta de Los Cronistas es correcta y precisa. Aunque mencionar al rey y el pedido de freno añade contexto, la denuncia de los abusos es el núcleo del motivo por el cual se escribió el texto, tal como indica el texto base.",
+            "paraSeguirPensando": "¿Por qué creen que para Bartolomé de las Casas era importante denunciar estos hechos específicamente ante el rey y no ante otras personas?"
+          },
+          "motivo": null
+        }
+      ],
+      "B": [
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide el motivo de la escritura de la obra. Los elementos clave son: 1) denunciar los abusos contra los indígenas y 2) el destinatario (el rey) para pedir que se frenen. El equipo mencionó el punto 1 de forma clara y directa.\",\n  \"calificacionRecomendada\": \"completa\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Cronistas tienen razón porque su respuesta identifica correctamente el motivo central de la obra según el texto.\",\n  \"explicacion\": \"La respuesta de Los Cronistas es precisa y responde directamente a la pregunta sobre el porqué de la obra. Aunque mencionar al rey añade contexto, el núcleo de la denuncia está perfectamente explicado en su respuesta.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que era importante para los cronistas dirigir sus escritos específicamente a las autoridades del rey y no solo al público en general?\"\n}",
+          "ms": 1460,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 1
+          },
+          "acierta": null,
+          "repartoOk": null,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide el motivo de la escritura de la obra. Los elementos clave son: 1) denunciar los abusos contra los indígenas y 2) el destinatario (el rey) para pedir que se frenen. El equipo mencionó el punto 1 de forma clara y directa.",
+            "calificacionRecomendada": "completa",
+            "tieneRazon": "responde",
+            "grado": "total",
+            "veredicto": "Los Cronistas tienen razón porque su respuesta identifica correctamente el motivo central de la obra según el texto.",
+            "explicacion": "La respuesta de Los Cronistas es precisa y responde directamente a la pregunta sobre el porqué de la obra. Aunque mencionar al rey añade contexto, el núcleo de la denuncia está perfectamente explicado en su respuesta.",
+            "paraSeguirPensando": "¿Por qué creen que era importante para los cronistas dirigir sus escritos específicamente a las autoridades del rey y no solo al público en general?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide el motivo de la escritura de la obra. Los elementos clave son: 1) denunciar los abusos contra los indígenas y 2) el destinatario (el rey) para pedir que se frenen dichos abusos. El equipo mencionó el motivo principal (denuncia) de forma clara y precisa.\",\n  \"calificacionRecomendada\": \"completa\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Cronistas tienen razón, ya que su respuesta identifica correctamente el motivo central de la obra según el texto.\",\n  \"explicacion\": \"La respuesta de Los Cronistas es correcta y precisa porque explica el propósito principal del autor. Aunque mencionar al rey añade contexto, la denuncia de los abusos es el núcleo de la pregunta y responde satisfactoriamente al porqué de la obra.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que era importante para un fraile como Bartolomé de las Casas escribirle directamente al rey en lugar de contarle sus quejas a otras personas?\"\n}",
+          "ms": 1589,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 1
+          },
+          "acierta": null,
+          "repartoOk": null,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide el motivo de la escritura de la obra. Los elementos clave son: 1) denunciar los abusos contra los indígenas y 2) el destinatario (el rey) para pedir que se frenen dichos abusos. El equipo mencionó el motivo principal (denuncia) de forma clara y precisa.",
+            "calificacionRecomendada": "completa",
+            "tieneRazon": "responde",
+            "grado": "total",
+            "veredicto": "Los Cronistas tienen razón, ya que su respuesta identifica correctamente el motivo central de la obra según el texto.",
+            "explicacion": "La respuesta de Los Cronistas es correcta y precisa porque explica el propósito principal del autor. Aunque mencionar al rey añade contexto, la denuncia de los abusos es el núcleo de la pregunta y responde satisfactoriamente al porqué de la obra.",
+            "paraSeguirPensando": "¿Por qué creen que era importante para un fraile como Bartolomé de las Casas escribirle directamente al rey en lugar de contarle sus quejas a otras personas?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide el motivo de la escritura de la obra. Los elementos clave son: 1) denunciar abusos contra indígenas y 2) dirigirse al rey para pedir que los frenara. El equipo mencionó el primero de forma clara y directa.\",\n  \"calificacionRecomendada\": \"completa\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Cronistas tienen razón, ya que su respuesta identifica correctamente el motivo central de la obra según el texto.\",\n  \"explicacion\": \"La respuesta de Los Cronistas es correcta y precisa. Aunque mencionar al destinatario (el rey) aporta más contexto, la denuncia de los abusos es el núcleo del motivo por el cual se escribió el texto, tal como indica el fragmento base.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que era importante para los cronistas dirigir sus escritos específicamente a las autoridades del reino en lugar de escribirlos para el público general?\"\n}",
+          "ms": 1486,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 1
+          },
+          "acierta": null,
+          "repartoOk": null,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide el motivo de la escritura de la obra. Los elementos clave son: 1) denunciar abusos contra indígenas y 2) dirigirse al rey para pedir que los frenara. El equipo mencionó el primero de forma clara y directa.",
+            "calificacionRecomendada": "completa",
+            "tieneRazon": "responde",
+            "grado": "total",
+            "veredicto": "Los Cronistas tienen razón, ya que su respuesta identifica correctamente el motivo central de la obra según el texto.",
+            "explicacion": "La respuesta de Los Cronistas es correcta y precisa. Aunque mencionar al destinatario (el rey) aporta más contexto, la denuncia de los abusos es el núcleo del motivo por el cual se escribió el texto, tal como indica el fragmento base.",
+            "paraSeguirPensando": "¿Por qué creen que era importante para los cronistas dirigir sus escritos específicamente a las autoridades del reino en lugar de escribirlos para el público general?"
+          },
+          "motivo": null
+        }
+      ]
+    },
+    "lengua-error-dato": {
+      "A": [
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La respuesta debía definir las crónicas como relatos de testigos o historiadores sobre la conquista de América en el siglo XVI. El equipo respondió que eran 'novelas de Cervantes sobre Colón', lo cual es un error conceptual grave.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Lectores tienen razón al calificar la respuesta como incorrecta.\",\n  \"explicacion\": \"Las crónicas de Indias no son novelas de ficción, sino relatos reales escritos por personas que vivieron la conquista. Confundir a los cronistas con Cervantes y el género histórico con la novela es un error conceptual importante que no permite validar la respuesta.\",\n  \"paraSeguirPensando\": \"¿Por qué es importante que las crónicas fueran escritas por testigos de la época y no por escritores de ficción?\"\n}",
+          "ms": 1402,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La respuesta debía definir las crónicas como relatos de testigos o historiadores sobre la conquista de América en el siglo XVI. El equipo respondió que eran 'novelas de Cervantes sobre Colón', lo cual es un error conceptual grave.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "Los Lectores tienen razón al calificar la respuesta como incorrecta.",
+            "explicacion": "Las crónicas de Indias no son novelas de ficción, sino relatos reales escritos por personas que vivieron la conquista. Confundir a los cronistas con Cervantes y el género histórico con la novela es un error conceptual importante que no permite validar la respuesta.",
+            "paraSeguirPensando": "¿Por qué es importante que las crónicas fueran escritas por testigos de la época y no por escritores de ficción?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La respuesta debía definir las crónicas como relatos de testigos o historiadores sobre la conquista de América en el siglo XVI. El equipo respondió que eran novelas de Cervantes sobre Colón, lo cual es un error conceptual y factual grave.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Lectores tienen razón al calificar la respuesta como incorrecta.\",\n  \"explicacion\": \"Las crónicas de Indias no son novelas de ficción, sino relatos reales escritos por personas que vivieron la conquista o la estudiaron. Confundir a los cronistas con Cervantes es un error histórico, ya que él fue un escritor de otro género y época.\",\n  \"paraSeguirPensando\": \"¿Por qué es importante que los cronistas hayan sido testigos de lo que escribían en lugar de inventar historias?\"\n}",
+          "ms": 1475,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La respuesta debía definir las crónicas como relatos de testigos o historiadores sobre la conquista de América en el siglo XVI. El equipo respondió que eran novelas de Cervantes sobre Colón, lo cual es un error conceptual y factual grave.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "Los Lectores tienen razón al calificar la respuesta como incorrecta.",
+            "explicacion": "Las crónicas de Indias no son novelas de ficción, sino relatos reales escritos por personas que vivieron la conquista o la estudiaron. Confundir a los cronistas con Cervantes es un error histórico, ya que él fue un escritor de otro género y época.",
+            "paraSeguirPensando": "¿Por qué es importante que los cronistas hayan sido testigos de lo que escribían en lugar de inventar historias?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La pregunta pide definir qué es una crónica de Indias. Los elementos clave son: 1) que son relatos o testimonios, 2) escritos en el siglo XVI, 3) sobre la conquista de América. El equipo respondió mencionando una 'novela' de 'Cervantes' sobre 'Colón', lo cual es un error conceptual y factual grave.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Lectores tienen razón al calificar la respuesta como incorrecta.\",\n  \"explicacion\": \"Las crónicas de Indias no son novelas, sino relatos históricos escritos por personas que vivieron la conquista o la investigaron. Confundir el género literario y al autor, como hizo el equipo, es un error conceptual que cambia totalmente el significado del tema.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que es importante distinguir entre un relato histórico escrito por un testigo y una novela de ficción?\"\n}",
+          "ms": 1402,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La pregunta pide definir qué es una crónica de Indias. Los elementos clave son: 1) que son relatos o testimonios, 2) escritos en el siglo XVI, 3) sobre la conquista de América. El equipo respondió mencionando una 'novela' de 'Cervantes' sobre 'Colón', lo cual es un error conceptual y factual grave.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "Los Lectores tienen razón al calificar la respuesta como incorrecta.",
+            "explicacion": "Las crónicas de Indias no son novelas, sino relatos históricos escritos por personas que vivieron la conquista o la investigaron. Confundir el género literario y al autor, como hizo el equipo, es un error conceptual que cambia totalmente el significado del tema.",
+            "paraSeguirPensando": "¿Por qué creen que es importante distinguir entre un relato histórico escrito por un testigo y una novela de ficción?"
+          },
+          "motivo": null
+        }
+      ],
+      "B": [
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La respuesta debía definir las crónicas como relatos de testigos o historiadores sobre la conquista de América en el siglo XVI. El equipo respondió que eran 'novelas' de 'Cervantes', lo cual es un error conceptual grave y factual.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Lectores tienen razón al calificar la respuesta como incorrecta.\",\n  \"explicacion\": \"Las crónicas de Indias no son novelas de ficción, sino relatos reales escritos por personas que vivieron la conquista o la estudiaron. Confundir el género literario y al autor es un error importante que cambia el significado de lo que estamos estudiando.\",\n  \"paraSeguirPensando\": \"¿Por qué es importante para un historiador saber si un texto es una crónica real o una novela de ficción?\"\n}",
+          "ms": 1540,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La respuesta debía definir las crónicas como relatos de testigos o historiadores sobre la conquista de América en el siglo XVI. El equipo respondió que eran 'novelas' de 'Cervantes', lo cual es un error conceptual grave y factual.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "Los Lectores tienen razón al calificar la respuesta como incorrecta.",
+            "explicacion": "Las crónicas de Indias no son novelas de ficción, sino relatos reales escritos por personas que vivieron la conquista o la estudiaron. Confundir el género literario y al autor es un error importante que cambia el significado de lo que estamos estudiando.",
+            "paraSeguirPensando": "¿Por qué es importante para un historiador saber si un texto es una crónica real o una novela de ficción?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La respuesta debía definir las crónicas como relatos de testigos o historiadores sobre la conquista de América en el siglo XVI. El equipo respondió que eran 'novelas de Cervantes sobre Colón', lo cual es un error conceptual grave.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Lectores tienen razón al calificar la respuesta como incorrecta.\",\n  \"explicacion\": \"Las crónicas de Indias no son novelas de ficción, sino relatos reales escritos por personas que vivieron la conquista. Confundir a los cronistas con Cervantes y el género histórico con la novela es un error de concepto que cambia totalmente el significado del tema.\",\n  \"paraSeguirPensando\": \"¿Por qué es importante que los cronistas hayan sido testigos de lo que pasó en lugar de inventar historias?\"\n}",
+          "ms": 1331,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La respuesta debía definir las crónicas como relatos de testigos o historiadores sobre la conquista de América en el siglo XVI. El equipo respondió que eran 'novelas de Cervantes sobre Colón', lo cual es un error conceptual grave.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "Los Lectores tienen razón al calificar la respuesta como incorrecta.",
+            "explicacion": "Las crónicas de Indias no son novelas de ficción, sino relatos reales escritos por personas que vivieron la conquista. Confundir a los cronistas con Cervantes y el género histórico con la novela es un error de concepto que cambia totalmente el significado del tema.",
+            "paraSeguirPensando": "¿Por qué es importante que los cronistas hayan sido testigos de lo que pasó en lugar de inventar historias?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La pregunta pide definir qué es una crónica de Indias. Los elementos clave son: 1) que son relatos o testimonios, 2) escritos en el siglo XVI, 3) sobre la conquista de América. El equipo respondió mencionando una 'novela' de 'Cervantes' sobre 'Colón', lo cual es un error conceptual y factual grave.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Lectores tienen razón al calificar la respuesta como incorrecta.\",\n  \"explicacion\": \"Las crónicas de Indias no son novelas de ficción, sino relatos históricos escritos por personas que vivieron la conquista de América. Confundir el género literario y al autor, como hizo el equipo, es un error conceptual que no permite considerar la respuesta como válida.\",\n  \"paraSeguirPensando\": \"¿Por qué es importante distinguir entre un relato histórico escrito por un testigo y una obra de ficción?\"\n}",
+          "ms": 1461,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La pregunta pide definir qué es una crónica de Indias. Los elementos clave son: 1) que son relatos o testimonios, 2) escritos en el siglo XVI, 3) sobre la conquista de América. El equipo respondió mencionando una 'novela' de 'Cervantes' sobre 'Colón', lo cual es un error conceptual y factual grave.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "Los Lectores tienen razón al calificar la respuesta como incorrecta.",
+            "explicacion": "Las crónicas de Indias no son novelas de ficción, sino relatos históricos escritos por personas que vivieron la conquista de América. Confundir el género literario y al autor, como hizo el equipo, es un error conceptual que no permite considerar la respuesta como válida.",
+            "paraSeguirPensando": "¿Por qué es importante distinguir entre un relato histórico escrito por un testigo y una obra de ficción?"
+          },
+          "motivo": null
+        }
+      ]
+    },
+    "historia-borderline": {
+      "A": [
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide explicar por qué el Nilo fue fundamental. El texto base menciona tres funciones: 1) agricultura (limo fértil), 2) organización del calendario, y 3) vía de transporte y comunicación. Los Faraones mencionaron el primer punto de forma correcta y específica.\",\n  \"calificacionRecomendada\": \"incompleta\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"parcial\",\n  \"veredicto\": \"Los Faraones tienen razón en parte, ya que su respuesta es correcta pero incompleta.\",\n  \"explicacion\": \"La respuesta de Los Faraones es correcta porque identifica la función agrícola del Nilo, que es fundamental según el texto. Sin embargo, la calificación de 'incompleta' es adecuada porque el equipo omitió otros usos importantes mencionados en el texto, como el transporte y la organización del calendario.\",\n  \"paraSeguirPensando\": \"¿De qué otras formas creen que el río Nilo ayudó a los egipcios a vivir mejor, además de permitirles cultivar sus alimentos?\"\n}",
+          "ms": 1662,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "parcial",
+          "reparto": {
+            "puntosPregunta": 0.25,
+            "puntosResponde": 0.75
+          },
+          "acierta": null,
+          "repartoOk": null,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide explicar por qué el Nilo fue fundamental. El texto base menciona tres funciones: 1) agricultura (limo fértil), 2) organización del calendario, y 3) vía de transporte y comunicación. Los Faraones mencionaron el primer punto de forma correcta y específica.",
+            "calificacionRecomendada": "incompleta",
+            "tieneRazon": "responde",
+            "grado": "parcial",
+            "veredicto": "Los Faraones tienen razón en parte, ya que su respuesta es correcta pero incompleta.",
+            "explicacion": "La respuesta de Los Faraones es correcta porque identifica la función agrícola del Nilo, que es fundamental según el texto. Sin embargo, la calificación de 'incompleta' es adecuada porque el equipo omitió otros usos importantes mencionados en el texto, como el transporte y la organización del calendario.",
+            "paraSeguirPensando": "¿De qué otras formas creen que el río Nilo ayudó a los egipcios a vivir mejor, además de permitirles cultivar sus alimentos?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide explicar por qué el Nilo fue fundamental. El texto base menciona tres funciones: 1) agricultura (limo fértil), 2) organización del calendario, 3) vía de transporte y comunicación. El equipo respondió correctamente sobre la agricultura, que es el elemento central mencionado en el texto.\",\n  \"calificacionRecomendada\": \"incompleta\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"parcial\",\n  \"veredicto\": \"Los Faraones tienen razón en que su respuesta es correcta, pero Los Escribas tienen razón en que está incompleta.\",\n  \"explicacion\": \"La respuesta de Los Faraones es correcta porque identifica la función agrícola del Nilo, que es fundamental según el texto. Sin embargo, como la pregunta es amplia, la respuesta queda incompleta al omitir otros usos importantes del río, como el transporte y la organización del tiempo.\",\n  \"paraSeguirPensando\": \"¿De qué otras formas creen que el río Nilo ayudó a que los egipcios pudieran vivir y organizarse como una gran civilización?\"\n}",
+          "ms": 1746,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "parcial",
+          "reparto": {
+            "puntosPregunta": 0.25,
+            "puntosResponde": 0.75
+          },
+          "acierta": null,
+          "repartoOk": null,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide explicar por qué el Nilo fue fundamental. El texto base menciona tres funciones: 1) agricultura (limo fértil), 2) organización del calendario, 3) vía de transporte y comunicación. El equipo respondió correctamente sobre la agricultura, que es el elemento central mencionado en el texto.",
+            "calificacionRecomendada": "incompleta",
+            "tieneRazon": "responde",
+            "grado": "parcial",
+            "veredicto": "Los Faraones tienen razón en que su respuesta es correcta, pero Los Escribas tienen razón en que está incompleta.",
+            "explicacion": "La respuesta de Los Faraones es correcta porque identifica la función agrícola del Nilo, que es fundamental según el texto. Sin embargo, como la pregunta es amplia, la respuesta queda incompleta al omitir otros usos importantes del río, como el transporte y la organización del tiempo.",
+            "paraSeguirPensando": "¿De qué otras formas creen que el río Nilo ayudó a que los egipcios pudieran vivir y organizarse como una gran civilización?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide explicar por qué el Nilo fue fundamental. El texto base menciona tres funciones: 1) agricultura (limo fértil), 2) organización del calendario, 3) vía de transporte y comunicación. El equipo respondió correctamente sobre la agricultura, que es el elemento central mencionado en el texto.\",\n  \"calificacionRecomendada\": \"incompleta\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"parcial\",\n  \"veredicto\": \"Los Faraones tienen razón en que su respuesta es correcta, pero Los Escribas tienen razón en que está incompleta.\",\n  \"explicacion\": \"La respuesta de Los Faraones es correcta porque identifica la función agrícola del Nilo, que es la base de la civilización según el texto. Sin embargo, es incompleta porque el texto también destaca que el río servía para organizar el calendario y como vía de comunicación, aspectos que no fueron mencionados.\",\n  \"paraSeguirPensando\": \"¿De qué manera el ciclo del río Nilo ayudaba a los egipcios a planificar su vida diaria y su trabajo durante todo el año?\"\n}",
+          "ms": 1567,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "parcial",
+          "reparto": {
+            "puntosPregunta": 0.25,
+            "puntosResponde": 0.75
+          },
+          "acierta": null,
+          "repartoOk": null,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide explicar por qué el Nilo fue fundamental. El texto base menciona tres funciones: 1) agricultura (limo fértil), 2) organización del calendario, 3) vía de transporte y comunicación. El equipo respondió correctamente sobre la agricultura, que es el elemento central mencionado en el texto.",
+            "calificacionRecomendada": "incompleta",
+            "tieneRazon": "responde",
+            "grado": "parcial",
+            "veredicto": "Los Faraones tienen razón en que su respuesta es correcta, pero Los Escribas tienen razón en que está incompleta.",
+            "explicacion": "La respuesta de Los Faraones es correcta porque identifica la función agrícola del Nilo, que es la base de la civilización según el texto. Sin embargo, es incompleta porque el texto también destaca que el río servía para organizar el calendario y como vía de comunicación, aspectos que no fueron mencionados.",
+            "paraSeguirPensando": "¿De qué manera el ciclo del río Nilo ayudaba a los egipcios a planificar su vida diaria y su trabajo durante todo el año?"
+          },
+          "motivo": null
+        }
+      ],
+      "B": [
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide explicar por qué el Nilo fue fundamental. El texto base menciona tres funciones: 1) agricultura (limo fértil), 2) organización del calendario, 3) vía de transporte y comunicación. El equipo respondió correctamente sobre la agricultura, que es el punto central del texto.\",\n  \"calificacionRecomendada\": \"completa\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Faraones tienen razón porque su respuesta identifica correctamente la función principal del río mencionada en el texto.\",\n  \"explicacion\": \"La respuesta de Los Faraones es correcta y precisa al señalar la agricultura como la base de la civilización. Aunque el texto menciona otros usos del río, la pregunta no pedía una lista exhaustiva, por lo que la respuesta es válida y completa.\",\n  \"paraSeguirPensando\": \"¿De qué otras formas creen que el río Nilo ayudaba a los egipcios en su vida diaria, además de permitirles cultivar sus alimentos?\"\n}",
+          "ms": 1611,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 1
+          },
+          "acierta": null,
+          "repartoOk": null,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide explicar por qué el Nilo fue fundamental. El texto base menciona tres funciones: 1) agricultura (limo fértil), 2) organización del calendario, 3) vía de transporte y comunicación. El equipo respondió correctamente sobre la agricultura, que es el punto central del texto.",
+            "calificacionRecomendada": "completa",
+            "tieneRazon": "responde",
+            "grado": "total",
+            "veredicto": "Los Faraones tienen razón porque su respuesta identifica correctamente la función principal del río mencionada en el texto.",
+            "explicacion": "La respuesta de Los Faraones es correcta y precisa al señalar la agricultura como la base de la civilización. Aunque el texto menciona otros usos del río, la pregunta no pedía una lista exhaustiva, por lo que la respuesta es válida y completa.",
+            "paraSeguirPensando": "¿De qué otras formas creen que el río Nilo ayudaba a los egipcios en su vida diaria, además de permitirles cultivar sus alimentos?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide explicar por qué el Nilo fue fundamental. El texto base menciona tres funciones: 1) agricultura (limo fértil), 2) organización del calendario, 3) vía de transporte y comunicación. El equipo respondió correctamente sobre la agricultura, que es el punto central del texto.\",\n  \"calificacionRecomendada\": \"completa\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Faraones tienen razón porque su respuesta identifica correctamente la función principal del río mencionada en el texto.\",\n  \"explicacion\": \"La respuesta de Los Faraones es correcta y precisa al señalar la importancia del limo fértil para la agricultura. Aunque el texto menciona otros usos del río, la respuesta responde directamente al 'por qué' fundamental sin errores, por lo que no debe considerarse incompleta.\",\n  \"paraSeguirPensando\": \"¿De qué otras formas creen que el río Nilo ayudó a que los egipcios pudieran vivir organizados como una gran civilización?\"\n}",
+          "ms": 1584,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 0,
+            "puntosResponde": 1
+          },
+          "acierta": null,
+          "repartoOk": null,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide explicar por qué el Nilo fue fundamental. El texto base menciona tres funciones: 1) agricultura (limo fértil), 2) organización del calendario, 3) vía de transporte y comunicación. El equipo respondió correctamente sobre la agricultura, que es el punto central del texto.",
+            "calificacionRecomendada": "completa",
+            "tieneRazon": "responde",
+            "grado": "total",
+            "veredicto": "Los Faraones tienen razón porque su respuesta identifica correctamente la función principal del río mencionada en el texto.",
+            "explicacion": "La respuesta de Los Faraones es correcta y precisa al señalar la importancia del limo fértil para la agricultura. Aunque el texto menciona otros usos del río, la respuesta responde directamente al 'por qué' fundamental sin errores, por lo que no debe considerarse incompleta.",
+            "paraSeguirPensando": "¿De qué otras formas creen que el río Nilo ayudó a que los egipcios pudieran vivir organizados como una gran civilización?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"B\",\n  \"elementosClave\": \"La pregunta pide explicar por qué el Nilo fue fundamental. El texto base menciona tres funciones: 1) agricultura (limo fértil), 2) organización del calendario, 3) vía de transporte y comunicación. El equipo respondió correctamente sobre la agricultura, que es el elemento central mencionado en el texto.\",\n  \"calificacionRecomendada\": \"incompleta\",\n  \"tieneRazon\": \"responde\",\n  \"grado\": \"parcial\",\n  \"veredicto\": \"Los Faraones tienen razón en que su respuesta es correcta, pero Los Escribas tienen razón en que faltaron elementos para que sea completa.\",\n  \"explicacion\": \"La respuesta de Los Faraones es correcta porque identifica la función agrícola del Nilo, que es fundamental según el texto. Sin embargo, al ser una pregunta abierta sobre la importancia del río, la respuesta queda incompleta al omitir que el Nilo también servía para organizar el tiempo y para viajar.\",\n  \"paraSeguirPensando\": \"¿De qué otras formas creen que el río Nilo ayudó a que los egipcios pudieran vivir y organizarse mejor en el desierto?\"\n}",
+          "ms": 1795,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "responde",
+          "grado": "parcial",
+          "reparto": {
+            "puntosPregunta": 0.25,
+            "puntosResponde": 0.75
+          },
+          "acierta": null,
+          "repartoOk": null,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "B",
+            "elementosClave": "La pregunta pide explicar por qué el Nilo fue fundamental. El texto base menciona tres funciones: 1) agricultura (limo fértil), 2) organización del calendario, 3) vía de transporte y comunicación. El equipo respondió correctamente sobre la agricultura, que es el elemento central mencionado en el texto.",
+            "calificacionRecomendada": "incompleta",
+            "tieneRazon": "responde",
+            "grado": "parcial",
+            "veredicto": "Los Faraones tienen razón en que su respuesta es correcta, pero Los Escribas tienen razón en que faltaron elementos para que sea completa.",
+            "explicacion": "La respuesta de Los Faraones es correcta porque identifica la función agrícola del Nilo, que es fundamental según el texto. Sin embargo, al ser una pregunta abierta sobre la importancia del río, la respuesta queda incompleta al omitir que el Nilo también servía para organizar el tiempo y para viajar.",
+            "paraSeguirPensando": "¿De qué otras formas creen que el río Nilo ayudó a que los egipcios pudieran vivir y organizarse mejor en el desierto?"
+          },
+          "motivo": null
+        }
+      ]
+    },
+    "historia-error-dato": {
+      "A": [
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La pregunta pide identificar al faraón que ordenó la construcción de la Gran Pirámide de Guiza. El elemento clave es el nombre 'Keops' o 'Jufu'. El equipo respondió 'Cleopatra', lo cual es un error histórico.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Escribas tienen razón al calificar la respuesta como incorrecta.\",\n  \"explicacion\": \"La Gran Pirámide fue construida para el faraón Keops hace miles de años. Cleopatra vivió mucho tiempo después, cuando la historia de Egipto ya era muy distinta y las pirámides ya eran monumentos antiguos.\",\n  \"paraSeguirPensando\": \"¿Por qué es importante fijarnos en las fechas cuando estudiamos la historia de los faraones y sus construcciones?\"\n}",
+          "ms": 1188,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La pregunta pide identificar al faraón que ordenó la construcción de la Gran Pirámide de Guiza. El elemento clave es el nombre 'Keops' o 'Jufu'. El equipo respondió 'Cleopatra', lo cual es un error histórico.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "Los Escribas tienen razón al calificar la respuesta como incorrecta.",
+            "explicacion": "La Gran Pirámide fue construida para el faraón Keops hace miles de años. Cleopatra vivió mucho tiempo después, cuando la historia de Egipto ya era muy distinta y las pirámides ya eran monumentos antiguos.",
+            "paraSeguirPensando": "¿Por qué es importante fijarnos en las fechas cuando estudiamos la historia de los faraones y sus construcciones?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La pregunta pide identificar al faraón que ordenó la construcción de la Gran Pirámide de Guiza. El elemento clave es el nombre 'Keops' o 'Jufu'. El equipo respondió 'Cleopatra', lo cual es un error factual.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Escribas tienen razón al calificar la respuesta como incorrecta.\",\n  \"explicacion\": \"La Gran Pirámide fue construida para el faraón Keops hace miles de años. Cleopatra vivió mucho tiempo después, cuando la historia de Egipto ya era muy distinta y las pirámides ya eran monumentos antiguos.\",\n  \"paraSeguirPensando\": \"¿Por qué es importante fijarnos en las fechas cuando estudiamos a los personajes de la historia antigua?\"\n}",
+          "ms": 1420,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La pregunta pide identificar al faraón que ordenó la construcción de la Gran Pirámide de Guiza. El elemento clave es el nombre 'Keops' o 'Jufu'. El equipo respondió 'Cleopatra', lo cual es un error factual.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "Los Escribas tienen razón al calificar la respuesta como incorrecta.",
+            "explicacion": "La Gran Pirámide fue construida para el faraón Keops hace miles de años. Cleopatra vivió mucho tiempo después, cuando la historia de Egipto ya era muy distinta y las pirámides ya eran monumentos antiguos.",
+            "paraSeguirPensando": "¿Por qué es importante fijarnos en las fechas cuando estudiamos a los personajes de la historia antigua?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La pregunta pide identificar al faraón que ordenó la construcción de la Gran Pirámide de Guiza. El elemento clave es el nombre 'Keops' (o 'Jufu'), tal como indica el texto base.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Escribas tienen razón al señalar que la respuesta de Los Faraones es incorrecta.\",\n  \"explicacion\": \"La Gran Pirámide fue construida para el faraón Keops hace miles de años. Cleopatra vivió mucho tiempo después, casi al final de la historia del antiguo Egipto, por lo que no pudo haberla mandado construir.\",\n  \"paraSeguirPensando\": \"¿Por qué es importante fijarnos en las fechas y los nombres de los faraones para entender la historia de Egipto?\"\n}",
+          "ms": 1226,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La pregunta pide identificar al faraón que ordenó la construcción de la Gran Pirámide de Guiza. El elemento clave es el nombre 'Keops' (o 'Jufu'), tal como indica el texto base.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "Los Escribas tienen razón al señalar que la respuesta de Los Faraones es incorrecta.",
+            "explicacion": "La Gran Pirámide fue construida para el faraón Keops hace miles de años. Cleopatra vivió mucho tiempo después, casi al final de la historia del antiguo Egipto, por lo que no pudo haberla mandado construir.",
+            "paraSeguirPensando": "¿Por qué es importante fijarnos en las fechas y los nombres de los faraones para entender la historia de Egipto?"
+          },
+          "motivo": null
+        }
+      ],
+      "B": [
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La pregunta pide identificar al faraón que ordenó la construcción de la Gran Pirámide de Guiza. El elemento clave es el nombre 'Keops' (o 'Jufu'), tal como indica el texto base.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Escribas tienen razón en su calificación, ya que la respuesta de Los Faraones contiene un error histórico importante.\",\n  \"explicacion\": \"La Gran Pirámide fue construida para el faraón Keops hace miles de años. Cleopatra vivió mucho tiempo después, casi al final de la historia del antiguo Egipto, por lo que no pudo haber mandado construir esa pirámide.\",\n  \"paraSeguirPensando\": \"¿Por qué es importante fijarnos en las fechas y los nombres de los faraones para entender la historia de Egipto?\"\n}",
+          "ms": 1447,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La pregunta pide identificar al faraón que ordenó la construcción de la Gran Pirámide de Guiza. El elemento clave es el nombre 'Keops' (o 'Jufu'), tal como indica el texto base.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "Los Escribas tienen razón en su calificación, ya que la respuesta de Los Faraones contiene un error histórico importante.",
+            "explicacion": "La Gran Pirámide fue construida para el faraón Keops hace miles de años. Cleopatra vivió mucho tiempo después, casi al final de la historia del antiguo Egipto, por lo que no pudo haber mandado construir esa pirámide.",
+            "paraSeguirPensando": "¿Por qué es importante fijarnos en las fechas y los nombres de los faraones para entender la historia de Egipto?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La pregunta pide identificar al faraón que ordenó la construcción de la Gran Pirámide de Guiza. El elemento clave es el nombre 'Keops' o 'Jufu'. El equipo respondió 'Cleopatra', lo cual es un error histórico.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Escribas tienen razón al señalar que la respuesta es incorrecta.\",\n  \"explicacion\": \"La Gran Pirámide fue construida para el faraón Keops hace miles de años. Cleopatra vivió mucho tiempo después, cuando la época de las grandes pirámides ya había terminado hace mucho.\",\n  \"paraSeguirPensando\": \"¿Por qué creen que es importante conocer en qué época vivió cada personaje de la historia de Egipto?\"\n}",
+          "ms": 1351,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La pregunta pide identificar al faraón que ordenó la construcción de la Gran Pirámide de Guiza. El elemento clave es el nombre 'Keops' o 'Jufu'. El equipo respondió 'Cleopatra', lo cual es un error histórico.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "Los Escribas tienen razón al señalar que la respuesta es incorrecta.",
+            "explicacion": "La Gran Pirámide fue construida para el faraón Keops hace miles de años. Cleopatra vivió mucho tiempo después, cuando la época de las grandes pirámides ya había terminado hace mucho.",
+            "paraSeguirPensando": "¿Por qué creen que es importante conocer en qué época vivió cada personaje de la historia de Egipto?"
+          },
+          "motivo": null
+        },
+        {
+          "texto": "{\n  \"resultado\": \"A\",\n  \"elementosClave\": \"La pregunta pide identificar al faraón que ordenó la construcción de la Gran Pirámide de Guiza. El elemento clave es el nombre 'Keops' o 'Jufu'. El equipo respondió 'Cleopatra', lo cual es un error histórico.\",\n  \"calificacionRecomendada\": \"no\",\n  \"tieneRazon\": \"pregunta\",\n  \"grado\": \"total\",\n  \"veredicto\": \"Los Escribas tienen razón al calificar la respuesta como incorrecta.\",\n  \"explicacion\": \"La Gran Pirámide fue construida para el faraón Keops hace miles de años. Cleopatra vivió mucho tiempo después, cuando la historia de Egipto ya era muy distinta y las pirámides ya eran monumentos antiguos.\",\n  \"paraSeguirPensando\": \"¿Por qué es importante fijarnos en las fechas cuando estudiamos a los personajes de la historia antigua?\"\n}",
+          "ms": 1377,
+          "jsonValido": true,
+          "valido": true,
+          "fueraDeTema": false,
+          "razon": "pregunta",
+          "grado": "total",
+          "reparto": {
+            "puntosPregunta": 1,
+            "puntosResponde": 0
+          },
+          "acierta": true,
+          "repartoOk": true,
+          "contradice": false,
+          "palabra": null,
+          "json": {
+            "resultado": "A",
+            "elementosClave": "La pregunta pide identificar al faraón que ordenó la construcción de la Gran Pirámide de Guiza. El elemento clave es el nombre 'Keops' o 'Jufu'. El equipo respondió 'Cleopatra', lo cual es un error histórico.",
+            "calificacionRecomendada": "no",
+            "tieneRazon": "pregunta",
+            "grado": "total",
+            "veredicto": "Los Escribas tienen razón al calificar la respuesta como incorrecta.",
+            "explicacion": "La Gran Pirámide fue construida para el faraón Keops hace miles de años. Cleopatra vivió mucho tiempo después, cuando la historia de Egipto ya era muy distinta y las pirámides ya eran monumentos antiguos.",
+            "paraSeguirPensando": "¿Por qué es importante fijarnos en las fechas cuando estudiamos a los personajes de la historia antigua?"
+          },
+          "motivo": null
+        }
+      ]
+    }
+  }
+}
