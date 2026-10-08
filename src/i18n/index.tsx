@@ -10,6 +10,7 @@ import { esRutaArbitro, esRutaAlumnoArbitro } from '../utils/arbitroRoutes';
 import { normalizarIdiomaSesion, localeDeIdioma, type IdiomaSesion } from '../utils/idiomaSesion';
 import { formatearPuntos, type IdiomaPuntos } from '../utils/formatoPuntos';
 import { almacenLocal } from "../utils/almacenSeguro";
+import { resolverIdiomaInicial } from "../utils/idiomaInicial";
 
 // ============================================
 // TIPOS
@@ -39,28 +40,18 @@ const translations: Record<Language, TranslationKeys> = {
 
 // ============================================
 // HELPER: idioma inicial
-// Prioridad: localStorage > navigator.language > 'en'
+// Prioridad: localStorage > dominio > navigator.language > 'en'
 // Clave: tlg_language
 // ============================================
 
 function getInitialLanguage(): Language {
-  // 1. Verificar localStorage
-  const saved = almacenLocal.getItem('tlg_language');
-  if (saved === 'es' || saved === 'en' || saved === 'pt') {
-    return saved;
-  }
-
-  // 2. Detectar del navegador
-  const browserLang = (navigator.language || navigator.languages?.[0] || '').toLowerCase();
-  if (browserLang.startsWith('es')) {
-    return 'es';
-  }
-  if (browserLang.startsWith('pt')) {
-    return 'pt';
-  }
-
-  // 3. Default
-  return 'en';
+  // Prioridad: elección explícita (localStorage) > dominio > idioma del navegador > 'en'.
+  // La lógica vive en utils/idiomaInicial.ts (pura, con prueba en verificar-dominio-idioma.cjs).
+  let guardado: string | null = null;
+  try { guardado = almacenLocal.getItem('tlg_language'); } catch { /* sin acceso a localStorage */ }
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const idiomaNavegador = typeof navigator !== 'undefined' ? (navigator.language || navigator.languages?.[0] || '') : '';
+  return resolverIdiomaInicial({ guardado, hostname, idiomaNavegador });
 }
 
 // ============================================
@@ -207,7 +198,9 @@ export function fillArbitro(text: string, values: Record<string, string | number
 // HELPER: Selector de idioma compacto
 // ============================================
 
-export function LanguageSelector({ compact = false }: { compact?: boolean }) {
+// tone: 'onDark' (por defecto, el de siempre: blanco translúcido), 'onColor' (cabeceras de color de las pantallas del
+// árbitro: fondo oscuro translúcido + borde blanco, igual que sus otros botones) y 'onLight' (fondo claro).
+export function LanguageSelector({ compact = false, tone = 'onDark' }: { compact?: boolean; tone?: 'onDark' | 'onColor' | 'onLight' }) {
   const { language, setLanguage } = useI18n();
   
   // Ciclo de idiomas: es -> en -> pt -> es
@@ -229,24 +222,36 @@ export function LanguageSelector({ compact = false }: { compact?: boolean }) {
     pt: 'PT',
   };
   
+  const tonos = {
+    onDark: { border: '2px solid rgba(255,255,255,0.3)', backgroundColor: 'rgba(255,255,255,0.1)', color: 'white' },
+    onColor: { border: '1px solid rgba(255,255,255,0.7)', backgroundColor: 'rgba(0,0,0,0.25)', color: '#ffffff' },
+    onLight: { border: '2px solid #cbd5e1', backgroundColor: 'white', color: '#334155' },
+  } as const;
+  const nombreAccesible: Record<Language, string> = {
+    es: 'ES · Cambiar idioma',
+    en: 'EN · Change language',
+    pt: 'PT · Mudar idioma',
+  };
+
   if (compact) {
     return (
       <button
+        type="button"
         onClick={() => setLanguage(nextLanguage())}
         style={{
           padding: '6px 12px',
           fontSize: 14,
           fontWeight: 600,
-          borderRadius: 8,
-          border: '2px solid rgba(255,255,255,0.3)',
-          backgroundColor: 'rgba(255,255,255,0.1)',
-          color: 'white',
+          borderRadius: tone === 'onColor' ? 20 : 8,
+          ...tonos[tone],
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           gap: 6,
+          whiteSpace: 'nowrap',
         }}
         title="Change language"
+        aria-label={nombreAccesible[language]}
       >
         {flags[language]} {labels[language]}
       </button>

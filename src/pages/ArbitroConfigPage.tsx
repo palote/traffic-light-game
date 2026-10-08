@@ -2,7 +2,7 @@ import { useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { useArbitroT, useI18n, useLocaleArbitro, useTituloPagina, fillArbitro, arbitroDic } from "../i18n";
+import { useArbitroT, useI18n, useLocaleArbitro, useTituloPagina, fillArbitro, arbitroDic, LanguageSelector } from "../i18n";
 import { instruccionesPorDefecto, informePorDefecto, contenidoCompleto, tituloClassroom } from "../utils/arbitroDocumentos";
 import { nombreVisible } from "../utils/arbitroNombres";
 import { idiomaSesionPorDefecto, type IdiomaSesion } from "../utils/idiomaSesion";
@@ -197,7 +197,9 @@ export default function ArbitroConfigPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sesion, setSesion] = useState<{ id: string; link: string; expiresAt: string } | null>(null);
-  const linkSesion = sesion ? `https://eljuegodelsemaforo.com/arbitro-juego/${sesion.id}` : "";
+  // El enlace se queda en el dominio desde el que se creó la sesión (eljuegodelsemaforo.com, thetrafficlightgame.com o localhost).
+  // Se arma acá con el origin y no se usa el campo `link` que devuelve crearSesionArbitro (trae un dominio fijo).
+  const linkSesion = sesion ? `${window.location.origin}/arbitro-juego/${sesion.id}` : "";
   const [copied, setCopied] = useState(false);
 
   const [showClassroomModal, setShowClassroomModal] = useState(false);
@@ -542,6 +544,7 @@ export default function ArbitroConfigPage() {
               zIndex: 10,
               maxWidth: "min(50vw, 240px)",
             }}>
+              <LanguageSelector compact tone="onColor" />
               <a
                 href="/arbitro-panel"
                 style={{

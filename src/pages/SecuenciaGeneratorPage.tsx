@@ -9,6 +9,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n, LanguageSelector } from '../i18n';
+import { piePaginaGenerador } from '../utils/dominioPorIdioma';
 import { useGameMode } from '../contexts/GameModeContext';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '../firebase.config';
@@ -297,7 +298,7 @@ Respondé directamente con la secuencia, sin introducción ni cierre.`;
         html += `<p>${sec.content.replace(/\n/g, '<br>')}</p>`;
       }
     }
-    html += `<div class="footer-print">Generado con El Juego del Semáforo · eljuegodelsemaforo.com</div>`;
+    html += `<div class="footer-print">${piePaginaGenerador(language)}</div>`;
     div.innerHTML = html;
     document.body.appendChild(div);
     window.print();

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { useArbitroT, useFormatoPuntos, fillArbitro, useLocaleArbitro, useTituloPagina } from "../i18n";
+import { useArbitroT, useFormatoPuntos, fillArbitro, useLocaleArbitro, useTituloPagina, LanguageSelector } from "../i18n";
 import { etiquetaCalificacion } from "../utils/arbitroEtiquetas";
 import { nombreVisible } from "../utils/arbitroNombres";
 import { esIaNoDisponible, textoErrorArbitro } from "../utils/arbitroErrores";
@@ -317,12 +317,15 @@ export default function ArbitroPanelPage() {
               style={{ background: "rgba(0,0,0,0.25)", border: "none", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
               {ta.panBackToList}
             </button>
-            {informe && (
-              <button onClick={() => window.print()}
-                style={{ background: "rgba(0,0,0,0.25)", border: "none", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-                {ta.panDownloadPdf}
-              </button>
-            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <LanguageSelector compact tone="onColor" />
+              {informe && (
+                <button onClick={() => window.print()}
+                  style={{ background: "rgba(0,0,0,0.25)", border: "none", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                  {ta.panDownloadPdf}
+                </button>
+              )}
+            </div>
           </div>
           <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 900 }}>⚖️ {materiaDe(sesionSeleccionada.materia)}</h1>
           <p style={{ margin: 0, fontSize: 13 }}>{sesionSeleccionada.tema}</p>
@@ -818,8 +821,11 @@ export default function ArbitroPanelPage() {
   // ── Vista lista de sesiones ─────────────────────────────────────────────
   return (
     <main style={{ minHeight: "100vh", backgroundColor: "#f8fafc", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
-      <div style={{ background: "linear-gradient(135deg,#1e3a5f,#3730a3)", padding: "24px", color: "white" }}>
-        <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 900 }}>{ta.panTitle}</h1>
+      <div style={{ background: "linear-gradient(135deg,#1e3a5f,#3730a3)", padding: "24px", color: "white", position: "relative" }}>
+        <div style={{ position: "absolute", top: 14, right: 16, zIndex: 10 }}>
+          <LanguageSelector compact tone="onColor" />
+        </div>
+        <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 900, paddingRight: 90 }}>{ta.panTitle}</h1>
         <p style={{ margin: 0, fontSize: 13 }}>{ta.panSubtitle}</p>
       </div>
 

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { useArbitroT, useTituloPagina } from "../i18n";
+import { useArbitroT, useTituloPagina, LanguageSelector } from "../i18n";
 import { nombreVisible } from "../utils/arbitroNombres";
 import { PALETA, AREA_COLORS } from "../utils/arbitroPalette";
 
@@ -210,6 +210,10 @@ export default function ArbitroLandingPage() {
         color: "white",
         position: "relative",
       }}>
+        {/* Selector de idioma de la interfaz (arriba a la izquierda; el acceso docente queda a la derecha) */}
+        <div style={{ position: "absolute", top: 14, left: 16, zIndex: 10 }}>
+          <LanguageSelector compact tone="onColor" />
+        </div>
         {/* Acceso para docentes que ya usaron el árbitro.
             Con sesión iniciada: acceso al panel + cuenta vinculada + salir.
             Sin sesión: botón que dispara el login con Google. */}

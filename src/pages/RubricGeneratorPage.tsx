@@ -9,6 +9,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n, LanguageSelector } from '../i18n';
+import { piePaginaGenerador } from '../utils/dominioPorIdioma';
 import { useGameMode } from '../contexts/GameModeContext';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getDatabase, ref, update, increment, push } from 'firebase/database';
@@ -109,7 +110,7 @@ function injectPrintStyle() {
   document.head.appendChild(s);
 }
 
-function buildPrintArea(rubric: GeneratedRubric, scale: typeof SCALES[number], context: string) {
+function buildPrintArea(rubric: GeneratedRubric, scale: typeof SCALES[number], context: string, language: string) {
   const div = document.createElement('div');
   div.id = 'rubric-print-area';
   div.style.display = 'none';
@@ -129,7 +130,7 @@ function buildPrintArea(rubric: GeneratedRubric, scale: typeof SCALES[number], c
         </tr>`).join('')}
       </tbody>
     </table>
-    <div class="footer-print">Generado con El Juego del Semáforo · eljuegodelsemaforo.com</div>`;
+    <div class="footer-print">${piePaginaGenerador(language)}</div>`;
   return div;
 }
 
@@ -421,7 +422,7 @@ Respondé ÚNICAMENTE con JSON válido, sin markdown:
     if (!rubric) return;
     injectPrintStyle();
     document.getElementById('rubric-print-area')?.remove();
-    document.body.appendChild(buildPrintArea(rubric, currentScale, printContext));
+    document.body.appendChild(buildPrintArea(rubric, currentScale, printContext, language));
     window.print();
     setTimeout(() => document.getElementById('rubric-print-area')?.remove(), 1000);
   };

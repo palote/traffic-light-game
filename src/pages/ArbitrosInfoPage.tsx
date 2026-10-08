@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PALETA } from "../utils/arbitroPalette";
-import { useArbitroT, useTituloPagina } from "../i18n";
+import { useArbitroT, useTituloPagina, LanguageSelector } from "../i18n";
 import { nombreVisible } from "../utils/arbitroNombres";
 
 // Los nombres de área son claves estables; el texto visible sale del diccionario (ta.areaNames, ta.infWhat_*).
@@ -41,7 +41,10 @@ export default function ArbitrosInfoPage() {
     <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
 
       {/* Header */}
-      <div style={{ background: "linear-gradient(135deg, #0ea5e9 0%, #0d9488 100%)", padding: "48px 24px 56px", textAlign: "center", color: "white" }}>
+      <div style={{ background: "linear-gradient(135deg, #0ea5e9 0%, #0d9488 100%)", padding: "48px 24px 56px", textAlign: "center", color: "white", position: "relative" }}>
+        <div style={{ position: "absolute", top: 14, right: 16, zIndex: 10 }}>
+          <LanguageSelector compact tone="onColor" />
+        </div>
         <div style={{ fontSize: 52, marginBottom: 12 }}>⚖️</div>
         <h1 style={{ margin: "0 0 12px", fontSize: 28, fontWeight: 900 }}>{ta.infTitle}</h1>
         <p style={{ margin: "0 auto", fontSize: 16, opacity: 0.92, maxWidth: 560, lineHeight: 1.6 }}>

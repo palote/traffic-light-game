@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n, LanguageSelector } from '../i18n';
+import { piePaginaGenerador } from '../utils/dominioPorIdioma';
 import { useGameMode } from '../contexts/GameModeContext';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '../firebase.config';
@@ -312,7 +313,7 @@ export function CorreccionPage() {
       html += `<div class="devolucion"><strong>Devolución general:</strong><br>${r.devolucion}</div>`;
       if (r.notaSugerida) html += `<p><strong>Calificación sugerida:</strong> ${r.notaSugerida}</p>`;
     }
-    html += `<div class="footer-print">Generado con El Juego del Semáforo · eljuegodelsemaforo.com</div>`;
+    html += `<div class="footer-print">${piePaginaGenerador(language)}</div>`;
     div.innerHTML = html;
     document.body.appendChild(div);
     window.print();

@@ -65,7 +65,7 @@ ok("en · informe de la partida sin letras del español", !SPANISH_LETTERS.test(
 ok("en · fecha en formato de EE. UU.", infEn.includes("Date: 10/8/2026"));
 ok("en · plural: «1 point» y «1.25 points»", infEn.includes("Final score: 1 point\n") && infEn.includes("Final score: 1.25 points"), infEn);
 ok("en · materia traducida en el título del informe", infEn.startsWith("SESSION REPORT — History · Egipto"));
-ok("en · reflexiones numeradas con las preguntas en inglés", infEn.includes("1. What did you learn today about \"Egipto\"?") && infEn.includes("REFLECTIONS OF ROJOS (Ana, Luis)") && infEn.endsWith("Learning Referee · eljuegodelsemaforo.com"));
+ok("en · reflexiones numeradas con las preguntas en inglés", infEn.includes("1. What did you learn today about \"Egipto\"?") && infEn.includes("REFLECTIONS OF ROJOS (Ana, Luis)") && infEn.endsWith("Learning Referee · thetrafficlightgame.com"));
 t("es · nombre del archivo del informe", "informe-arbitro", es.docFileName); t("en · nombre del archivo del informe", "referee-report", en.docFileName);
 t("textos enviados al modelo · es", 'Pregunta: "¿Q?"\n\nRespuesta de Azules: "R"', es.modelConflict.replace("{pregunta}", "¿Q?").replace("{equipo}", "Azules").replace("{respuesta}", "R"));
 t("textos enviados al modelo · en", 'Question: "Q?"\n\nAnswer from Blue: "A"', en.modelConflict.replace("{pregunta}", "Q?").replace("{equipo}", "Blue").replace("{respuesta}", "A"));

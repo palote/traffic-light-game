@@ -38,22 +38,22 @@
         },
         {
           "source": "/r/exactas",
-          "destination": "/learning-referee/exactas",
+          "destination": "/arbitro/exactas",
           "type": 301
         },
         {
           "source": "/r/sociales",
-          "destination": "/learning-referee/sociales",
+          "destination": "/arbitro/sociales",
           "type": 301
         },
         {
           "source": "/r/lenguajes",
-          "destination": "/learning-referee/lenguajes",
+          "destination": "/arbitro/lenguajes",
           "type": 301
         },
         {
           "source": "/r/arte",
-          "destination": "/learning-referee/arte",
+          "destination": "/arbitro/arte",
           "type": 301
         }
       ],
@@ -95,22 +95,22 @@
         },
         {
           "source": "/r/exactas",
-          "destination": "/learning-referee/exactas",
+          "destination": "/arbitro/exactas",
           "type": 301
         },
         {
           "source": "/r/sociales",
-          "destination": "/learning-referee/sociales",
+          "destination": "/arbitro/sociales",
           "type": 301
         },
         {
           "source": "/r/lenguajes",
-          "destination": "/learning-referee/lenguajes",
+          "destination": "/arbitro/lenguajes",
           "type": 301
         },
         {
           "source": "/r/arte",
-          "destination": "/learning-referee/arte",
+          "destination": "/arbitro/arte",
           "type": 301
         }
       ],
