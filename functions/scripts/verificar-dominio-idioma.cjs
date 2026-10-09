@@ -48,9 +48,25 @@ const PANTALLAS = { "pages/ArbitroConfigPage.tsx": 1, "pages/ArbitroLandingPage.
 for (const [f, n] of Object.entries(PANTALLAS)) {
   const s = leer(f);
   ok(/import \{[^}]*\bLanguageSelector\b[^}]*\} from "\.\.\/i18n"/.test(s), `${f}: falta importar LanguageSelector`);
-  const usos = (s.match(/<LanguageSelector compact tone="onColor" \/>/g) || []).length;
-  ok(usos === n, `${f}: se esperaban ${n} selector(es) y hay ${usos}`);
+  const usos = (s.match(/<LanguageSelector compact tone="onColor" idiomas=\{IDIOMAS_ARBITRO\} \/>/g) || []).length;
+  ok(usos === n, `${f}: se esperaban ${n} selector(es) limitados a es/en y hay ${usos}`);
+  ok((s.match(/<LanguageSelector/g) || []).length === n, `${f}: todos sus selectores deben pasar idiomas={IDIOMAS_ARBITRO}`);
+  ok(/import \{[^}]*\bIDIOMAS_ARBITRO\b[^}]*\} from "\.\.\/i18n"/.test(s), `${f}: falta importar IDIOMAS_ARBITRO`);
 }
+// El resto del sitio no limita idiomas
+for (const f of fs.readdirSync(path.join(SRC, "pages")).filter((x) => x.endsWith(".tsx") && !Object.keys(PANTALLAS).some((k) => k.endsWith(x))))
+  ok(!/idiomas=\{/.test(leer("pages/" + f)), `pages/${f}: el selector fuera del árbitro debe seguir con los 3 idiomas`);
+ok(/IDIOMAS_ARBITRO: readonly Language\[\] = \['es', 'en'\]/.test(idx), "IDIOMAS_ARBITRO debe ser exactamente ['es','en']");
+// Comportamiento del selector limitado (incluido 'pt' guardado)
+const { idiomaMostrado, siguienteIdioma } = cargar("utils/idiomasSelector.ts");
+const LIM = ["es", "en"];
+ok(idiomaMostrado("pt", LIM) === "es", "pt guardado + árbitro → el selector muestra ES");
+ok(siguienteIdioma("pt", LIM) === "en", "pt guardado + árbitro → primer clic va a EN");
+ok(siguienteIdioma("en", LIM) === "es" && siguienteIdioma("es", LIM) === "en", "en el árbitro solo alterna ES/EN (nunca PT)");
+let x = "pt"; const vistos = new Set(); for (let i = 0; i < 6; i++) { x = siguienteIdioma(x, LIM); vistos.add(x); }
+ok(!vistos.has("pt") && vistos.size === 2, "ningún clic en el árbitro puede producir PT");
+ok(siguienteIdioma("es") === "en" && siguienteIdioma("en") === "pt" && siguienteIdioma("pt") === "es", "fuera del árbitro el ciclo ES→EN→PT→ES sigue igual");
+ok(idiomaMostrado("pt") === "pt", "fuera del árbitro pt se muestra como PT");
 ok(/tone\?: 'onDark' \| 'onColor' \| 'onLight'/.test(idx) && idx.includes("aria-label={nombreAccesible[language]}"), "LanguageSelector debe tener tone y aria-label");
 // El resto de las páginas que ya lo usaban conservan el estilo por defecto (sin tone)
 for (const f of ["pages/DashboardPage.tsx", "pages/LoginPage.tsx", "pages/LibraryPage.tsx"]) ok(!/tone=/.test(leer(f)), `${f}: no debe cambiar de estilo`);

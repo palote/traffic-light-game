@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { useArbitroT, useFormatoPuntos, fillArbitro, useLocaleArbitro, useTituloPagina, LanguageSelector } from "../i18n";
+import { useArbitroT, useFormatoPuntos, fillArbitro, useLocaleArbitro, useTituloPagina, LanguageSelector, IDIOMAS_ARBITRO } from "../i18n";
 import { etiquetaCalificacion } from "../utils/arbitroEtiquetas";
 import { nombreVisible } from "../utils/arbitroNombres";
 import { esIaNoDisponible, textoErrorArbitro } from "../utils/arbitroErrores";
@@ -318,7 +318,7 @@ export default function ArbitroPanelPage() {
               {ta.panBackToList}
             </button>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <LanguageSelector compact tone="onColor" />
+              <LanguageSelector compact tone="onColor" idiomas={IDIOMAS_ARBITRO} />
               {informe && (
                 <button onClick={() => window.print()}
                   style={{ background: "rgba(0,0,0,0.25)", border: "none", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
@@ -824,7 +824,7 @@ export default function ArbitroPanelPage() {
       <div style={{ background: "linear-gradient(135deg,#1e3a5f,#3730a3)", padding: "24px", color: "white", position: "relative" }}>
         <style>{`@media (max-width: 560px) { .pan-sel { position: static !important; margin-bottom: 10px; } .pan-h1 { padding-right: 0 !important; } }`}</style>
         <div className="pan-sel" style={{ position: "absolute", top: 14, right: 16, zIndex: 10 }}>
-          <LanguageSelector compact tone="onColor" />
+          <LanguageSelector compact tone="onColor" idiomas={IDIOMAS_ARBITRO} />
         </div>
         <h1 className="pan-h1" style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 900, paddingRight: 90 }}>{ta.panTitle}</h1>
         <p style={{ margin: 0, fontSize: 13 }}>{ta.panSubtitle}</p>

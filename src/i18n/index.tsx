@@ -1,6 +1,7 @@
 // src/i18n/index.ts
 // Sistema de internacionalización
 
+import { idiomasPermitidos, idiomaMostrado, siguienteIdioma } from '../utils/idiomasSelector';
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { es } from './es';
 import { en } from './en';
@@ -200,15 +201,16 @@ export function fillArbitro(text: string, values: Record<string, string | number
 
 // tone: 'onDark' (por defecto, el de siempre: blanco translúcido), 'onColor' (cabeceras de color de las pantallas del
 // árbitro: fondo oscuro translúcido + borde blanco, igual que sus otros botones) y 'onLight' (fondo claro).
-export function LanguageSelector({ compact = false, tone = 'onDark' }: { compact?: boolean; tone?: 'onDark' | 'onColor' | 'onLight' }) {
-  const { language, setLanguage } = useI18n();
-  
-  // Ciclo de idiomas: es -> en -> pt -> es
-  const nextLanguage = (): Language => {
-    if (language === 'es') return 'en';
-    if (language === 'en') return 'pt';
-    return 'es';
-  };
+// Idiomas que ofrece el selector en las pantallas del árbitro (no tiene textos en portugués).
+export const IDIOMAS_ARBITRO: readonly Language[] = ['es', 'en'];
+
+export function LanguageSelector({ compact = false, tone = 'onDark', idiomas }: { compact?: boolean; tone?: 'onDark' | 'onColor' | 'onLight'; idiomas?: readonly Language[] }) {
+  const { language: idiomaGuardado, setLanguage } = useI18n();
+  // Con la lista limitada, si el idioma guardado no está en ella (p. ej. 'pt' en el árbitro) el
+  // selector muestra el primero de la lista (español): es lo que ve el usuario en pantalla.
+  const permitidos = idiomasPermitidos(idiomas);
+  const language: Language = idiomaMostrado(idiomaGuardado, idiomas);
+  const nextLanguage = (): Language => siguienteIdioma(idiomaGuardado, idiomas);
 
   const flags: Record<Language, string> = {
     es: '🇪🇸',
@@ -290,7 +292,7 @@ export function LanguageSelector({ compact = false, tone = 'onDark' }: { compact
       >
         🇺🇸 English
       </button>
-      <button
+      {permitidos.includes('pt') && <button
         onClick={() => setLanguage('pt')}
         style={{
           padding: '8px 16px',
@@ -304,7 +306,7 @@ export function LanguageSelector({ compact = false, tone = 'onDark' }: { compact
         }}
       >
         🇧🇷 Português
-      </button>
+      </button>}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { useArbitroT, useI18n, useLocaleArbitro, useTituloPagina, fillArbitro, arbitroDic, LanguageSelector } from "../i18n";
+import { useArbitroT, useI18n, useLocaleArbitro, useTituloPagina, fillArbitro, arbitroDic, LanguageSelector, IDIOMAS_ARBITRO } from "../i18n";
 import { instruccionesPorDefecto, informePorDefecto, contenidoCompleto, tituloClassroom } from "../utils/arbitroDocumentos";
 import { nombreVisible } from "../utils/arbitroNombres";
 import { idiomaSesionPorDefecto, type IdiomaSesion } from "../utils/idiomaSesion";
@@ -550,7 +550,7 @@ export default function ArbitroConfigPage() {
               maxWidth: "min(50vw, 240px)",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <LanguageSelector compact tone="onColor" />
+              <LanguageSelector compact tone="onColor" idiomas={IDIOMAS_ARBITRO} />
               <a
                 href="/arbitro-panel"
                 style={{
