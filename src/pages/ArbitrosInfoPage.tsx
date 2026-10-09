@@ -8,16 +8,16 @@ import { nombreVisible } from "../utils/arbitroNombres";
 // i18n-clave
 const AREAS = [
   {
-    emoji: "🔬", nombre: "Ciencias Exactas y Naturales", key: "exactas", primary: "#0ea5e9", bg: "#f0f9ff",
+    emoji: "🔬", nombre: "Ciencias Exactas y Naturales", key: "exactas", primary: "#0ea5e9", text: "#0369a1", bg: "#f0f9ff",
   },
   {
-    emoji: "🌍", nombre: "Ciencias Sociales y Humanidades", key: "sociales", primary: PALETA.naranja, bg: "#fff7ed",
+    emoji: "🌍", nombre: "Ciencias Sociales y Humanidades", key: "sociales", primary: PALETA.naranja, text: PALETA.naranjaOscuro, bg: "#fff7ed",
   },
   {
-    emoji: "💬", nombre: "Comunicación y Lenguajes", key: "lenguajes", primary: "#8b5cf6", bg: "#faf5ff",
+    emoji: "💬", nombre: "Comunicación y Lenguajes", key: "lenguajes", primary: "#8b5cf6", text: "#6d28d9", bg: "#faf5ff",
   },
   {
-    emoji: "🎨", nombre: "Arte y Expresión", key: "arte", primary: "#f43f5e", bg: "#fff1f2",
+    emoji: "🎨", nombre: "Arte y Expresión", key: "arte", primary: "#f43f5e", text: "#be123c", bg: "#fff1f2",
   },
 ];
 
@@ -41,7 +41,7 @@ export default function ArbitrosInfoPage() {
     <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
 
       {/* Header */}
-      <div style={{ background: "linear-gradient(135deg, #0ea5e9 0%, #0d9488 100%)", padding: "48px 24px 56px", textAlign: "center", color: "white", position: "relative" }}>
+      <div style={{ background: "linear-gradient(135deg, #0369a1 0%, #0f766e 100%)", padding: "48px 24px 56px", textAlign: "center", color: "white", position: "relative" }}>
         <div style={{ position: "absolute", top: 14, right: 16, zIndex: 10 }}>
           <LanguageSelector compact tone="onColor" />
         </div>
@@ -50,7 +50,7 @@ export default function ArbitrosInfoPage() {
         <p style={{ margin: "0 auto", fontSize: 16, opacity: 0.92, maxWidth: 560, lineHeight: 1.6 }}>
           {ta.infIntro}
         </p>
-        <button onClick={() => navigate("/arbitro-config")} style={{ marginTop: 28, padding: "14px 36px", fontSize: 16, fontWeight: 800, borderRadius: 14, border: "none", backgroundColor: "white", color: "#0ea5e9", cursor: "pointer", boxShadow: "0 6px 20px rgba(0,0,0,0.15)" }}>
+        <button onClick={() => navigate("/arbitro-config")} style={{ marginTop: 28, padding: "14px 36px", fontSize: 16, fontWeight: 800, borderRadius: 14, border: "none", backgroundColor: "white", color: "#0369a1", cursor: "pointer", boxShadow: "0 6px 20px rgba(0,0,0,0.15)" }}>
           {ta.landConfigure}
         </button>
       </div>
@@ -71,7 +71,7 @@ export default function ArbitrosInfoPage() {
               <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 16 }}>
                 {PASOS.map(s => (
                   <div key={s.n} style={{ display: "flex", gap: 12, marginBottom: 12, alignItems: "flex-start" }}>
-                    <div style={{ width: 26, height: 26, borderRadius: "50%", backgroundColor: "#e0f2fe", color: "#0ea5e9", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{s.n}</div>
+                    <div style={{ width: 26, height: 26, borderRadius: "50%", backgroundColor: "#e0f2fe", color: "#0369a1", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{s.n}</div>
                     <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.55, paddingTop: 3 }}>{s.txt}</div>
                   </div>
                 ))}
@@ -95,17 +95,17 @@ export default function ArbitrosInfoPage() {
                 <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, ${area.primary}, ${area.primary}aa)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{area.emoji}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{nombreVisible(ta.areaNames, area.nombre)}</div>
-                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{(ta as any)[`infMaterias_${area.key}`]}</div>
+                  <div style={{ fontSize: 12, color: PALETA.grisOscuro, marginTop: 2 }}>{(ta as any)[`infMaterias_${area.key}`]}</div>
                 </div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: area.primary }}>{ta.infConfigure}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: area.text }}>{ta.infConfigure}</div>
               </div>
               {/* Expandable toggle */}
               <button
                 onClick={() => setExpandedCard(expandedCard === area.key ? null : area.key)}
                 style={{ width: "100%", padding: "8px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", background: `${area.primary}10`, border: "none", borderTop: `1px solid ${area.primary}20`, cursor: "pointer", textAlign: "left" }}
               >
-                <span style={{ fontSize: 12, fontWeight: 700, color: area.primary }}>{ta.infWhat}</span>
-                <span style={{ fontSize: 14, color: area.primary, transition: "transform 0.2s", transform: expandedCard === area.key ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: area.text }}>{ta.infWhat}</span>
+                <span style={{ fontSize: 14, color: area.text, transition: "transform 0.2s", transform: expandedCard === area.key ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
               </button>
               {expandedCard === area.key && (
                 <div style={{ padding: "14px 20px 18px", borderTop: `1px solid ${area.primary}15` }}>
@@ -137,7 +137,7 @@ export default function ArbitrosInfoPage() {
                 <p style={{ margin: 0 }}>
                   <button
                     onClick={() => navigate("/about")}
-                    style={{ background: "none", border: "none", color: "#0ea5e9", cursor: "pointer", fontSize: 14, fontWeight: 600, padding: 0, textDecoration: "underline" }}
+                    style={{ background: "none", border: "none", color: "#0369a1", cursor: "pointer", fontSize: 14, fontWeight: 600, padding: 0, textDecoration: "underline" }}
                   >
                     {ta.infMore}
                   </button>
@@ -149,7 +149,7 @@ export default function ArbitrosInfoPage() {
 
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <div style={{ fontSize: 13, color: PALETA.gris, marginBottom: 8 }}>{ta.infFreeNoReg}</div>
-          <button onClick={() => navigate(-1)} style={{ background: "none", border: "none", color: "#0ea5e9", cursor: "pointer", fontSize: 13, textDecoration: "underline" }}>{ta.infBack}</button>
+          <button onClick={() => navigate(-1)} style={{ background: "none", border: "none", color: "#0369a1", cursor: "pointer", fontSize: 13, textDecoration: "underline" }}>{ta.infBack}</button>
         </div>
       </div>
     </div>

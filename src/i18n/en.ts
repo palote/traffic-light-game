@@ -857,7 +857,7 @@ export const en = {
       orange: "Orange",
     },
     teamColorGroup: "Color for team {team}",
-    teamColorNumber: "team {n}",
+    teamColorNumber: "{n}",
     timerName: "Question timer",
     timerLastSeconds: "⚠️ Last 15 seconds!",
     timerAnnounce15: "15 seconds left",

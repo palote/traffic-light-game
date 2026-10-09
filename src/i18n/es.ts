@@ -885,7 +885,7 @@ export const es = {
       orange: "Naranja",
     },
     teamColorGroup: "Color del equipo {team}",
-    teamColorNumber: "equipo {n}",
+    teamColorNumber: "{n}",
     timerName: "Temporizador de la pregunta",
     timerLastSeconds: "⚠️ ¡Últimos 15 segundos!",
     timerAnnounce15: "Quedan 15 segundos",

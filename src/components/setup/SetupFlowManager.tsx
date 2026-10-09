@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GameModeSelector, type QuestionSource } from "./GameModeSelector";
-import { ProposalFlowOrchestrator } from "./ProposalFlowOrchestrator";
+import { ProposalFlowOrchestrator } from "./Proposalfloworchestrator";
 
 interface SetupFlowManagerProps {
   onGameCreated: (gameId: string) => void;

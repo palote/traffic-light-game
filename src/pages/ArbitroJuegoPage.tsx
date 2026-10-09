@@ -5,6 +5,7 @@ import { app } from "../firebase.config";
 import { useArbitroT, fillArbitro, useFormatoPuntos, useIdiomaSesion, useLocaleArbitro, useTituloPagina } from "../i18n";
 import { textoInformePartida } from "../utils/arbitroDocumentos";
 import { etiquetaCalificacion } from "../utils/arbitroEtiquetas";
+import { nombreVisible } from "../utils/arbitroNombres";
 import { calificacionPreguntaParaServidor } from "../utils/arbitroCalificacion";
 import { esIaNoDisponible, esRespuestaNoClara, textoErrorArbitro } from "../utils/arbitroErrores";
 import { PALETA, EQUIPO_COLORES, EQUIPO_COLOR_1, EQUIPO_COLOR_2 } from "../utils/arbitroPalette";
@@ -478,7 +479,7 @@ export default function ArbitroJuegoPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${t.docFileName}-${sesion?.materia}-${new Date().toLocaleDateString(locale).replace(/\//g, "-")}.txt`;
+    a.download = `${t.docFileName}-${nombreVisible(t.materiaNames, sesion?.materia)}-${new Date().toLocaleDateString(locale).replace(/\//g, "-")}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -717,7 +718,7 @@ export default function ArbitroJuegoPage() {
           <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 20 }}>
             <div style={{ textAlign: "center" }}>
               <div aria-hidden="true" style={{ fontSize: 24, marginBottom: 4 }}>⚖️ {t.sesTitle}</div>
-              <div style={{ fontSize: 13, color: "#64748b" }}>{sesion.materia} · {sesion.tema}</div>
+              <div style={{ fontSize: 13, color: "#64748b" }}>{nombreVisible(t.materiaNames, sesion.materia)} · {sesion.tema}</div>
             </div>
 
             {[0, 1].map(idx => {
@@ -1739,7 +1740,7 @@ function Header({ colors, materia, tema, titulo }: { colors: { gradient: string;
         <h1 style={{ margin: 0, fontSize: 14, fontWeight: 800 }}>
           <span aria-hidden="true">⚖️ </span>{t.sesTitle}<span style={srOnly}>: {titulo}</span>
         </h1>
-        <div style={{ fontSize: 12 }}>{materia} · {tema}</div>
+        <div style={{ fontSize: 12 }}>{nombreVisible(t.materiaNames, materia)} · {tema}</div>
       </div>
     </div>
   );

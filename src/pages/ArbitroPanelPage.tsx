@@ -312,7 +312,7 @@ export default function ArbitroPanelPage() {
         `}</style>
         {/* Header */}
         <div data-noprint style={{ background: colors.gradient, padding: "20px 24px", color: "white" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
+          <div className="pan-top" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
             <button onClick={() => { setSesionSeleccionada(null); setInforme(null); setMetacogniciones([]); setRondasData(null); setErrorRondas(""); setSeleccion({}); }}
               style={{ background: "rgba(0,0,0,0.25)", border: "none", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
               {ta.panBackToList}
@@ -822,10 +822,11 @@ export default function ArbitroPanelPage() {
   return (
     <main style={{ minHeight: "100vh", backgroundColor: "#f8fafc", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
       <div style={{ background: "linear-gradient(135deg,#1e3a5f,#3730a3)", padding: "24px", color: "white", position: "relative" }}>
-        <div style={{ position: "absolute", top: 14, right: 16, zIndex: 10 }}>
+        <style>{`@media (max-width: 560px) { .pan-sel { position: static !important; margin-bottom: 10px; } .pan-h1 { padding-right: 0 !important; } }`}</style>
+        <div className="pan-sel" style={{ position: "absolute", top: 14, right: 16, zIndex: 10 }}>
           <LanguageSelector compact tone="onColor" />
         </div>
-        <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 900, paddingRight: 90 }}>{ta.panTitle}</h1>
+        <h1 className="pan-h1" style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 900, paddingRight: 90 }}>{ta.panTitle}</h1>
         <p style={{ margin: 0, fontSize: 13 }}>{ta.panSubtitle}</p>
       </div>
 

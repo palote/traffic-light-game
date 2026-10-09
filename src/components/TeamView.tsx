@@ -20,7 +20,7 @@ import {
 } from '../services/gameRepository';
 import { useSound } from '../hooks/useSound';
 import { useI18n } from '../i18n';
-import './TeamView.css';
+import './Teamview.css';
 
 // ============================================
 // TRADUCCIONES

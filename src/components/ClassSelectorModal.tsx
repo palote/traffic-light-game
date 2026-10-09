@@ -12,7 +12,7 @@ import {
   deleteClass,
   type SavedClass,
   type NewClassData 
-} from '../services/savedClassesService';
+} from '../services/SavedClassesService';
 
 interface ClassSelectorModalProps {
   isOpen: boolean;

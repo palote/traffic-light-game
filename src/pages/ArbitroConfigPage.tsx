@@ -512,6 +512,11 @@ export default function ArbitroConfigPage() {
     <>
       <style>{`
         #arbitro-print-area { display: none; }
+        @media (max-width: 560px) {
+          .arb-hdr { flex-wrap: wrap; row-gap: 10px; padding-left: 16px !important; padding-right: 16px !important; }
+          .arb-hdr-title { flex: 1 1 0; min-width: 0; }
+          .arb-hdr-ctl { position: static !important; order: 3; flex-basis: 100%; max-width: none !important; align-items: flex-start !important; }
+        }
         @media print {
           body * { visibility: hidden; }
           #arbitro-print-area, #arbitro-print-area * { visibility: visible; }
@@ -523,8 +528,8 @@ export default function ArbitroConfigPage() {
         <div style={cardStyle}>
 
           {/* ── Header ── */}
-          <div style={{ background: headerGrad, padding: "20px 28px", borderRadius: "20px 20px 0 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start", color: "white", position: "relative" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div className="arb-hdr" style={{ background: headerGrad, padding: "20px 28px", borderRadius: "20px 20px 0 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start", color: "white", position: "relative" }}>
+            <div className="arb-hdr-title" style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 28 }}>{areaConfig ? areaConfig.emoji : "⚖️"}</span>
               <div>
                 <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{ta.sesTitle}</h1>
@@ -533,7 +538,7 @@ export default function ArbitroConfigPage() {
                 </p>
               </div>
             </div>
-            <div style={{
+            <div className="arb-hdr-ctl" style={{
               position: "absolute",
               top: 14,
               right: 72,
@@ -544,6 +549,7 @@ export default function ArbitroConfigPage() {
               zIndex: 10,
               maxWidth: "min(50vw, 240px)",
             }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <LanguageSelector compact tone="onColor" />
               <a
                 href="/arbitro-panel"
@@ -563,6 +569,7 @@ export default function ArbitroConfigPage() {
                 }}>
                 {ta.cfgMySessions}
               </a>
+              </div>
               {user && (
                 <div style={{
                   fontSize: 12,
@@ -1205,7 +1212,7 @@ export default function ArbitroConfigPage() {
             <div style={{ background: "linear-gradient(135deg, #1967d2 0%, #0d47a1 100%)", padding: "18px 24px", color: "white", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <h2 id="dlg-classroom-titulo" style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>{ta.cfgPublishClassroom}</h2>
-                <div style={{ fontSize: 12, marginTop: 2 }}>{materia} · {tema}</div>
+                <div style={{ fontSize: 12, marginTop: 2 }}>{nombreVisible(ta.materiaNames, materia)} · {tema}</div>
               </div>
               {!creandoTarea && (
                 <button onClick={() => setShowClassroomModal(false)}
