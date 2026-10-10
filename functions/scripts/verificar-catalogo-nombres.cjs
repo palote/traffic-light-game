@@ -91,7 +91,7 @@ if (MATERIA_EN) for (const n of LEGADO.materias) ok(MATERIA_EN[n] === dic.en.mat
 // ── 3. Las pantallas no muestran el valor crudo ──
 // Una materia/nivel/área que viene de la sesión (o del estado) solo se muestra con nombreVisible(...). Prohibido: {materia}, {sesion.materia},
 // {sesion?.nivel}, etc. como texto, y ${...materia} dentro de plantillas de texto visibles (nombres de archivo).
-const PANTALLAS = ["pages/ArbitroConfigPage.tsx", "pages/ArbitroLandingPage.tsx", "pages/ArbitrosInfoPage.tsx", "pages/ArbitroPanelPage.tsx", "pages/ArbitroSesionPage.tsx", "pages/ArbitroJuegoPage.tsx"];
+const PANTALLAS = ["pages/ArbitroConfigPage.tsx", "pages/ArbitroLandingPage.tsx", "pages/ArbitrosInfoPage.tsx", "pages/ArbitrosPublicaPage.tsx", "pages/ArbitroPanelPage.tsx", "pages/ArbitroSesionPage.tsx", "pages/ArbitroJuegoPage.tsx"];
 const CRUDO = /\{\s*(?:[\w$]+\??\.)*(materia|nivel|area|materiaV|nivelV)\s*\}/; // {materia}, {sesion?.materia}…  (materiaV/nivelV ya son nombres visibles: se excluyen abajo)
 const PLANTILLA = /\$\{\s*(?:[\w$]+\??\.)*(materia|nivel|area)\s*\}/;
 for (const f of PANTALLAS) {
@@ -129,6 +129,9 @@ for (const f of todos) {
   v(sf);
 }
 ok(todos.length > 50, "el recorrido de src/ debería ver todos los archivos");
+// La portada pública /arbitros usa la misma fuente (catálogo común + areaNames + descripciones del diccionario)
+const publica = leer(SRC, "pages/ArbitrosPublicaPage.tsx");
+ok(/AREAS_ORDEN\.map/.test(publica) && /nombreVisible\(ta\.areaNames, AREA_LABELS_ES\[key\]\)/.test(publica) && /arbAreaDescs\[key\]/.test(publica), "ArbitrosPublicaPage: las tarjetas de área deben salir de AREAS_ORDEN + AREA_LABELS_ES + nombreVisible + arbAreaDescs");
 // La portada usa la fuente común y los diccionarios
 const portada = leer(SRC, "pages/DashboardPage.tsx");
 ok(/AREAS_ORDEN\.map/.test(portada) && /nombreVisible\(ta\.areaNames, AREA_LABELS_ES\[key\]\)/.test(portada), "DashboardPage: las tarjetas de área deben salir de AREAS_ORDEN + AREA_LABELS_ES + nombreVisible(ta.areaNames, …)");

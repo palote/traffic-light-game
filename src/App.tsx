@@ -127,6 +127,7 @@ const ArbitroSesionPage = lazy(() => import("./pages/ArbitroSesionPage"));
 const ArbitroPanelPage = lazy(() => import("./pages/ArbitroPanelPage"));
 const ArbitroLandingPage = lazy(() => import("./pages/ArbitroLandingPage"));
 const ArbitrosInfoPage = lazy(() => import("./pages/ArbitrosInfoPage"));
+const ArbitrosPublicaPage = lazy(() => import("./pages/ArbitrosPublicaPage"));
 const ArbitroJuegoPage = lazy(() => import("./pages/ArbitroJuegoPage"));
 
 // 📊 A/B TEST DASHBOARD
@@ -746,6 +747,15 @@ function App() {
                   element={
                     <Suspense fallback={<div>Cargando...</div>}>
                       <ArbitroLandingPage />
+                    </Suspense>
+                  }
+                />
+                {/* 🆕 ÁRBITRO: Portada pública (sin sesión), entrada para la postulación */}
+                <Route
+                  path="/arbitros"
+                  element={
+                    <Suspense fallback={<div>Cargando...</div>}>
+                      <ArbitrosPublicaPage />
                     </Suspense>
                   }
                 />

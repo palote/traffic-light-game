@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { PALETA } from "../utils/arbitroPalette";
 import { useArbitroT, useTituloPagina, LanguageSelector, IDIOMAS_ARBITRO } from "../i18n";
 import { nombreVisible } from "../utils/arbitroNombres";
+import { pasosArbitro } from "../utils/arbitroPasos";
 import { AREA_EMOJI, AREA_LABELS_ES } from "../utils/arbitroAreas";
 
 // Emoji y nombre interno de cada área salen de utils/arbitroAreas (única fuente); aquí solo van los colores propios de esta pantalla.
@@ -26,14 +27,7 @@ const AREAS = [
 export default function ArbitrosInfoPage() {
   const ta = useArbitroT();
   useTituloPagina(`${ta.infTitle} — ${ta.pageTitleSuffix}`);
-  const PASOS = [
-    { n: "1", txt: ta.infStep1 },
-    { n: "2", txt: ta.infStep2 },
-    { n: "3", txt: ta.infStep3 },
-    { n: "4", txt: ta.infStep4 },
-    { n: "5", txt: ta.rulesStep5Info },
-    { n: "6", txt: ta.infStep6 },
-  ];
+  const PASOS = pasosArbitro(ta);
   const navigate = useNavigate();
   const [showPasos, setShowPasos] = useState(false);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);

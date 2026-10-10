@@ -5,7 +5,7 @@ const root = path.resolve(__dirname, "..", "..");
 let ts; try { ts = require(path.join(root, "node_modules", "typescript")); } catch { ts = require(path.join(root, "functions", "node_modules", "typescript")); }
 const ARCHIVOS = [
   "src/pages/ArbitroSesionPage.tsx","src/pages/ArbitroJuegoPage.tsx","src/pages/ArbitroConfigPage.tsx",
-  "src/pages/ArbitroPanelPage.tsx","src/pages/ArbitroLandingPage.tsx","src/pages/ArbitrosInfoPage.tsx",
+  "src/pages/ArbitroPanelPage.tsx","src/pages/ArbitroLandingPage.tsx","src/pages/ArbitrosInfoPage.tsx","src/pages/ArbitrosPublicaPage.tsx","src/utils/arbitroPasos.ts",
   "src/utils/arbitroAreas.ts","src/utils/arbitroPalette.ts","src/utils/arbitroPartida.ts","src/utils/arbitroErrores.ts",
   "src/components/PWAMiniBadge.tsx","src/utils/arbitroA11y.tsx","src/utils/arbitroDocumentos.ts",
   "src/pages/DashboardPage.tsx", "src/components/DashboardBanners.tsx",

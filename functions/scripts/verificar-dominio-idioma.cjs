@@ -44,15 +44,26 @@ ok(/import \{ resolverIdiomaInicial \} from "\.\.\/utils\/idiomaInicial"/.test(i
 ok(!leer("contexts/GameModeContext.tsx").includes("idiomaInicial"), "GameModeContext no debe tocarse");
 
 // ── 3. Las 4 pantallas del árbitro montan el selector ──
-const PANTALLAS = { "pages/ArbitroConfigPage.tsx": 1, "pages/ArbitroLandingPage.tsx": 1, "pages/ArbitrosInfoPage.tsx": 1, "pages/ArbitroPanelPage.tsx": 2 };
+const PANTALLAS = { "pages/ArbitroConfigPage.tsx": 1, "pages/ArbitroLandingPage.tsx": 1, "pages/ArbitrosInfoPage.tsx": 1, "pages/ArbitroPanelPage.tsx": 2, "pages/ArbitrosPublicaPage.tsx": 1 };
 for (const [f, n] of Object.entries(PANTALLAS)) {
   const s = leer(f);
   ok(/import \{[^}]*\bLanguageSelector\b[^}]*\} from "\.\.\/i18n"/.test(s), `${f}: falta importar LanguageSelector`);
-  const usos = (s.match(/<LanguageSelector compact tone="onColor" idiomas=\{IDIOMAS_ARBITRO\} \/>/g) || []).length;
+  const usos = (s.match(/<LanguageSelector compact tone="on(?:Color|Light)" idiomas=\{IDIOMAS_ARBITRO\} \/>/g) || []).length;
   ok(usos === n, `${f}: se esperaban ${n} selector(es) limitados a es/en y hay ${usos}`);
   ok((s.match(/<LanguageSelector/g) || []).length === n, `${f}: todos sus selectores deben pasar idiomas={IDIOMAS_ARBITRO}`);
   ok(/import \{[^}]*\bIDIOMAS_ARBITRO\b[^}]*\} from "\.\.\/i18n"/.test(s), `${f}: falta importar IDIOMAS_ARBITRO`);
 }
+// Portada pública /arbitros: ruta fuera de ProtectedRoute, página sin useAuth, y bajo /arbitro* (idioma es/en)
+const app = leer("App.tsx");
+const bloque = app.slice(app.indexOf('path="/arbitros"'), app.indexOf('path="/arbitros"') + 260);
+ok(app.includes('path="/arbitros"') && bloque.includes("<ArbitrosPublicaPage />") && !bloque.includes("ProtectedRoute"), 'App.tsx: /arbitros debe ser una ruta pública (sin ProtectedRoute)');
+for (const ruta of ["/arbitro-config", "/arbitro/:area", "/arbitros-info", "/arbitro-panel"]) { const i = app.indexOf(`path="${ruta}"`); ok(i > 0, `App.tsx: falta la ruta ${ruta}`); }
+const pub = leer("pages/ArbitrosPublicaPage.tsx");
+ok(!/useAuth|AuthContext|ProtectedRoute/.test(pub), "ArbitrosPublicaPage no debe depender de la sesión");
+ok(!/DashboardPage|Semáforo|useGameMode/.test(pub), "ArbitrosPublicaPage no debe mezclar el dashboard ni el Semáforo");
+ok(/<Link to="\/login"/.test(pub), "ArbitrosPublicaPage: debe tener el link a /login");
+const { esRutaArbitro } = cargar("utils/arbitroRoutes.ts");
+ok(esRutaArbitro("/arbitros"), "/arbitros cae bajo las rutas del árbitro (idioma es/en, <html lang>)");
 // El resto del sitio no limita idiomas
 for (const f of fs.readdirSync(path.join(SRC, "pages")).filter((x) => x.endsWith(".tsx") && !Object.keys(PANTALLAS).some((k) => k.endsWith(x))))
   ok(!/idiomas=\{/.test(leer("pages/" + f)), `pages/${f}: el selector fuera del árbitro debe seguir con los 3 idiomas`);
