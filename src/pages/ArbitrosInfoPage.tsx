@@ -3,21 +3,23 @@ import { useNavigate } from "react-router-dom";
 import { PALETA } from "../utils/arbitroPalette";
 import { useArbitroT, useTituloPagina, LanguageSelector, IDIOMAS_ARBITRO } from "../i18n";
 import { nombreVisible } from "../utils/arbitroNombres";
+import { AREA_EMOJI, AREA_LABELS_ES } from "../utils/arbitroAreas";
 
-// Los nombres de área son claves estables; el texto visible sale del diccionario (ta.areaNames, ta.infWhat_*).
+// Emoji y nombre interno de cada área salen de utils/arbitroAreas (única fuente); aquí solo van los colores propios de esta pantalla.
+// El texto visible sale del diccionario (ta.areaNames, ta.infWhat_*).
 // i18n-clave
 const AREAS = [
   {
-    emoji: "🔬", nombre: "Ciencias Exactas y Naturales", key: "exactas", primary: "#0ea5e9", text: "#0369a1", bg: "#f0f9ff",
+    emoji: AREA_EMOJI.exactas, nombre: AREA_LABELS_ES.exactas, key: "exactas" as const, primary: "#0ea5e9", text: "#0369a1", bg: "#f0f9ff",
   },
   {
-    emoji: "🌍", nombre: "Ciencias Sociales y Humanidades", key: "sociales", primary: PALETA.naranja, text: PALETA.naranjaOscuro, bg: "#fff7ed",
+    emoji: AREA_EMOJI.sociales, nombre: AREA_LABELS_ES.sociales, key: "sociales" as const, primary: PALETA.naranja, text: PALETA.naranjaOscuro, bg: "#fff7ed",
   },
   {
-    emoji: "💬", nombre: "Comunicación y Lenguajes", key: "lenguajes", primary: "#8b5cf6", text: "#6d28d9", bg: "#faf5ff",
+    emoji: AREA_EMOJI.lenguajes, nombre: AREA_LABELS_ES.lenguajes, key: "lenguajes" as const, primary: "#8b5cf6", text: "#6d28d9", bg: "#faf5ff",
   },
   {
-    emoji: "🎨", nombre: "Arte y Expresión", key: "arte", primary: "#f43f5e", text: "#be123c", bg: "#fff1f2",
+    emoji: AREA_EMOJI.arte, nombre: AREA_LABELS_ES.arte, key: "arte" as const, primary: "#f43f5e", text: "#be123c", bg: "#fff1f2",
   },
 ];
 

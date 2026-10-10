@@ -60,6 +60,28 @@ export const pt = {
 
     myGames: "Meus jogos",
     active: "ativos",
+    // Portada: textos que antes estaban escritos a mano en DashboardPage
+    tagline: "Onde aprendemos todos juntos",
+    groupWork: "TRABALHO EM GRUPO",
+    arbitrosTitle: "Árbitros de Aprendizagem",
+    fullDynamic: "A DINÂMICA COMPLETA",
+    moreInfo: "mais informações",
+    configureSession: "Configurar sessão →",
+    show: "▼ ver",
+    showAll: "▼ ver todas",
+    hide: "▲ ocultar",
+    levelPrimary: "Fundamental",
+    levelSecondary: "Ensino Médio",
+    videoStartPrimary: "▶ Fundamental — Como começar",
+    videoStartSecondary: "▶ Ensino Médio — Como começar",
+    videoWhichLevel: "Para qual nível?",
+    videoChange: "Alterar",
+    watchVideo: "Como começar? Ver vídeo",
+    moreTools: "Mais ferramentas para professores",
+    moreToolsDesc: "Gerador de rubricas, planilhas de presença, sequências didáticas, planejamentos anuais, comparador de países, equações e mais.",
+    gameShared: "Jogo compartilhado com a comunidade!",
+    shareLabel: "Compartilhar",
+    arbAreaDescs: { exactas: "Matemática, Biologia, Física, Química e mais", sociales: "História, Geografia, Filosofia, Economia e mais", lenguajes: "Língua, Inglês, Literatura, Comunicação e mais", arte: "Artes Visuais, Música, Teatro, Ed. Física e mais" },
 
     noGames: "Sem jogos ativos",
     startFirst: "Crie seu primeiro jogo!",
@@ -74,6 +96,7 @@ export const pt = {
     noGamesCreated: "Você ainda não criou nenhum jogo.",
     finishedGames: "jogos finalizados",
     viewResults: "Ver resultados",
+    goToPodium: "Ir para o pódio",
     unnamedGame: "Jogo sem título",
 
     // Current mode panel

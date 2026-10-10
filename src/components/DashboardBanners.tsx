@@ -138,6 +138,7 @@ export function DashboardBanners() {
     return true;
   };
 
+  // i18n-clave: textos con las tres lenguas en cada ternario (lo controla verificar-textos-fijos)
   const texts = {
     referral: {
       title:

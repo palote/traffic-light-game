@@ -35,6 +35,22 @@ console.log(`es.ts: ${cuenta(es)} textos · en.ts: ${cuenta(en)} textos`);
 mostrar("Faltan en en.ts (están en es.ts)", faltanEnEn); mostrar("Faltan en es.ts (están en en.ts)", faltanEnEs);
 mostrar("Texto en un idioma y objeto/lista en el otro", tipos); mostrar("Listas de distinto largo", largos);
 mostrar("{Marcadores} distintos entre es y en", marc);
+// Portugués: solo la sección `dashboard` (la portada) está traducida a las tres lenguas; pt.ts no tiene sección `arbitro`.
+// Toda clave de es.dashboard tiene que existir en pt.dashboard, del mismo tipo y con los mismos {marcadores}.
+const pt = cargar("pt.ts", "pt");
+const faltanEnPt = [], tiposPt = [], marcPt = [];
+(function compararPt(a, b, ruta) {
+  for (const k of Object.keys(a)) {
+    const q = ruta + "." + k;
+    if (!b || !(k in b)) { faltanEnPt.push(q); continue; }
+    if (esObj(a[k]) !== esObj(b[k]) || Array.isArray(a[k]) !== Array.isArray(b[k])) { tiposPt.push(q); continue; }
+    if (esObj(a[k])) compararPt(a[k], b[k], q);
+    else if (!Array.isArray(a[k]) && marcadores(a[k]) !== marcadores(b[k])) marcPt.push(q);
+  }
+})(es.dashboard, pt.dashboard, "dashboard");
+mostrar("Faltan en pt.ts (están en es.ts, sección dashboard)", faltanEnPt); mostrar("Tipo distinto en pt.ts (dashboard)", tiposPt); mostrar("{Marcadores} distintos en pt.ts (dashboard)", marcPt);
+const totalPt = faltanEnPt.length + tiposPt.length + marcPt.length;
+if (totalPt) { console.error(`\nFALLÓ: ${totalPt} diferencias entre es.ts y pt.ts en la sección dashboard.`); process.exit(1); }
 const total = faltanEnEn.length + faltanEnEs.length + tipos.length + largos.length + marc.length;
 if (total) { console.error(`\nFALLÓ: ${total} diferencias entre es.ts y en.ts.`); process.exit(1); }
-console.log("OK: es.ts y en.ts tienen exactamente las mismas claves (y los mismos {marcadores}).");
+console.log("OK: es.ts y en.ts tienen exactamente las mismas claves (y los mismos {marcadores}); pt.ts tiene todas las de dashboard.");

@@ -8,6 +8,7 @@ const ARCHIVOS = [
   "src/pages/ArbitroPanelPage.tsx","src/pages/ArbitroLandingPage.tsx","src/pages/ArbitrosInfoPage.tsx",
   "src/utils/arbitroAreas.ts","src/utils/arbitroPalette.ts","src/utils/arbitroPartida.ts","src/utils/arbitroErrores.ts",
   "src/components/PWAMiniBadge.tsx","src/utils/arbitroA11y.tsx","src/utils/arbitroDocumentos.ts",
+  "src/pages/DashboardPage.tsx", "src/components/DashboardBanners.tsx",
 ];
 const PALABRAS = /\b(el|la|los|las|de|del|con|para|por|sin|que|una|uno|y|o|tu|tus|su|sus|este|esta|esto|ya|más|mas|aún|todavía|equipo|equipos|ronda|rondas|puntos?|pregunta|respuesta|sesión|sesion|docente|alumnos?|cargando|volver|guardar|enviar|siguiente|anterior|elegí|escribí|completá|verificá|intentá|esperá|probá|tocá|ingresá|nombre|materia|nivel|árbitro|arbitro|juego|partida|resultados?|ganador|empate|error|usuario|clase|grupo|curso)\b/i;
 const ACENTOS = /[áéíóúñÁÉÍÓÚÑ¿¡]/;
@@ -53,6 +54,22 @@ for (const rel of ARCHIVOS) {
   };
   visit(sf);
 }
+// ── Portada (DashboardPage) y banners: todo texto elegido por idioma debe tener es, en y pt ──
+for (const rel of ["src/pages/DashboardPage.tsx", "src/components/DashboardBanners.tsx"]) {
+  const src = fs.readFileSync(path.join(root, rel), "utf8");
+  const lineas = src.split("\n");
+  lineas.forEach((l, i) => {
+    if (/^\s*(\/\/|\*)/.test(l)) return;
+    // ternario `language === "es" ? … : …`: la expresión (hasta ~320 caracteres) tiene que nombrar "pt"
+    if (/\blanguage === "es"/.test(l) && !/"(es-AR|pt-BR)"/.test(l)) {
+      const ventana = lineas.slice(i, i + 4).join(" ").slice(0, 320);
+      if (!/language === "pt"|language === 'pt'/.test(ventana)) hallazgos.push(`${rel}:${i + 1}  ternario es/en sin versión en portugués: ${l.trim().slice(0, 80)}`);
+    }
+  });
+  // diccionarios es/en/pt propios: misma cantidad de bloques por idioma
+  const n = (c) => (src.match(new RegExp("^\\s*" + c + ": \\{", "gm")) || []).length;
+  if (!(n("es") === n("en") && n("en") === n("pt"))) hallazgos.push(`${rel}  los diccionarios por idioma no tienen la misma cantidad de bloques es/en/pt (${n("es")}/${n("en")}/${n("pt")})`);
+}
 const unicos = [...new Set(hallazgos)];
 if (unicos.length) { console.log(`Textos en español escritos en el código: ${unicos.length}`); if (process.argv.includes("--lista") || unicos.length <= 80) unicos.forEach((h) => console.log("  " + h)); process.exit(1); }
-console.log("OK: no hay textos en español escritos directamente en las pantallas de los árbitros.");
+console.log("OK: no hay textos en español escritos directamente en las pantallas de los árbitros ni en la portada.");

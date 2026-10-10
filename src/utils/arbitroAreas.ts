@@ -16,6 +16,16 @@ export const AREA_LABELS_ES: Record<AreaKey, string> = {
   arte: "Arte y Expresión",
 };
 
+/** Orden en que se muestran las áreas (portada, selectores). */
+export const AREAS_ORDEN: readonly AreaKey[] = ["exactas", "sociales", "lenguajes", "arte"];
+
+export const AREA_EMOJI: Record<AreaKey, string> = {
+  exactas: "🔬",
+  sociales: "🌍",
+  lenguajes: "💬",
+  arte: "🎨",
+};
+
 // i18n-clave: nombres con los que se reconoce el área (no se muestran)
 const AREA_KEY_POR_NOMBRE: Record<string, AreaKey> = {
   exactas: "exactas",

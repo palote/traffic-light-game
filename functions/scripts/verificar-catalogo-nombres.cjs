@@ -107,5 +107,37 @@ for (const f of PANTALLAS) {
 const juego = leer(SRC, "pages/ArbitroJuegoPage.tsx");
 ok(/function Header\([^)]*\)[\s\S]{0,700}nombreVisible\(t\.materiaNames, materia\)/.test(juego), "ArbitroJuegoPage: Header debe mostrar nombreVisible(t.materiaNames, materia)");
 
+// ── Una sola fuente de áreas en todo src/ ──
+// Ninguna pantalla (portada incluida) puede tener una lista propia de áreas con nombres en español ni con
+// `key: "exactas"` y similares: tienen que salir de utils/arbitroAreas (AREAS_ORDEN, AREA_LABELS_ES, AREA_EMOJI) y mostrarse con
+// nombreVisible(areaNames, …). Excepciones documentadas: las dos pantallas cuyo catálogo ya se valida arriba (Config y Landing) y el
+// propio utils/arbitroAreas. Los diccionarios (src/i18n) y las claves de color (AREA_COLORS) no cuentan.
+const NOMBRES_AREA = new Set(areasLab);
+const CLAVES_AREA = new Set(Object.keys(areaPorKey));
+const PERMITIDOS = new Set(["pages/ArbitroConfigPage.tsx", "pages/ArbitroLandingPage.tsx", "utils/arbitroAreas.ts"]);
+const listar = (d) => fs.readdirSync(path.join(SRC, d), { withFileTypes: true }).flatMap((e) => e.isDirectory() ? (d + "/" + e.name === "i18n" ? [] : listar((d ? d + "/" : "") + e.name)) : (/\.tsx?$/.test(e.name) ? [(d ? d + "/" : "") + e.name] : []));
+const todos = listar("").filter((f) => !f.startsWith("i18n/"));
+let propias = 0;
+for (const f of todos) {
+  if (PERMITIDOS.has(f)) continue;
+  const sf = ts.createSourceFile(f, leer(SRC, f), ts.ScriptTarget.Latest, true, f.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  const v = (n) => {
+    if (ts.isStringLiteralLike(n) && NOMBRES_AREA.has(n.text)) { propias++; ok(false, `${f}:${sf.getLineAndCharacterOfPosition(n.getStart()).line + 1}: nombre de área en español escrito a mano («${n.text}»): usar AREA_LABELS_ES de utils/arbitroAreas`); }
+    if (ts.isPropertyAssignment(n) && /^(key|areaKey|areaId)$/.test(n.name.getText().replace(/["']/g, "")) && ts.isStringLiteralLike(n.initializer) && CLAVES_AREA.has(n.initializer.text)) { propias++; ok(false, `${f}:${sf.getLineAndCharacterOfPosition(n.getStart()).line + 1}: lista propia de áreas (key: "${n.initializer.text}"): usar AREAS_ORDEN de utils/arbitroAreas`); }
+    ts.forEachChild(n, v);
+  };
+  v(sf);
+}
+ok(todos.length > 50, "el recorrido de src/ debería ver todos los archivos");
+// La portada usa la fuente común y los diccionarios
+const portada = leer(SRC, "pages/DashboardPage.tsx");
+ok(/AREAS_ORDEN\.map/.test(portada) && /nombreVisible\(ta\.areaNames, AREA_LABELS_ES\[key\]\)/.test(portada), "DashboardPage: las tarjetas de área deben salir de AREAS_ORDEN + AREA_LABELS_ES + nombreVisible(ta.areaNames, …)");
+// Descripciones de las tarjetas de la portada: las cuatro áreas, en es/en/pt
+for (const [idioma, nombre] of [["es", "es"], ["en", "en"], ["pt", "pt"]]) {
+  const dic = cargar("i18n/" + nombre + ".ts", nombre);
+  const d = dic.dashboard && dic.dashboard.arbAreaDescs;
+  for (const k of CLAVES_AREA) ok(d && typeof d[k] === "string" && d[k].trim().length > 3, `dashboard.arbAreaDescs.${k} falta en ${idioma}.ts`);
+}
+
 console.log(fallos ? `\nFALLÓ: ${fallos} de ${total} comprobaciones` : `OK: ${total} comprobaciones (${todasAreas.size} áreas, ${todasMaterias.size} materias y ${todosNiveles.size} niveles con nombre en español e inglés; servidor y pantalla coinciden; las pantallas los muestran con nombreVisible).`);
 process.exit(fallos ? 1 : 0);

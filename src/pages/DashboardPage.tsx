@@ -5,7 +5,10 @@ import { ref, onValue, off, remove, get, query, orderByChild, equalTo } from "fi
 import { database } from "../firebase.config";
 import { useAuth } from "../contexts/AuthContext";
 import { useGameMode, type GameMode } from "../contexts/GameModeContext";
-import { useI18n, LanguageSelector } from "../i18n";
+import { useI18n, useArbitroT, LanguageSelector } from "../i18n";
+import { nombreVisible } from "../utils/arbitroNombres";
+import { AREAS_ORDEN, AREA_EMOJI, AREA_LABELS_ES } from "../utils/arbitroAreas";
+import { AREA_COLORS } from "../utils/arbitroPalette";
 import { DashboardBanners } from "../components/DashboardBanners";
 import { saveTeacherGame } from "../services/teacherLibraryService";
 import type { NewTeacherGame } from "../types/teacherLibrary";
@@ -19,31 +22,7 @@ interface TeacherStats {
   monthDurationSec: number; gamesCreated: number; gamesCompleted: number;
 }
 
-// ─── Árbitro areas ────────────────────────────────────────────────────────────
-
-const ARBITRO_AREAS = [
-  {
-    nombre: "Ciencias Exactas y Naturales", emoji: "🔬", key: "exactas",
-    gradient: "linear-gradient(135deg, #0ea5e9 0%, #0d9488 100%)", primary: "#0ea5e9",
-    desc: "Matemática, Biología, Física, Química y más"
-  },
-  {
-    nombre: "Ciencias Sociales y Humanidades", emoji: "🌍", key: "sociales",
-    gradient: "linear-gradient(135deg, #f97316 0%, #b45309 100%)", primary: "#f97316",
-    desc: "Historia, Geografía, Filosofía, Economía y más"
-  },
-  {
-    nombre: "Comunicación y Lenguajes", emoji: "💬", key: "lenguajes",
-    gradient: "linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)", primary: "#8b5cf6",
-    desc: "Lengua, Inglés, Literatura, Comunicación y más"
-  },
-  {
-    nombre: "Arte y Expresión", emoji: "🎨", key: "arte",
-    gradient: "linear-gradient(135deg, #f43f5e 0%, #f97316 100%)", primary: "#f43f5e",
-    desc: "Plástica, Música, Teatro, Ed. Física y más"
-  },
-];
-
+// i18n-clave: diccionario es/en/pt de la propia pantalla (los tres idiomas son obligatorios; lo controla verificar-textos-fijos)
 const GAME_CARDS_STRINGS = {
   newGame: {
     es: { title: "Comenzar juego nuevo", description: "Creá una actividad con IA y empezá a jugar en minutos con tu clase.", cta: "Crear →" },
@@ -57,6 +36,7 @@ const GAME_CARDS_STRINGS = {
   },
 };
 
+// i18n-clave: diccionario es/en/pt de la propia pantalla (los tres idiomas son obligatorios; lo controla verificar-textos-fijos)
 const TOOLS = [
   {
     id: "rubric", icon: "📐", route: "/rubric-generator", color: "#f59e0b",
@@ -136,6 +116,7 @@ function ShareGameModal({ game, user, onClose, onSuccess }: { game: ActiveGame; 
   const { language } = useI18n();
   const [title, setTitle] = useState(game.name || "");
   const [description, setDescription] = useState("");
+  // i18n-clave: valor interno guardado (no se muestra)
   const [area, setArea] = useState("Matemática");
   const [grade, setGrade] = useState("6°");
   const [level, setLevel] = useState<"primary" | "secondary">("primary");
@@ -148,15 +129,13 @@ function ShareGameModal({ game, user, onClose, onSuccess }: { game: ActiveGame; 
 
   const isSecondary = level === "secondary";
   const grades = isSecondary ? ["1°", "2°", "3°", "4°", "5°", "6°"] : ["3°", "4°", "5°", "6°", "7°"];
-  const areas = [
-    { id: "Lengua", label: "Lengua" }, { id: "Matemática", label: "Matemática" },
-    { id: "Ciencias Naturales", label: "Ciencias Naturales" }, { id: "Ciencias Sociales", label: "Ciencias Sociales" },
-    { id: "Otras", label: "Otras" },
-  ];
+  // i18n-clave: valores internos guardados (se muestran con areaLabels)
+  const areaIds = ["Lengua", "Matemática", "Ciencias Naturales", "Ciencias Sociales", "Otras"];
+  // i18n-clave: diccionario es/en/pt de la propia pantalla (los tres idiomas son obligatorios; lo controla verificar-textos-fijos)
   const tx = {
-    es: { title: "Compartir con la comunidad", subtitle: "Completá los datos para que otros docentes puedan encontrar tu juego.", titleLabel: "Título del juego *", descLabel: "Descripción", descPlaceholder: "¿De qué trata el juego?", levelLabel: "Nivel", primary: "Primaria", secondary: "Secundaria", areaLabel: "Área", gradeLabel: "Grado", topicLabel: "Tema", topicPlaceholder: "Ej: Resolución de problemas", contentsLabel: "Contenidos", contentsPlaceholder: "Ej: Suma, resta", skillsLabel: "Habilidades", skillsPlaceholder: "Ej: Comprensión lectora", langLabel: "Idioma", share: "Compartir", sharing: "Compartiendo...", cancel: "Cancelar", required: "El título es obligatorio", noQuestions: "No se encontraron preguntas" },
-    en: { title: "Share with community", subtitle: "Fill in the details so other teachers can find your game.", titleLabel: "Game title *", descLabel: "Description", descPlaceholder: "What is this game about?", levelLabel: "Level", primary: "Primary", secondary: "Secondary", areaLabel: "Area", gradeLabel: "Grade", topicLabel: "Topic", topicPlaceholder: "E.g.: Problem solving", contentsLabel: "Contents", contentsPlaceholder: "E.g.: Addition", skillsLabel: "Skills", skillsPlaceholder: "E.g.: Reading", langLabel: "Language", share: "Share", sharing: "Sharing...", cancel: "Cancel", required: "Title is required", noQuestions: "No questions found" },
-    pt: { title: "Compartilhar com a comunidade", subtitle: "Preencha os dados para que outros professores encontrem seu jogo.", titleLabel: "Título do jogo *", descLabel: "Descrição", descPlaceholder: "Sobre o que é o jogo?", levelLabel: "Nível", primary: "Fundamental", secondary: "Médio", areaLabel: "Área", gradeLabel: "Série", topicLabel: "Tema", topicPlaceholder: "Ex: Resolução de problemas", contentsLabel: "Conteúdos", contentsPlaceholder: "Ex: Soma", skillsLabel: "Habilidades", skillsPlaceholder: "Ex: Compreensão", langLabel: "Idioma", share: "Compartilhar", sharing: "Compartilhando...", cancel: "Cancelar", required: "O título é obrigatório", noQuestions: "Nenhuma pergunta encontrada" },
+    es: { title: "Compartir con la comunidad", areaLabels: {"Lengua": "Lengua", "Matemática": "Matemática", "Ciencias Naturales": "Ciencias Naturales", "Ciencias Sociales": "Ciencias Sociales", "Otras": "Otras"}, subtitle: "Completá los datos para que otros docentes puedan encontrar tu juego.", titleLabel: "Título del juego *", descLabel: "Descripción", descPlaceholder: "¿De qué trata el juego?", levelLabel: "Nivel", primary: "Primaria", secondary: "Secundaria", areaLabel: "Área", gradeLabel: "Grado", topicLabel: "Tema", topicPlaceholder: "Ej: Resolución de problemas", contentsLabel: "Contenidos", contentsPlaceholder: "Ej: Suma, resta", skillsLabel: "Habilidades", skillsPlaceholder: "Ej: Comprensión lectora", langLabel: "Idioma", share: "Compartir", sharing: "Compartiendo...", cancel: "Cancelar", required: "El título es obligatorio", noQuestions: "No se encontraron preguntas" },
+    en: { title: "Share with community", areaLabels: {"Lengua": "Language", "Matemática": "Mathematics", "Ciencias Naturales": "Natural Sciences", "Ciencias Sociales": "Social Studies", "Otras": "Other"}, subtitle: "Fill in the details so other teachers can find your game.", titleLabel: "Game title *", descLabel: "Description", descPlaceholder: "What is this game about?", levelLabel: "Level", primary: "Primary", secondary: "Secondary", areaLabel: "Area", gradeLabel: "Grade", topicLabel: "Topic", topicPlaceholder: "E.g.: Problem solving", contentsLabel: "Contents", contentsPlaceholder: "E.g.: Addition", skillsLabel: "Skills", skillsPlaceholder: "E.g.: Reading", langLabel: "Language", share: "Share", sharing: "Sharing...", cancel: "Cancel", required: "Title is required", noQuestions: "No questions found" },
+    pt: { title: "Compartilhar com a comunidade", areaLabels: {"Lengua": "Língua", "Matemática": "Matemática", "Ciencias Naturales": "Ciências Naturais", "Ciencias Sociales": "Ciências Sociais", "Otras": "Outras"}, subtitle: "Preencha os dados para que outros professores encontrem seu jogo.", titleLabel: "Título do jogo *", descLabel: "Descrição", descPlaceholder: "Sobre o que é o jogo?", levelLabel: "Nível", primary: "Fundamental", secondary: "Médio", areaLabel: "Área", gradeLabel: "Série", topicLabel: "Tema", topicPlaceholder: "Ex: Resolução de problemas", contentsLabel: "Conteúdos", contentsPlaceholder: "Ex: Soma", skillsLabel: "Habilidades", skillsPlaceholder: "Ex: Compreensão", langLabel: "Idioma", share: "Compartilhar", sharing: "Compartilhando...", cancel: "Cancelar", required: "O título é obrigatório", noQuestions: "Nenhuma pergunta encontrada" },
   };
   const uiLang = (language as string) in tx ? (language as keyof typeof tx) : "es";
   const t = tx[uiLang];
@@ -200,7 +179,7 @@ function ShareGameModal({ game, user, onClose, onSuccess }: { game: ActiveGame; 
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div><label style={labelStyle}>{t.areaLabel}</label><select value={area} onChange={e => setArea(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>{areas.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</select></div>
+            <div><label style={labelStyle}>{t.areaLabel}</label><select value={area} onChange={e => setArea(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>{areaIds.map(id => <option key={id} value={id}>{t.areaLabels[id as keyof typeof t.areaLabels]}</option>)}</select></div>
             <div><label style={labelStyle}>{t.gradeLabel}</label><select value={grade} onChange={e => setGrade(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>{grades.map(g => <option key={g} value={g}>{g}</option>)}</select></div>
           </div>
           <div><label style={labelStyle}>{t.topicLabel}</label><input type="text" value={topic} onChange={e => setTopic(e.target.value)} placeholder={t.topicPlaceholder} style={inputStyle} /></div>
@@ -208,6 +187,7 @@ function ShareGameModal({ game, user, onClose, onSuccess }: { game: ActiveGame; 
           <div><label style={labelStyle}>{t.skillsLabel}</label><input type="text" value={mainSkills} onChange={e => setMainSkills(e.target.value)} placeholder={t.skillsPlaceholder} style={inputStyle} /></div>
           <div><label style={labelStyle}>{t.langLabel}</label>
             <div style={{ display: "flex", gap: 8 }}>
+              {/* i18n-clave: nombre de cada idioma en su propio idioma */}
               {([{ code: "es" as const, flag: "🇪🇸", label: "Español" }, { code: "en" as const, flag: "🇺🇸", label: "English" }, { code: "pt" as const, flag: "🇧🇷", label: "Português" }]).map(l => (
                 <button key={l.code} onClick={() => setLang(l.code)} style={{ flex: 1, padding: "8px", borderRadius: 10, border: lang === l.code ? "3px solid #8b5cf6" : "2px solid #e2e8f0", backgroundColor: lang === l.code ? "#ede9fe" : "white", color: lang === l.code ? "#7c3aed" : "#475569", fontWeight: lang === l.code ? 700 : 400, cursor: "pointer", fontSize: 12 }}>
                   {l.flag} {l.label}
@@ -234,6 +214,7 @@ function ShareGameModal({ game, user, onClose, onSuccess }: { game: ActiveGame; 
 function TeacherStatsCard({ stats, loading, collapsed, onToggle }: { stats: TeacherStats | null; loading: boolean; collapsed: boolean; onToggle: () => void }) {
   const { language } = useI18n();
   const fmt = (s: number) => { if (s < 60) return `${s}s`; if (s < 3600) return `${Math.round(s / 60)}m`; return `${Math.floor(s / 3600)}h ${Math.round((s % 3600) / 60)}m`; };
+  // i18n-clave: diccionario es/en/pt de la propia pantalla (los tres idiomas son obligatorios; lo controla verificar-textos-fijos)
   const texts = {
     es: { title: "Tu actividad", thisMonth: "Este mes", total: "Total", time: "Tiempo", sessions: "Sesiones", games: "Juegos", created: "creados", completed: "completados", loading: "⏳ Cargando estadísticas..." },
     en: { title: "Your activity", thisMonth: "This month", total: "Total", time: "Time", sessions: "Sessions", games: "Games", created: "created", completed: "completed", loading: "⏳ Loading statistics..." },
@@ -371,7 +352,7 @@ function GameCard({ game, onContinue, onDelete, onShare, selfEvalCount = 0 }: { 
 
   const si = getStatusInfo();
   const isFinished = ["finished", "ended", "game_complete"].includes(game.status);
-  const shareLabel = language === "es" ? "Compartir" : language === "pt" ? "Compartilhar" : "Share";
+  const shareLabel = t.dashboard.shareLabel;
 
   const formatDate = (ts: number) => {
     const d = new Date(ts), now = new Date();
@@ -444,7 +425,16 @@ export function DashboardPage() {
   const { user, logout, isAdmin } = useAuth();
   const { mode, setMode, getLocalizedTheme } = useGameMode();
   const { t, language } = useI18n();
+  const ta = useArbitroT();
   const theme = getLocalizedTheme(language);
+  // Única fuente de áreas: utils/arbitroAreas (claves, emoji, nombre interno) + AREA_COLORS + ta.areaNames.
+  const areasArbitro = AREAS_ORDEN.map((key) => ({
+    key,
+    emoji: AREA_EMOJI[key],
+    ...AREA_COLORS[key],
+    nombre: nombreVisible(ta.areaNames, AREA_LABELS_ES[key]),
+    desc: t.dashboard.arbAreaDescs[key],
+  }));
 
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [showVideoModal, setShowVideoModal] = useState(false);
@@ -521,7 +511,7 @@ export function DashboardPage() {
       const evals: typeof gamesWithEvaluations = [];
       for (const { game, count } of results) {
         counts[game.id] = count;
-        if (count > 0) evals.push({ gameId: game.id, gameName: game.name || "Sin nombre", subject: game.subject, evalCount: count, completedAt: game.createdAt });
+        if (count > 0) evals.push({ gameId: game.id, gameName: game.name || "Sin nombre" /* i18n-clave */, subject: game.subject, evalCount: count, completedAt: game.createdAt });
       }
       evals.sort((a, b) => b.evalCount - a.evalCount);
       setSelfEvalCounts(counts); setGamesWithEvaluations(evals);
@@ -549,8 +539,8 @@ export function DashboardPage() {
   // Mode button label
   const isCoopetition = mode === "coopetition";
   const modeBtnLabel = isCoopetition
-    ? `🎯 ${language === "es" ? "Secundaria" : "Secondary"}`
-    : `🚦 ${language === "es" ? "Primaria" : "Primary"}`;
+    ? `🎯 ${t.dashboard.levelSecondary}`
+    : `🚦 ${t.dashboard.levelPrimary}`;
 
   return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(180deg, ${theme.cardHoverBg} 0%, #f8fafc 50%, #f1f5f9 100%)`, fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif" }}>
@@ -562,7 +552,7 @@ export function DashboardPage() {
             <span style={{ fontSize: 28 }}>{theme.icon}</span>
             <div>
               <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{theme.name}</h1>
-              <p style={{ margin: 0, fontSize: 11, opacity: 0.85 }}>Donde aprendemos <strong>todos</strong> juntos</p>
+              <p style={{ margin: 0, fontSize: 11, opacity: 0.85 }}>{t.dashboard.tagline}</p>
             </div>
             {/* Mode button — shows current level, click to change */}
             <button
@@ -591,7 +581,7 @@ export function DashboardPage() {
 
         {shareSuccess && (
           <div style={{ marginBottom: 20, padding: "14px 20px", backgroundColor: "#f0fdf4", border: "2px solid #22c55e", borderRadius: 12, fontSize: 14, fontWeight: 600, color: "#166534" }}>
-            ✅ {language === "es" ? "¡Juego compartido con la comunidad!" : "Game shared with the community!"}
+            ✅ {t.dashboard.gameShared}
           </div>
         )}
 
@@ -604,22 +594,22 @@ export function DashboardPage() {
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
               <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>
-                TRABAJO EN GRUPO
+                {t.dashboard.groupWork}
               </h2>
               <div style={{ width: 1, height: 14, backgroundColor: "#cbd5e1" }} />
               <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#1e293b" }}>
-                Árbitros de Aprendizaje
+                {t.dashboard.arbitrosTitle}
               </h2>
               <span style={{ fontSize: 13, color: "#94a3b8" }}>·</span>
               <button onClick={() => navigate("/arbitros-info")} style={{ background: "none", border: "none", color: "#1e40af", cursor: "pointer", fontSize: 13, textDecoration: "underline", padding: 0 }}>
-                más info
+                {t.dashboard.moreInfo}
               </button>
             </div>
           </div>
 
           {/* Cards de área */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 14 }}>
-            {ARBITRO_AREAS.map(area => (
+            {areasArbitro.map(area => (
               <button key={area.key} onClick={() => navigate(`/arbitro-config?area=${area.key}`)}
                 style={{ padding: 20, borderRadius: 16, border: "2px solid transparent", background: "white", boxShadow: "0 3px 12px rgba(0,0,0,0.06)", cursor: "pointer", transition: "all 0.2s", textAlign: "left", display: "flex", flexDirection: "column", gap: 10 }}
                 onMouseOver={e => { e.currentTarget.style.transform = "translateY(-5px)"; e.currentTarget.style.boxShadow = `0 12px 28px ${area.primary}22`; e.currentTarget.style.borderColor = area.primary; }}
@@ -631,7 +621,7 @@ export function DashboardPage() {
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 3, lineHeight: 1.3 }}>{area.nombre}</div>
                   <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.4 }}>{area.desc}</div>
                 </div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: area.primary }}>Configurar sesión →</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: area.primary }}>{t.dashboard.configureSession}</div>
               </button>
             ))}
           </div>
@@ -644,15 +634,15 @@ export function DashboardPage() {
           <div style={{ marginBottom: 20 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
               <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>
-                LA DINÁMICA COMPLETA
+                {t.dashboard.fullDynamic}
               </h2>
               <div style={{ width: 1, height: 14, backgroundColor: "#cbd5e1" }} />
               <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#1e293b" }}>
-                {isCoopetition ? "El Juego de la Coopetición" : "El Juego del Semáforo"}
+                {theme.name}
               </h2>
               <span style={{ fontSize: 13, color: "#94a3b8" }}>·</span>
               <button onClick={() => navigate("/about")} style={{ background: "none", border: "none", color: "#1e40af", cursor: "pointer", fontSize: 13, textDecoration: "underline", padding: 0 }}>
-                más info
+                {t.dashboard.moreInfo}
               </button>
             </div>
           </div>
@@ -662,7 +652,7 @@ export function DashboardPage() {
             <button
               onClick={() => { setVideoLevel('selector'); setShowVideoModal(true); }}
               style={{ padding: "11px 24px", fontSize: 14, fontWeight: 700, borderRadius: 10, border: "none", background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)", color: "white", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8, boxShadow: "0 3px 12px rgba(239,68,68,0.35)" }}>
-              ▶ {language === "es" ? "¿Cómo empezar? Ver video" : language === "pt" ? "Como começar? Ver vídeo" : "How to start? Watch video"}
+              ▶ {t.dashboard.watchVideo}
             </button>
           </div>
 
@@ -677,7 +667,7 @@ export function DashboardPage() {
                 <h3 style={{ margin: "0 0 6px 0", fontSize: 18, fontWeight: 700, color: "#1e293b" }}>{GAME_CARDS_STRINGS.newGame[lang].title}</h3>
                 <p style={{ margin: 0, fontSize: 13, color: "#1e40af", lineHeight: 1.5 }}>{GAME_CARDS_STRINGS.newGame[lang].description}</p>
               </div>
-              <div style={{ color: theme.primary, fontWeight: 600, fontSize: 13 }}>{GAME_CARDS_STRINGS.newGame[lang].cta}</div>
+              <div style={{ color: `color-mix(in srgb, ${theme.primary} 60%, black)`, fontWeight: 600, fontSize: 13 }}>{GAME_CARDS_STRINGS.newGame[lang].cta}</div>
             </button>
 
             <button onClick={() => navigate("/library")}
@@ -689,7 +679,7 @@ export function DashboardPage() {
                 <h3 style={{ margin: "0 0 6px 0", fontSize: 18, fontWeight: 700, color: "#1e293b" }}>{GAME_CARDS_STRINGS.community[lang].title}</h3>
                 <p style={{ margin: 0, fontSize: 13, color: "#1e40af", lineHeight: 1.5 }}>{GAME_CARDS_STRINGS.community[lang].description}</p>
               </div>
-              <div style={{ color: "#8b5cf6", fontWeight: 600, fontSize: 13 }}>{GAME_CARDS_STRINGS.community[lang].cta}</div>
+              <div style={{ color: "#6d28d9", fontWeight: 600, fontSize: 13 }}>{GAME_CARDS_STRINGS.community[lang].cta}</div>
             </button>
           </div>
         </div>
@@ -708,12 +698,12 @@ export function DashboardPage() {
                 <span style={{ padding: "2px 8px", borderRadius: 12, backgroundColor: "#dcfce7", color: "#166534", fontSize: 13, fontWeight: 600 }}>{ongoingGames.length} {t.dashboard.active}</span>
               )}
               {ongoingGames.length > 0 && gamesCollapsed && (
-                <span style={{ padding: "2px 8px", borderRadius: 12, backgroundColor: "#dcfce7", color: "#166534", fontSize: 13, fontWeight: 600 }}>{ongoingGames.length} activos</span>
+                <span style={{ padding: "2px 8px", borderRadius: 12, backgroundColor: "#dcfce7", color: "#166534", fontSize: 13, fontWeight: 600 }}>{ongoingGames.length} {t.dashboard.active}</span>
               )}
             </h3>
             <div style={{ flex: 1 }} />
             <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600, flexShrink: 0 }}>
-              {gamesCollapsed ? "▼ ver" : "▲ ocultar"}
+              {gamesCollapsed ? t.dashboard.show : t.dashboard.hide}
             </span>
           </button>
 
@@ -754,18 +744,16 @@ export function DashboardPage() {
             <span style={{ fontSize: 18 }}>🛠️</span>
             <div style={{ flex: 1 }}>
               <span style={{ fontSize: 16, fontWeight: 700, color: "#1e293b" }}>
-                {language === "es" ? "Más herramientas para docentes" : "More teacher tools"}
+                {t.dashboard.moreTools}
               </span>
               {toolsCollapsed && (
                 <p style={{ margin: "2px 0 0", fontSize: 12, color: "#94a3b8", fontWeight: 400 }}>
-                  {language === "es"
-                    ? "Generador de rúbricas, planillas de presentismo, secuencias didácticas, planificaciones anuales, comparador de países, ecuaciones y más."
-                    : "Rubric generator, attendance sheets, lesson sequences, annual plans, country comparator and more."}
+                  {t.dashboard.moreToolsDesc}
                 </p>
               )}
             </div>
             <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600, flexShrink: 0 }}>
-              {toolsCollapsed ? "▼ ver todas" : "▲ ocultar"}
+              {toolsCollapsed ? t.dashboard.showAll : t.dashboard.hide}
             </span>
           </button>
 
@@ -806,14 +794,14 @@ export function DashboardPage() {
           <div style={{ backgroundColor: "white", borderRadius: 20, width: "100%", maxWidth: 800, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={e => e.stopPropagation()}>
             <div style={{ padding: "16px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#1e293b" }}>
-                {videoLevel === 'selector' ? (language === "es" ? "¿Para qué nivel?" : "For which level?")
-                  : videoLevel === 'primary' ? "▶ Primaria — Cómo empezar"
-                    : "▶ Secundaria — Cómo empezar"}
+                {videoLevel === 'selector' ? t.dashboard.videoWhichLevel
+                  : videoLevel === 'primary' ? t.dashboard.videoStartPrimary
+                    : t.dashboard.videoStartSecondary}
               </h3>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 {videoLevel !== 'selector' && (
                   <button onClick={() => setVideoLevel('selector')} style={{ fontSize: 13, fontWeight: 600, padding: "6px 12px", borderRadius: 8, border: "1px solid #e2e8f0", backgroundColor: "white", color: "#64748b", cursor: "pointer" }}>
-                    ← {language === "es" ? "Cambiar" : "Change"}
+                    ← {t.dashboard.videoChange}
                   </button>
                 )}
                 <button onClick={() => setShowVideoModal(false)} style={{ background: "none", border: "none", fontSize: 24, cursor: "pointer", color: "#64748b" }}>✕</button>
@@ -821,7 +809,7 @@ export function DashboardPage() {
             </div>
             {videoLevel === 'selector' && (
               <div style={{ padding: 32, display: "flex", gap: 16 }}>
-                {[{ id: 'primary' as const, icon: '🎒', label: "Primaria", color: "#22c55e", bg: "#f0fdf4" }, { id: 'secondary' as const, icon: '🎓', label: "Secundaria", color: "#6366f1", bg: "#eef2ff" }].map(opt => (
+                {[{ id: 'primary' as const, icon: '🎒', label: t.dashboard.levelPrimary, color: "#22c55e", bg: "#f0fdf4" }, { id: 'secondary' as const, icon: '🎓', label: t.dashboard.levelSecondary, color: "#6366f1", bg: "#eef2ff" }].map(opt => (
                   <button key={opt.id} onClick={() => setVideoLevel(opt.id)}
                     style={{ flex: 1, padding: 28, borderRadius: 16, border: `2px solid ${opt.color}`, backgroundColor: opt.bg, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}
                     onMouseOver={e => { e.currentTarget.style.transform = "scale(1.03)"; }}
