@@ -20,10 +20,29 @@ export const OPCIONES_REPARTO: ReadonlyArray<{ tieneRazon: TieneRazon; grado: Gr
 
 export interface RepartoDetallado extends Reparto { tieneRazon: TieneRazon; grado: Grado }
 
-const ID_RE = /^[A-Za-z0-9_-]{8,40}$/;
+export const ID_RE = /^[A-Za-z0-9_-]{8,40}$/;
 const ID_CONSULTA_RE = /^[A-Za-z0-9]{10,40}$/;
 
 const texto = (v: unknown, max: number): string => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "");
+
+// Como `texto`, pero conserva los saltos de línea (la respuesta escrita puede venir en varias líneas:
+// listas, pasos, tablas armadas a mano). Solo colapsa los espacios/tabs DENTRO de cada línea y el
+// exceso de líneas en blanco seguidas, y recorta los bordes.
+const textoMultilinea = (v: unknown, max: number): string =>
+  typeof v === "string"
+    ? v
+        .replace(/\r\n/g, "\n")
+        .split("\n")
+        .map((linea) => linea.replace(/[^\S\n]+/g, " ").trim())
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim()
+        .slice(0, max)
+    : "";
+
+// Largo máximo de la respuesta escrita de un equipo (modo de respuesta «escrita», o lo que se tipeó al
+// disputar en modo oral). Sin disputa y en modo oral queda en "": la respuesta sigue siendo oral.
+const MAX_RESPUESTA_RONDA = 1500;
 
 export interface EntradaRonda {
   partidaId: string;
@@ -31,6 +50,7 @@ export interface EntradaRonda {
   equipoPregunta: string;
   equipoResponde: string;
   pregunta: string;
+  respuesta: string;
   calificacion: CalificacionRonda;
   consultaId: string | null;
   tiempoSegundos: number | null;
@@ -48,6 +68,9 @@ export function validarEntradaRonda(data: any): EntradaRonda {
   if (!equipoPregunta || !equipoResponde) throw mal("Faltan los nombres de los equipos.");
   const pregunta = texto(data.pregunta, 600);
   if (!pregunta) throw mal("Falta la pregunta.");
+  // Respuesta escrita del equipo (modo «escrita», o lo que se tipeó al disputar en modo oral). Opcional:
+  // las sesiones en modo oral sin disputa no mandan nada y queda "".
+  const respuesta = textoMultilinea(data.respuesta, MAX_RESPUESTA_RONDA);
   if (!CALIFICACIONES_RONDA.includes(data.calificacion)) throw mal("Calificación inválida.");
   let consultaId: string | null = null;
   if (data.consultaId !== undefined && data.consultaId !== null && data.consultaId !== "") {
@@ -56,7 +79,7 @@ export function validarEntradaRonda(data: any): EntradaRonda {
   }
   const t = data.tiempoSegundos;
   const tiempoSegundos = typeof t === "number" && Number.isFinite(t) && t >= 0 && t <= 36000 ? Math.round(t) : null;
-  return { partidaId: data.partidaId, ronda, equipoPregunta, equipoResponde, pregunta, calificacion: data.calificacion, consultaId, tiempoSegundos };
+  return { partidaId: data.partidaId, ronda, equipoPregunta, equipoResponde, pregunta, respuesta, calificacion: data.calificacion, consultaId, tiempoSegundos };
 }
 
 /** Id determinístico: reintentar el registro de la misma ronda de la misma partida no duplica nada. */
@@ -79,6 +102,7 @@ export function construirRonda(entrada: EntradaRonda, consulta: Record<string, a
     equipoPregunta: entrada.equipoPregunta,
     equipoResponde: entrada.equipoResponde,
     pregunta: entrada.pregunta,
+    respuesta: entrada.respuesta,
     calificacion: entrada.calificacion,
     tiempoSegundos: entrada.tiempoSegundos,
     estado: entrada.calificacion === "pasada" ? "pasada" : entrada.calificacion === "fuera_de_tema" ? "fuera_de_tema" : "jugada",
@@ -99,7 +123,9 @@ export function construirRonda(entrada: EntradaRonda, consulta: Record<string, a
       consultaId: entrada.consultaId,
       planteo: texto(consulta.desacuerdo, 1500),
       posicionPregunta: texto(consulta.posicionA, 1200),
-      posicionResponde: texto(consulta.posicionB, 1200),
+      // posicionB es, en modo escrito, la respuesta ya confirmada (sin re-tipear): misma regla que `respuesta`,
+      // conserva los saltos de línea.
+      posicionResponde: textoMultilinea(consulta.posicionB, 1200),
       resultado: String(consulta.resultado ?? ""),
       veredicto: texto(consulta.veredicto, 600),
       explicacion: texto(consulta.explicacion, 1200),
@@ -155,7 +181,7 @@ export function aplicarCorreccion(ronda: Record<string, any>, tieneRazon: unknow
 // ── Totales ──────────────────────────────────────────────────────────────────
 
 export interface TotalEquipo { nombre: string; puntosAlumnos: number; puntosFinales: number }
-export interface TotalPartida { partidaId: string; equipos: TotalEquipo[]; rondasCorregidas: number }
+export interface TotalPartida { partidaId: string; equipos: TotalEquipo[]; rondasCorregidas: number; creadoEn: string }
 
 /**
  * Totales por partida. «puntosAlumnos» es el marcador que vieron los alumnos; «puntosFinales» lo recalcula con las correcciones del
@@ -193,7 +219,9 @@ export function calcularTotales(rondas: Array<Record<string, any>>, informes: Ar
     } else {
       for (const nombre of new Set([...alumnos.keys(), ...finales.keys()])) equipos.push({ nombre, puntosAlumnos: alumnos.get(nombre) ?? 0, puntosFinales: finales.get(nombre) ?? 0 });
     }
-    out.push({ partidaId, equipos, rondasCorregidas: rs.filter((r) => !!r.correccion).length });
+    // Fecha de la partida = la del primer round registrado (no la fecha en la que se imprime el informe).
+    const creadoEn = rs.reduce((min, r) => (typeof r.creadoEn === "string" && (!min || r.creadoEn < min) ? r.creadoEn : min), "" as string);
+    out.push({ partidaId, equipos, rondasCorregidas: rs.filter((r) => !!r.correccion).length, creadoEn });
   }
   return out;
 }

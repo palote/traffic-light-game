@@ -48,7 +48,7 @@ const PANTALLAS = { "pages/ArbitroConfigPage.tsx": 1, "pages/ArbitroLandingPage.
 for (const [f, n] of Object.entries(PANTALLAS)) {
   const s = leer(f);
   ok(/import \{[^}]*\bLanguageSelector\b[^}]*\} from "\.\.\/i18n"/.test(s), `${f}: falta importar LanguageSelector`);
-  const usos = (s.match(/<LanguageSelector compact tone="on(?:Color|Light)" idiomas=\{IDIOMAS_ARBITRO\} \/>/g) || []).length;
+  const usos = (s.match(/<LanguageSelector compact tone="on(?:Color|Light)" idiomas=\{IDIOMAS_ARBITRO\}(?: etiqueta=\{[^}]+\})? \/>/g) || []).length;
   ok(usos === n, `${f}: se esperaban ${n} selector(es) limitados a es/en y hay ${usos}`);
   ok((s.match(/<LanguageSelector/g) || []).length === n, `${f}: todos sus selectores deben pasar idiomas={IDIOMAS_ARBITRO}`);
   ok(/import \{[^}]*\bIDIOMAS_ARBITRO\b[^}]*\} from "\.\.\/i18n"/.test(s), `${f}: falta importar IDIOMAS_ARBITRO`);
@@ -78,7 +78,7 @@ let x = "pt"; const vistos = new Set(); for (let i = 0; i < 6; i++) { x = siguie
 ok(!vistos.has("pt") && vistos.size === 2, "ningún clic en el árbitro puede producir PT");
 ok(siguienteIdioma("es") === "en" && siguienteIdioma("en") === "pt" && siguienteIdioma("pt") === "es", "fuera del árbitro el ciclo ES→EN→PT→ES sigue igual");
 ok(idiomaMostrado("pt") === "pt", "fuera del árbitro pt se muestra como PT");
-ok(/tone\?: 'onDark' \| 'onColor' \| 'onLight'/.test(idx) && idx.includes("aria-label={nombreAccesible[language]}"), "LanguageSelector debe tener tone y aria-label");
+ok(/tone\?: 'onDark' \| 'onColor' \| 'onLight'/.test(idx) && idx.includes("nombreAccesible[language]"), "LanguageSelector debe tener tone y aria-label");
 // El resto de las páginas que ya lo usaban conservan el estilo por defecto (sin tone)
 for (const f of ["pages/DashboardPage.tsx", "pages/LoginPage.tsx", "pages/LibraryPage.tsx"]) ok(!/tone=/.test(leer(f)), `${f}: no debe cambiar de estilo`);
 

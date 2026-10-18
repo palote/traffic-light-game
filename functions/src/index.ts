@@ -15,7 +15,10 @@ import { resolverRondaOral } from "./arbitroReparto";
 import * as admin from "firebase-admin";
 import { buildArbitroPrompt, buildPromptPreguntaPropia, buildPromptConsignas, buildPromptConsigna, buildPromptInforme, normalizarAreaKey } from "./arbitroPrompt";
 import { normalizarIdiomaSesion, advertirIdiomaSalida } from "./arbitroIdioma";
-import { validarEntradaRonda, construirRonda, idDeRonda, aplicarCorreccion, calcularTotales, OPCIONES_REPARTO } from "./arbitroRondas";
+import { normalizarModoMetacognicion, normalizarModoRespuesta, sanearEquipoInforme } from "./arbitroIntegrantes";
+import { normalizarPreguntasMeta } from "./arbitroMetaPreguntas";
+import { validarEntradaRonda, construirRonda, idDeRonda, aplicarCorreccion, calcularTotales, OPCIONES_REPARTO, ID_RE } from "./arbitroRondas";
+import { rondasFaltantesParaRevisar, construirPromptRevision, parsearRevisionGemini, compararConOtroEquipo, esNoRevisable, type EstadoDocenteObservacion } from "./arbitroRevision";
 
 // Inicializar Firebase Admin UNA SOLA VEZ
 if (!admin.apps.length) {
@@ -1335,7 +1338,7 @@ export const crearSesionArbitro = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 60 },
   async (request) => {
     try {
-      const { area, materia, nivel, anio, tema, subtema, ejercicio, duracion = "clase", tiempoPregunta, textoFuente, permitirPreguntasPropias, idioma } = request.data;
+      const { area, materia, nivel, anio, tema, subtema, ejercicio, duracion = "clase", tiempoPregunta, textoFuente, permitirPreguntasPropias, idioma, modoMetacognicion, preguntasMetacognicion, modoRespuesta } = request.data;
       if (!materia || !nivel || !anio || !tema) {
         throw new HttpsError("invalid-argument", "Faltan campos obligatorios: materia, nivel, año y tema", { motivo: "datos_incompletos" });
       }
@@ -1360,6 +1363,13 @@ export const crearSesionArbitro = onCall(
         permitirPreguntasPropias: permitirPreguntasPropias !== false,
         // Idioma de la sesión: 'es' | 'en'. Cualquier otro valor (o ninguno) cuenta como 'es'.
         idioma: normalizarIdiomaSesion(idioma),
+        // «Informe de metacognición»: 'grupal' (por defecto, una reflexión por equipo) o 'individual' (una por alumno).
+        modoMetacognicion: normalizarModoMetacognicion(modoMetacognicion),
+        // Preguntas de metacognición personalizadas (1 a 6, tal cual las escribe el docente). Vacío = las 4 por defecto.
+        preguntasMetacognicion: normalizarPreguntasMeta(preguntasMetacognicion),
+        // «Modo de respuesta»: 'oral' (por defecto, como siempre) o 'escrita' (cada equipo escribe su respuesta
+        // y el informe las incluye todas, no solo las disputas).
+        modoRespuesta: normalizarModoRespuesta(modoRespuesta),
         docenteUid: request.auth?.uid ?? null,
         docenteEmail: request.auth?.token?.email ?? null,
       });
@@ -1399,6 +1409,9 @@ export const getSesionArbitro = onCall(
       textoFuente: data.textoFuente || "",
       permitirPreguntasPropias: data.permitirPreguntasPropias !== false, // las sesiones viejas no tienen el campo: permitido
       idioma: normalizarIdiomaSesion(data.idioma), // las sesiones viejas no tienen el campo: 'es'
+      modoMetacognicion: normalizarModoMetacognicion(data.modoMetacognicion), // las sesiones viejas no tienen el campo: 'grupal'
+      preguntasMetacognicion: normalizarPreguntasMeta(data.preguntasMetacognicion), // las sesiones viejas no tienen el campo: [] (4 por defecto)
+      modoRespuesta: normalizarModoRespuesta(data.modoRespuesta), // las sesiones viejas no tienen el campo: 'oral'
       expiresAt: data.expiresAt,
       docenteEmail: data.docenteEmail || "",
     };
@@ -1937,6 +1950,7 @@ async function exigirSesionVigente(sessionId: unknown) {
   const doc = await db.collection("sesiones_arbitro").doc(sessionId).get();
   if (!doc.exists) throw new HttpsError("not-found", "La sesión no existe o expiró.", { motivo: "sesion_no_encontrada" });
   if (new Date(doc.data()!.expiresAt) < new Date()) throw new HttpsError("failed-precondition", "La sesión ha expirado.", { motivo: "sesion_expirada" });
+  return doc.data() as Record<string, any>;
 }
 
 export const guardarInformeArbitro = onCall(
@@ -1950,7 +1964,9 @@ export const guardarInformeArbitro = onCall(
       if (!sessionId || !equipos?.length) {
         throw new HttpsError("invalid-argument", "sessionId y equipos son requeridos para el modo competitivo", { motivo: "datos_incompletos" });
       }
-      await exigirSesionVigente(sessionId);
+      const sesionData = await exigirSesionVigente(sessionId);
+      // Preguntas de metacognición de la sesión: se copian al informe (la fuente es la sesión, no el cliente) para que el panel muestre el texto usado.
+      const preguntasUsadas = normalizarPreguntasMeta(sesionData?.preguntasMetacognicion);
       // Id de la partida (lo genera el juego): une este informe con las rondas registradas por registrarRonda.
       const partidaId = typeof data.partidaId === "string" && /^[A-Za-z0-9_-]{8,40}$/.test(data.partidaId) ? data.partidaId : null;
       const informeRef = db
@@ -1961,9 +1977,12 @@ export const guardarInformeArbitro = onCall(
 
       await informeRef.set({
         modo: "competitivo",
+        modoMetacognicion: normalizarModoMetacognicion(data.modoMetacognicion),
+        ...(preguntasUsadas.length ? { preguntas: preguntasUsadas } : {}),
         grupoNombre: equipos[0]?.nombre || "Grupo",
         ...(partidaId ? { partidaId } : {}),
-        equipos,
+        // integrantes siempre como array (el formato viejo era un string); individuales solo en el modo individual.
+        equipos: equipos.map(sanearEquipoInforme),
         registros: registros || [],
         creadoEn: new Date().toISOString(),
       });
@@ -2087,11 +2106,38 @@ export const listarRondasSesion = onCall(
     if (typeof sessionId !== "string" || !sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.", { motivo: "datos_incompletos" });
     const session = await exigirDocenteDeSesion(request.auth, sessionId);
     const datos = await leerRondasYTotales(sessionId);
+    // Observaciones de la IA (Etapa 2), por partida: sesiones_arbitro/{sessionId}/revisiones/{partidaId}.
+    const revisionesSnap = await db.collection("sesiones_arbitro").doc(sessionId).collection("revisiones").get();
+    const revisiones: Record<string, any> = {};
+    for (const d of revisionesSnap.docs) revisiones[d.id] = d.data();
+
+    // Por partida, cuántas rondas todavía faltan revisar — con la MISMA función que usa revisarPartidaArbitro
+    // (rondasFaltantesParaRevisar), así el panel no repite ese filtro: solo mira el número para decidir si
+    // dispara la revisión. De paso, decora cada ronda con noRevisable (agotó LIMITE_INTENTOS_REVISION) para que
+    // el panel la muestre aparte sin tener que conocer el límite.
+    const rondasPorPartida = new Map<string, Array<Record<string, any>>>();
+    for (const r of datos.rondas) {
+      if (!rondasPorPartida.has(r.partidaId)) rondasPorPartida.set(r.partidaId, []);
+      rondasPorPartida.get(r.partidaId)!.push(r);
+    }
+    const faltantesPorPartida: Record<string, number> = {};
+    for (const [pid, rondasDePartida] of rondasPorPartida) {
+      const rev = revisiones[pid] || {};
+      const intentos: Record<string, number> = rev.intentos || {};
+      faltantesPorPartida[pid] = rondasFaltantesParaRevisar(rondasDePartida, rev.observaciones || {}, intentos).length;
+      for (const r of rondasDePartida) {
+        if (esNoRevisable(intentos[r.id])) r.noRevisable = true;
+      }
+    }
+
     return {
       ...datos,
+      revisiones,
+      faltantesPorPartida,
       // Solo el docente dueño corrige; el admin puede mirar pero no cambiar repartos.
       puedeCorregir: !!request.auth?.uid && request.auth.uid === session.docenteUid,
       opciones: OPCIONES_REPARTO,
+      modoRespuesta: normalizarModoRespuesta(session.modoRespuesta), // para que el panel sepa cómo mostrar el informe
     };
   }
 );
@@ -2124,6 +2170,225 @@ export const corregirRonda = onCall(
     return { ok: true, cambio: resultado.cambio, ronda };
   }
 );
+// ── Revisión con IA de las respuestas sin disputa (Etapa 2) ─────────────────────
+// Para cada partida en modo escrito, el panel llama a revisarPartidaArbitro al abrirse (no hay disparo desde
+// el juego ni función pública): revisa con Gemini las rondas sin disputa que todavía no tienen observación
+// (identificadas por rondaId, nunca por posición) y guarda el resultado en
+// sesiones_arbitro/{sessionId}/revisiones/{partidaId}. El docente confirma, corrige (con nota obligatoria,
+// porque la Etapa 3 muestra esa nota en vez de la explicación de la IA) o descarta cada observación con
+// revisarObservacionArbitro. Diseño incremental, reserva atómica y validación del JSON de Gemini en
+// arbitroRevision.ts; pruebas en scripts/verificar-revision.cjs.
+
+// Más viejo que esto, un "en_progreso" se trata como abandonado (la función que lo puso se cayó o superó su
+// propio timeoutSeconds) y se puede reclamar de nuevo. Mayor que el timeoutSeconds de revisarPartidaArbitro
+// para no pisar una corrida que todavía puede estar en curso.
+const REVISION_TIMEOUT_MS = 150_000;
+
+export const revisarPartidaArbitro = onCall(
+  { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 120, memory: "256MiB" },
+  async (request) => {
+    const { sessionId, partidaId } = (request.data || {}) as Record<string, unknown>;
+    if (typeof sessionId !== "string" || !sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.", { motivo: "datos_incompletos" });
+    if (typeof partidaId !== "string" || !ID_RE.test(partidaId)) throw new HttpsError("invalid-argument", "partidaId inválido.", { motivo: "datos_incompletos" });
+
+    // Exige docente dueño (o admin), igual que listarRondasSesion: esta función es para el panel; no hay
+    // disparo público ni desde el juego.
+    const session = await exigirDocenteDeSesion(request.auth, sessionId);
+    if (normalizarModoRespuesta(session.modoRespuesta) !== "escrita") {
+      throw new HttpsError("failed-precondition", "Esta sesión no usa modo de respuesta escrita.", { motivo: "modo_no_escrito" });
+    }
+
+    const sessionRef = db.collection("sesiones_arbitro").doc(sessionId);
+    const revisionRef = sessionRef.collection("revisiones").doc(partidaId);
+
+    // Transacción A: reserva atómica. Si ya hay una corrida en curso (en_progreso más nuevo que el timeout),
+    // esta llamada no toca nada más y devuelve lo que ya hay, para que el panel la siga esperando. Si
+    // en_progreso es viejo (la función anterior se cayó a mitad de camino), se trata como si no existiera.
+    const reserva = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(revisionRef);
+      const data = snap.exists ? (snap.data() as Record<string, any>) : {};
+      const observacionesExistentes: Record<string, any> = data.observaciones || {};
+      const intentosExistentes: Record<string, number> = data.intentos || {};
+      const enProgreso = data.enProgreso;
+      const ahoraMs = Date.now();
+      const enCurso = !!enProgreso?.inicio && ahoraMs - Date.parse(enProgreso.inicio) < REVISION_TIMEOUT_MS;
+      if (enCurso) return { enCurso: true as const, observaciones: observacionesExistentes, intentos: intentosExistentes };
+      tx.set(revisionRef, { enProgreso: { inicio: new Date(ahoraMs).toISOString() } }, { merge: true });
+      return { enCurso: false as const, observaciones: observacionesExistentes, intentos: intentosExistentes };
+    });
+
+    if (reserva.enCurso) {
+      return { ok: true, revisando: true, observaciones: reserva.observaciones, intentos: reserva.intentos };
+    }
+
+    try {
+      // Rondas de esta partida sin disputa, con respuesta y sin observación todavía (por rondaId) que no
+      // agotaron el límite de intentos: las que faltan revisar en esta corrida (rondasFaltantesParaRevisar,
+      // misma función que usa listarRondasSesion para el conteo del panel). Si el docente abre el panel con la
+      // partida en juego, se revisan las rondas que hay hasta ahora; la próxima vez, solo las nuevas.
+      // Todas las rondas de la sesión (igual que leerRondasYTotales), filtradas en memoria por partidaId: no
+      // hace falta un índice de Firestore para esto y la colección ya es chica (una sesión de clase).
+      const rondasSnap = await sessionRef.collection("rondas").get();
+      const rondas = rondasSnap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as Record<string, any>) } as Record<string, any>))
+        .filter((r) => r.partidaId === partidaId);
+      const faltantes = rondasFaltantesParaRevisar(rondas, reserva.observaciones, reserva.intentos);
+
+      if (faltantes.length === 0) {
+        // Nada para pedirle a Gemini esta vez: igual hay que liberar la reserva.
+        await db.runTransaction(async (tx) => {
+          tx.set(revisionRef, { enProgreso: null }, { merge: true });
+        });
+        return { ok: true, revisando: false, observaciones: reserva.observaciones, intentos: reserva.intentos };
+      }
+
+      const apiKey = GEMINI_KEY.value();
+      if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada.", { motivo: "ia_no_configurada" });
+
+      // Mismos criterios de corrección que requestVeredicto (comparten la rúbrica RUBRICA_CALIFICACION_ES/EN)
+      // y el mismo contexto de sesión que usa hoy el árbitro en producción (materia, nivel, año, tema) — SIN
+      // la línea opcional de área/criterio, porque runArbitro tampoco la activa hoy: así la revisión y el
+      // árbitro miden exactamente igual (ver nota en arbitroRevision.ts).
+      const prompt = construirPromptRevision({
+        materia: session.materia,
+        nivel: session.nivel,
+        anio: session.anio,
+        tema: session.tema,
+        subtema: session.subtema || "",
+        textoFuente: session.textoFuente || "",
+        idioma: normalizarIdiomaSesion(session.idioma),
+        rondas: faltantes,
+      });
+
+      const textoGemini = await generarTextoGemini(apiKey, {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+      });
+
+      const idsEsperados = new Set(faltantes.map((r) => r.rondaId));
+      const validados = parsearRevisionGemini(textoGemini, idsEsperados);
+      const idsValidados = new Set(validados.map((v) => v.rondaId));
+      const porRondaId = new Map(faltantes.map((r) => [r.rondaId, r]));
+      const ahoraISO = new Date().toISOString();
+
+      // Transacción B: fusiona lo nuevo sin pisar nada que ya exista (otra revisión, o una corrección del
+      // docente mientras tanto), suma un intento fallido a cada ronda pedida que Gemini no contestó
+      // válidamente (hasta LIMITE_INTENTOS_REVISION queda "no revisable", ver arbitroRevision.ts) y libera la
+      // reserva.
+      const resultado = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(revisionRef);
+        const data = snap.exists ? (snap.data() as Record<string, any>) : {};
+        const actuales: Record<string, any> = data.observaciones || {};
+        const intentosActuales: Record<string, number> = data.intentos || {};
+        const patch: Record<string, any> = { enProgreso: null };
+        for (const item of validados) {
+          if (actuales[item.rondaId]) continue; // ya existe: no se pisa (ver arbitroRevision.ts)
+          const ronda = porRondaId.get(item.rondaId);
+          if (!ronda) continue;
+          patch[`observaciones.${item.rondaId}`] = {
+            veredictoIA: item.veredictoIA,
+            explicacionIA: item.explicacionIA,
+            comparacion: compararConOtroEquipo(ronda.calificacionOtroEquipo, item.veredictoIA),
+            estadoDocente: "pendiente",
+            notaDocente: null,
+            actualizadoEn: ahoraISO,
+          };
+        }
+        for (const ronda of faltantes) {
+          if (idsValidados.has(ronda.rondaId)) continue; // esta corrida sí la resolvió
+          if (actuales[ronda.rondaId]) continue; // ya tiene observación (otra corrida la resolvió mientras tanto)
+          patch[`intentos.${ronda.rondaId}`] = (intentosActuales[ronda.rondaId] ?? 0) + 1;
+        }
+        tx.set(revisionRef, patch, { merge: true });
+        const observacionesFinal: Record<string, any> = { ...actuales };
+        const intentosFinal: Record<string, number> = { ...intentosActuales };
+        for (const k of Object.keys(patch)) {
+          if (k.startsWith("observaciones.")) observacionesFinal[k.slice("observaciones.".length)] = patch[k];
+          else if (k.startsWith("intentos.")) intentosFinal[k.slice("intentos.".length)] = patch[k];
+        }
+        return { observaciones: observacionesFinal, intentos: intentosFinal };
+      });
+
+      return { ok: true, revisando: false, observaciones: resultado.observaciones, intentos: resultado.intentos };
+    } catch (error) {
+      // Cualquier error (Gemini caído, JSON inválido, etc.) libera la reserva YA: no hay que esperar al
+      // timeout para poder reintentar. El panel ofrece "Reintentar". No suma intentos: un error de Gemini no es
+      // culpa de ninguna ronda en particular.
+      await db.runTransaction(async (tx) => {
+        tx.set(revisionRef, { enProgreso: null }, { merge: true });
+      }).catch(() => {});
+      if (error instanceof HttpsError) throw error;
+      console.error("revisarPartidaArbitro:", error);
+      throw new HttpsError("unavailable", "No se pudo revisar esta partida. Probá de nuevo.", { motivo: "revision_fallida" });
+    }
+  }
+);
+
+// Acción del docente sobre UNA observación de la IA: confirmar, corregir (con nota obligatoria: en la Etapa 3
+// la nota reemplaza a la explicación de la IA, que deja de valer) o descartar. Transacción porque esta
+// escritura y una fusión de revisarPartidaArbitro pueden tocar el mismo documento al mismo tiempo.
+export const revisarObservacionArbitro = onCall(
+  { invoker: "public", timeoutSeconds: 30 },
+  async (request) => {
+    try {
+      const uid = request.auth?.uid;
+      if (!uid) throw new HttpsError("unauthenticated", "Tenés que iniciar sesión para revisar una observación.", { motivo: "login_requerido" });
+      const { sessionId, partidaId, rondaId, accion, nota } = (request.data || {}) as Record<string, unknown>;
+      if (typeof sessionId !== "string" || !sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.", { motivo: "datos_incompletos" });
+      if (typeof partidaId !== "string" || !ID_RE.test(partidaId)) throw new HttpsError("invalid-argument", "partidaId inválido.", { motivo: "datos_incompletos" });
+      if (typeof rondaId !== "string" || !/^[A-Za-z0-9_-]{8,60}$/.test(rondaId)) throw new HttpsError("invalid-argument", "rondaId inválido.", { motivo: "datos_incompletos" });
+      if (accion !== "confirmar" && accion !== "corregir" && accion !== "descartar") {
+        throw new HttpsError("invalid-argument", "Acción inválida.", { motivo: "datos_incompletos" });
+      }
+      const notaTexto = typeof nota === "string" ? nota.trim().slice(0, 1200) : "";
+      if (accion === "corregir" && !notaTexto) {
+        throw new HttpsError("invalid-argument", "La nota es obligatoria para corregir un veredicto.", { motivo: "nota_requerida" });
+      }
+
+      const sessionRef = db.collection("sesiones_arbitro").doc(sessionId);
+      const sessionDoc = await sessionRef.get();
+      if (!sessionDoc.exists) throw new HttpsError("not-found", "Sesión no encontrada.", { motivo: "sesion_no_encontrada" });
+      // Igual que corregirRonda: solo el docente dueño (sin bypass de admin) puede cambiar el estado de una
+      // observación — es una escritura que cambia estado propio del docente, no una lectura para el panel.
+      if (sessionDoc.data()!.docenteUid !== uid) {
+        throw new HttpsError("permission-denied", "Solo el docente dueño de la sesión puede revisar sus observaciones.", { motivo: "sesion_de_otro_docente" });
+      }
+
+      const revisionRef = sessionRef.collection("revisiones").doc(partidaId);
+      const estadoDocente: EstadoDocenteObservacion = accion === "confirmar" ? "confirmada" : accion === "corregir" ? "corregida" : "descartada";
+      const ahoraISO = new Date().toISOString();
+
+      const resultado = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(revisionRef);
+        const data = snap.exists ? (snap.data() as Record<string, any>) : {};
+        const observaciones: Record<string, any> = data.observaciones || {};
+        const existente = observaciones[rondaId];
+        if (!existente) throw new HttpsError("not-found", "Esta ronda todavía no tiene una observación de la IA.", { motivo: "observacion_no_encontrada" });
+        const actualizada = {
+          ...existente,
+          estadoDocente,
+          notaDocente: notaTexto || null,
+          revisadoPorDocenteEn: ahoraISO,
+        };
+        tx.set(revisionRef, { [`observaciones.${rondaId}`]: actualizada }, { merge: true });
+        return actualizada;
+      });
+
+      return { ok: true, observacion: resultado };
+    } catch (error) {
+      // Deja en los logs el código y el motivo de CUALQUIER rechazo (incluidos los esperables, como
+      // permission-denied o datos inválidos) para poder auditar incidentes de producción — pero nunca la nota
+      // del docente ni ningún otro texto de la sesión: solo code/motivo, como en revisarPartidaArbitro.
+      if (error instanceof HttpsError) {
+        console.warn(JSON.stringify({ evento: "revisarObservacionArbitro_rechazada", code: error.code, motivo: (error.details as any)?.motivo ?? null }));
+        throw error;
+      }
+      console.error("revisarObservacionArbitro:", error);
+      throw new HttpsError("internal", "No se pudo guardar. Probá de nuevo.", { motivo: "error_interno" });
+    }
+  }
+);
+
 
 // ── validarPreguntaPropia ───────────────────────────────────────────────────
 // Antes de pasarle al otro equipo la pregunta que escribió un equipo, se verifica con Gemini que corresponda
