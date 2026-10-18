@@ -3,6 +3,10 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useArbitroT, useI18n, useLocaleArbitro, useTituloPagina, fillArbitro, arbitroDic, LanguageSelector, IDIOMAS_ARBITRO } from "../i18n";
+import { useFondoDocumento } from "../utils/useFondoDocumento";
+import type { ModoMetacognicion } from "../utils/arbitroIntegrantes";
+import type { ModoRespuesta } from "../utils/arbitroIntegrantes";
+import { MAX_PREGUNTAS_META, MIN_PREGUNTAS_META, MAX_LARGO_PREGUNTA, esIgualALasPorDefecto, listaPreguntasMeta, preguntasPorDefecto } from "../utils/arbitroMetaPreguntas";
 import { instruccionesPorDefecto, informePorDefecto, contenidoCompleto, tituloClassroom } from "../utils/arbitroDocumentos";
 import { nombreVisible } from "../utils/arbitroNombres";
 import { idiomaSesionPorDefecto, type IdiomaSesion } from "../utils/idiomaSesion";
@@ -162,6 +166,7 @@ export default function ArbitroConfigPage() {
   const preselectedArea = AREA_BY_KEY[searchParams.get("area") || ""] || "";
 
   const [area, setArea] = useState(preselectedArea);
+  const [areaAbierto, setAreaAbierto] = useState(false); // las 4 opciones: colapsadas si ya hay área; sin área se muestran siempre (ver abajo)
   const [materia, setMateria] = useState("");
   const [nivel, setNivel] = useState<NivelKey>("Secundaria");
   const [anio, setAnio] = useState("3°");
@@ -179,9 +184,15 @@ export default function ArbitroConfigPage() {
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
   const [errorSesion, setErrorSesion] = useState("");
   const [duracion, setDuracion] = useState<"clase" | "dia">("clase");
+  const [modoMetacognicion, setModoMetacognicion] = useState<ModoMetacognicion>("grupal"); // «Informe de metacognición»: grupal por defecto
+  const [modoRespuesta, setModoRespuesta] = useState<ModoRespuesta>("oral"); // «Modo de respuesta»: oral por defecto
+  // Preguntas de metacognición: null = las 4 por defecto del idioma de la sesión (sin tocar); array = lo que está editando el docente.
+  const [preguntasMeta, setPreguntasMeta] = useState<string[] | null>(null);
+  const [preguntasMetaAbierto, setPreguntasMetaAbierto] = useState(false); // acordeón cerrado por defecto
   const [permitirPreguntasPropias, setPermitirPreguntasPropias] = useState(true); // «Permitir preguntas propias»: activada por defecto
   // «Idioma de la sesión»: por defecto, el idioma actual de la interfaz (inglés o, si no, español).
   const { language: idiomaInterfaz } = useI18n();
+  useFondoDocumento(FONDO_CONFIG);
   const [idiomaSesion, setIdiomaSesion] = useState<IdiomaSesion>(() => idiomaSesionPorDefecto(idiomaInterfaz));
   const [tiempoPregunta, setTiempoPregunta] = useState(0); // 0 = sin límite
   const [showMaterial, setShowMaterial] = useState(true);
@@ -373,6 +384,14 @@ export default function ArbitroConfigPage() {
     return ta.cfgMissingQuestions;
   };
 
+  // Lista de preguntas de metacognición que se muestra en el editor (las por defecto del idioma de la sesión mientras no se toquen).
+  const listaPreguntasEditor = preguntasMeta ?? preguntasPorDefecto(arbitroDic(idiomaSesion), "jg");
+  // Lo que se guarda en la sesión: solo si el docente las cambió; igual a las por defecto (o vacío) = [] (se usan las del diccionario).
+  const preguntasParaGuardar = (): string[] => {
+    const lista = listaPreguntasMeta(preguntasMeta);
+    return lista.length > 0 && !esIgualALasPorDefecto(arbitroDic(idiomaSesion), lista) ? lista : [];
+  };
+
   const handleGenerar = async (skipCheck = false) => {
     // El juego corre sin banco de preguntas ni texto base, pero los equipos
     // tienen que inventar las preguntas en el momento y el árbitro pierde precisión.
@@ -403,12 +422,12 @@ export default function ArbitroConfigPage() {
 
     try {
       const fn = httpsCallable(getFunctions(app, "us-central1"), "crearSesionArbitro");
-      const res = await fn({ area: areaConfig?.key ?? area, materia, nivel, anio, tema: tema.trim(), subtema: "", ejercicio, duracion, tiempoPregunta, textoFuente, permitirPreguntasPropias, idioma: idiomaSesion }) as {
+      const res = await fn({ area: areaConfig?.key ?? area, materia, nivel, anio, tema: tema.trim(), subtema: "", ejercicio, duracion, tiempoPregunta, textoFuente, permitirPreguntasPropias, idioma: idiomaSesion, modoMetacognicion, preguntasMetacognicion: preguntasParaGuardar(), modoRespuesta }) as {
         data: { id: string; link: string; expiresAt: string };
       };
       setSesion(res.data);
       setIdiomaCreada(idiomaSesion);
-      setInstrucciones(instruccionesPorDefecto(arbitroDic(idiomaSesion), tema.trim()));
+      setInstrucciones(instruccionesPorDefecto(arbitroDic(idiomaSesion), tema.trim(), modoMetacognicion));
       setInforme(informePorDefecto(arbitroDic(idiomaSesion), tema.trim()));
     } catch (err: any) {
       setError(fillArbitro(ta.cfgErrCreate, { detail: textoErrorArbitro(err, ta, err.message) }));
@@ -550,7 +569,7 @@ export default function ArbitroConfigPage() {
               maxWidth: "min(50vw, 240px)",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <LanguageSelector compact tone="onColor" idiomas={IDIOMAS_ARBITRO} />
+              <LanguageSelector compact tone="onColor" idiomas={IDIOMAS_ARBITRO} etiqueta={ta.cfgUiLang} />
               <a
                 href="/arbitro-panel"
                 style={{
@@ -612,7 +631,7 @@ export default function ArbitroConfigPage() {
           </div>
 
           {/* ── Body ── */}
-          <div style={{ padding: "24px 28px", overflowY: "auto", maxHeight: "72vh", display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={{ padding: "24px 28px", overflowY: "auto", maxHeight: "72vh", display: "flex", flexDirection: "column", gap: 20, position: "relative" }}>
 
             {/* Encabezado de la sección del formulario (para lectores de pantalla) y avisos de estado */}
             <h2 style={srOnly}>{ta.configFormTitle}</h2>
@@ -621,32 +640,31 @@ export default function ArbitroConfigPage() {
             {/* Cómo funciona — acordeón */}
             <ComoFuncionaAccordionES primary={accentColor} light={areaConfig ? areaConfig.light : "#f0f7ff"} border={areaConfig ? areaConfig.border : "#bfdbfe"} />
 
-            {/* ── Área ── */}
-            {preselectedArea ? (
-              // Viene del dashboard → mostrar título fijo, sin selector
-              <div style={{
-                display: "flex", alignItems: "center", gap: 12,
-                padding: "12px 16px", borderRadius: 12,
-                backgroundColor: areaConfig ? `${areaConfig.primary}12` : "#f0f7ff",
-                border: `2px solid ${areaConfig ? areaConfig.primary : "#bfdbfe"}`,
-              }}>
-                <span style={{ fontSize: 28 }}>{areaConfig?.emoji}</span>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: PALETA.grisOscuro, textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 2 }}>
-                    {ta.cfgRefereeOf}
-                  </div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: areaConfig?.primary }}>
-                    {nombreVisible(ta.areaNames, area)}
-                  </div>
+            {/* ── Área: línea compacta (área actual + «Cambiar»); las 4 opciones se despliegan al cambiar o si no hay área elegida ── */}
+            <div>
+              {area && (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                  padding: "8px 12px", borderRadius: 12,
+                  backgroundColor: areaConfig ? `${areaConfig.primary}12` : "#f0f7ff",
+                  border: `2px solid ${areaConfig ? areaConfig.primary : "#bfdbfe"}`,
+                }}>
+                  <span aria-hidden="true" style={{ fontSize: 22 }}>{areaConfig?.emoji}</span>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 14, color: PALETA.grisOscuro }}>
+                    {ta.cfgAreaShort}: <strong style={{ color: areaConfig?.primary, fontWeight: 800 }}>{nombreVisible(ta.areaNames, area)}</strong>
+                  </span>
+                  <button type="button" aria-expanded={areaAbierto} aria-controls="config-area-opciones" aria-label={ta.cfgAreaChangeLabel}
+                    onClick={() => setAreaAbierto(v => !v)}
+                    style={{ minHeight: 44, padding: "0 14px", borderRadius: 10, border: `2px solid ${areaConfig ? areaConfig.primary : "#bfdbfe"}`, backgroundColor: "white", color: areaConfig ? areaConfig.primary : "#1e293b", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    {ta.cfgAreaChange}
+                  </button>
                 </div>
-              </div>
-            ) : (
-              // Sin pre-selección → mostrar selector completo
-              <fieldset style={fieldsetReset}>
+              )}
+              <fieldset id="config-area-opciones" hidden={!!area && !areaAbierto} style={{ ...fieldsetReset, marginTop: area ? 10 : 0 }}>
                 <legend style={{ ...legendReset, ...labelStyle }}>{ta.cfgAreaLegend}</legend>
                 <div className="arb-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {Object.entries(AREAS).map(([nombre, cfg]) => (
-                    <button key={nombre} onClick={() => handleAreaChange(nombre)} aria-pressed={area === nombre} style={{
+                    <button key={nombre} type="button" onClick={() => { handleAreaChange(nombre); setAreaAbierto(false); }} aria-pressed={area === nombre} style={{
                       padding: "16px 12px", borderRadius: 14, cursor: "pointer", textAlign: "center" as const,
                       border: `2px solid ${area === nombre ? cfg.primary : "#e2e8f0"}`,
                       backgroundColor: area === nombre ? `${cfg.primary}15` : "white",
@@ -660,7 +678,30 @@ export default function ArbitroConfigPage() {
                   ))}
                 </div>
               </fieldset>
-            )}
+            </div>
+
+            {/* ── Idioma del juego: antes de las preguntas, porque el generador con IA usa el idioma de la sesión ── */}
+              <fieldset style={fieldsetReset}>
+                <legend style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", padding: 0, marginBottom: 8 }}>{ta.cfgSessionLang}</legend>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+                  {([
+                    { id: "es" as const, label: ta.cfgLangEs },
+                    { id: "en" as const, label: ta.cfgLangEn },
+                  ]).map(i => (
+                    <button key={i.id} type="button" lang={i.id} onClick={() => setIdiomaSesion(i.id)} aria-pressed={idiomaSesion === i.id}
+                      style={{
+                        padding: "10px 6px", borderRadius: 10, minHeight: 44,
+                        border: `2px solid ${idiomaSesion === i.id ? accentColor : "#e2e8f0"}`,
+                        backgroundColor: idiomaSesion === i.id ? `${accentColor}12` : "white",
+                        color: idiomaSesion === i.id ? accentColor : "#64748b",
+                        fontWeight: 700, fontSize: 13, cursor: "pointer",
+                      }}>
+                      {i.label}
+                    </button>
+                  ))}
+                </div>
+                <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgSessionLangHint}</p>
+              </fieldset>
 
             {/* ── Nivel + Año ── */}
             <div className="arb-una-columna" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -734,105 +775,10 @@ export default function ArbitroConfigPage() {
               </div>
             )}
 
-            {/* ── Duración ── */}
-            {tema.trim() && (
-              <fieldset style={fieldsetReset}>
-                <PasoLabel n={4} legend>{ta.cfgDuration}</PasoLabel>
-                <div className="arb-una-columna" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  {([
-                    { id: "clase" as const, label: ta.cfgDurClass, desc: ta.cfgDurClassDesc },
-                    { id: "dia" as const, label: ta.cfgDurDay, desc: ta.cfgDurDayDesc },
-                  ]).map(d => (
-                    <button key={d.id} onClick={() => setDuracion(d.id)} aria-pressed={duracion === d.id} style={{
-                      padding: "12px 16px", borderRadius: 12, textAlign: "left" as const,
-                      border: `2px solid ${duracion === d.id ? accentColor : "#e2e8f0"}`,
-                      backgroundColor: duracion === d.id ? `${accentColor}12` : "white",
-                      cursor: "pointer",
-                    }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: duracion === d.id ? accentColor : "#1e293b" }}>{d.label}</div>
-                      <div style={{ fontSize: 12, color: PALETA.grisOscuro, marginTop: 2 }}>{d.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-            )}
-
-            {/* ── Tiempo para formular la pregunta ── */}
-            {tema.trim() && (
-              <fieldset style={fieldsetReset}>
-                <PasoLabel n={5} legend>{ta.cfgRoundTime}</PasoLabel>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-                  {([
-                    { val: 0, label: ta.cfgNoLimit },
-                    { val: 60, label: fillArbitro(ta.cfgMinutes, { n: 1 }) },
-                    { val: 120, label: fillArbitro(ta.cfgMinutes, { n: 2 }) },
-                    { val: 180, label: fillArbitro(ta.cfgMinutes, { n: 3 }) },
-                  ]).map(t => (
-                    <button key={t.val} onClick={() => setTiempoPregunta(t.val)} aria-pressed={tiempoPregunta === t.val}
-                      style={{
-                        padding: "10px 6px", borderRadius: 10,
-                        border: `2px solid ${tiempoPregunta === t.val ? accentColor : "#e2e8f0"}`,
-                        backgroundColor: tiempoPregunta === t.val ? `${accentColor}12` : "white",
-                        color: tiempoPregunta === t.val ? accentColor : "#64748b",
-                        fontWeight: 700, fontSize: 12, cursor: "pointer",
-                      }}>
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-                <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>
-                  {ta.cfgRoundTimeHint}
-                </p>
-              </fieldset>
-            )}
-
-            {/* ── Preguntas propias ── */}
-            {tema.trim() && (
-              <div>
-                <label htmlFor="config-preguntas-propias" style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", minHeight: 44 }}>
-                  <input
-                    id="config-preguntas-propias"
-                    type="checkbox"
-                    checked={permitirPreguntasPropias}
-                    onChange={e => setPermitirPreguntasPropias(e.target.checked)}
-                    style={{ width: 24, height: 24, marginTop: 2, accentColor, flexShrink: 0 }}
-                  />
-                  <span>
-                    <span style={{ display: "block", fontWeight: 700, fontSize: 14, color: "#1e293b" }}>{ta.allowOwnQuestions}</span>
-                    <span style={{ display: "block", fontSize: 12, color: PALETA.gris, lineHeight: 1.5, marginTop: 2 }}>{ta.allowOwnQuestionsHint}</span>
-                  </span>
-                </label>
-              </div>
-            )}
-
-            {/* ── Idioma de la sesión ── */}
-            {tema.trim() && (
-              <fieldset style={fieldsetReset}>
-                <legend style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", padding: 0, marginBottom: 8 }}>{ta.cfgSessionLang}</legend>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
-                  {([
-                    { id: "es" as const, label: ta.cfgLangEs },
-                    { id: "en" as const, label: ta.cfgLangEn },
-                  ]).map(i => (
-                    <button key={i.id} type="button" lang={i.id} onClick={() => setIdiomaSesion(i.id)} aria-pressed={idiomaSesion === i.id}
-                      style={{
-                        padding: "10px 6px", borderRadius: 10, minHeight: 44,
-                        border: `2px solid ${idiomaSesion === i.id ? accentColor : "#e2e8f0"}`,
-                        backgroundColor: idiomaSesion === i.id ? `${accentColor}12` : "white",
-                        color: idiomaSesion === i.id ? accentColor : "#64748b",
-                        fontWeight: 700, fontSize: 13, cursor: "pointer",
-                      }}>
-                      {i.label}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-            )}
-
             {/* ── Texto base de la sesión ── */}
             {tema.trim() && (
               <div id="texto-base-sesion">
-                <PasoLabel n={6} htmlFor="config-texto-base">
+                <PasoLabel n={4} htmlFor="config-texto-base">
                   {ta.cfgBaseText}{" "}
                   <span style={{ fontSize: 12, fontWeight: 400, color: "#64748b", marginLeft: 6 }}>
                     {ta.cfgRecommended}
@@ -892,7 +838,7 @@ export default function ArbitroConfigPage() {
                 }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ width: 20, height: 20, borderRadius: "50%", backgroundColor: `${accentColor}20`, color: accentColor, fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      7
+                      5
                     </span>
                     {ta.cfgGameQuestions}
                   </span>
@@ -933,6 +879,183 @@ export default function ArbitroConfigPage() {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* ── 6. Opciones de la sesión: agrupa los controles que antes iban sin número ── */}
+            {tema.trim() && (
+              <fieldset style={fieldsetReset}>
+                <PasoLabel n={6} legend>{ta.cfgSessionOptions}</PasoLabel>
+                <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 10 }}>
+            {/* ── Duración ── */}
+            {tema.trim() && (
+              <fieldset style={fieldsetReset}>
+                <legend style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", padding: 0, marginBottom: 8 }}>{ta.cfgDuration}</legend>
+                <div className="arb-una-columna" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {([
+                    { id: "clase" as const, label: ta.cfgDurClass, desc: ta.cfgDurClassDesc },
+                    { id: "dia" as const, label: ta.cfgDurDay, desc: ta.cfgDurDayDesc },
+                  ]).map(d => (
+                    <button key={d.id} onClick={() => setDuracion(d.id)} aria-pressed={duracion === d.id} style={{
+                      padding: "12px 16px", borderRadius: 12, textAlign: "left" as const,
+                      border: `2px solid ${duracion === d.id ? accentColor : "#e2e8f0"}`,
+                      backgroundColor: duracion === d.id ? `${accentColor}12` : "white",
+                      cursor: "pointer",
+                    }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: duracion === d.id ? accentColor : "#1e293b" }}>{d.label}</div>
+                      <div style={{ fontSize: 12, color: PALETA.grisOscuro, marginTop: 2 }}>{d.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+
+            {/* ── Tiempo para formular la pregunta ── */}
+            {tema.trim() && (
+              <fieldset style={fieldsetReset}>
+                <legend style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", padding: 0, marginBottom: 8 }}>{ta.cfgRoundTime}</legend>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                  {([
+                    { val: 0, label: ta.cfgNoLimit },
+                    { val: 60, label: fillArbitro(ta.cfgMinutes, { n: 1 }) },
+                    { val: 120, label: fillArbitro(ta.cfgMinutes, { n: 2 }) },
+                    { val: 180, label: fillArbitro(ta.cfgMinutes, { n: 3 }) },
+                  ]).map(t => (
+                    <button key={t.val} onClick={() => setTiempoPregunta(t.val)} aria-pressed={tiempoPregunta === t.val}
+                      style={{
+                        padding: "10px 6px", borderRadius: 10,
+                        border: `2px solid ${tiempoPregunta === t.val ? accentColor : "#e2e8f0"}`,
+                        backgroundColor: tiempoPregunta === t.val ? `${accentColor}12` : "white",
+                        color: tiempoPregunta === t.val ? accentColor : "#64748b",
+                        fontWeight: 700, fontSize: 12, cursor: "pointer",
+                      }}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>
+                  {ta.cfgRoundTimeHint}
+                </p>
+              </fieldset>
+            )}
+
+            {/* ── Preguntas propias ── */}
+            {tema.trim() && (
+              <div>
+                <label htmlFor="config-preguntas-propias" style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", minHeight: 44 }}>
+                  <input
+                    id="config-preguntas-propias"
+                    type="checkbox"
+                    checked={permitirPreguntasPropias}
+                    onChange={e => setPermitirPreguntasPropias(e.target.checked)}
+                    style={{ width: 24, height: 24, marginTop: 2, accentColor, flexShrink: 0 }}
+                  />
+                  <span>
+                    <span style={{ display: "block", fontWeight: 700, fontSize: 14, color: "#1e293b" }}>{ta.allowOwnQuestions}</span>
+                    <span style={{ display: "block", fontSize: 12, color: PALETA.gris, lineHeight: 1.5, marginTop: 2 }}>{ta.allowOwnQuestionsHint}</span>
+                  </span>
+                </label>
+              </div>
+            )}
+
+            {/* ── Informe de metacognición: grupal (por defecto) o individual ── */}
+            {tema.trim() && (
+              <fieldset style={fieldsetReset}>
+                <legend style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", padding: 0, marginBottom: 8 }}>{ta.cfgMetaMode}</legend>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+                  {([
+                    { id: "grupal" as const, label: ta.cfgMetaGroup },
+                    { id: "individual" as const, label: ta.cfgMetaIndividual },
+                  ]).map(m => (
+                    <button key={m.id} type="button" onClick={() => setModoMetacognicion(m.id)} aria-pressed={modoMetacognicion === m.id}
+                      style={{
+                        padding: "10px 6px", borderRadius: 10, minHeight: 44,
+                        border: `2px solid ${modoMetacognicion === m.id ? accentColor : "#e2e8f0"}`,
+                        backgroundColor: modoMetacognicion === m.id ? `${accentColor}12` : "white",
+                        color: modoMetacognicion === m.id ? accentColor : "#64748b",
+                        fontWeight: 700, fontSize: 13, cursor: "pointer",
+                      }}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+                <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgMetaHint}</p>
+                {/* Preguntas de metacognición (avanzado): acordeón cerrado por defecto, dentro del informe */}
+              <div style={{ border: "2px solid #e2e8f0", borderRadius: 12, overflow: "hidden", flexShrink: 0, marginTop: 12 }}>
+                <h3 style={{ margin: 0 }}>
+                  <button type="button" id="config-metaq-boton" aria-expanded={preguntasMetaAbierto} aria-controls="config-metaq-panel"
+                    onClick={() => setPreguntasMetaAbierto(v => !v)}
+                    style={{ width: "100%", minHeight: 44, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: "none", backgroundColor: "#f8fafc", color: "#1e293b", fontWeight: 700, fontSize: 14, cursor: "pointer", textAlign: "left" }}>
+                    <span>{ta.cfgMetaQTitle}</span>
+                    <span aria-hidden="true">{preguntasMetaAbierto ? "▲" : "▼"}</span>
+                  </button>
+                </h3>
+                <div id="config-metaq-panel" role="region" aria-labelledby="config-metaq-boton" hidden={!preguntasMetaAbierto} style={{ padding: preguntasMetaAbierto ? 14 : 0 }}>
+                  <p style={{ margin: "0 0 12px", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgMetaQHint}</p>
+                  {listaPreguntasEditor.map((texto, k) => {
+                    const idP = `config-metaq-${k + 1}`;
+                    return (
+                      <div key={k} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 10 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <label htmlFor={idP} style={{ display: "block", marginBottom: 4, fontSize: 12, fontWeight: 700, color: "#374151" }}>{fillArbitro(ta.cfgMetaQN, { n: k + 1 })}</label>
+                          <textarea id={idP} value={texto} rows={2} maxLength={MAX_LARGO_PREGUNTA}
+                            onChange={e => setPreguntasMeta(listaPreguntasEditor.map((v, j) => j === k ? e.target.value : v))}
+                            style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 13, borderRadius: 10, border: "2px solid #e2e8f0", fontFamily: "inherit", resize: "vertical" }} />
+                        </div>
+                        {listaPreguntasEditor.length > MIN_PREGUNTAS_META && (
+                          <button type="button" aria-label={fillArbitro(ta.cfgMetaQRemoveLabel, { n: k + 1 })}
+                            onClick={() => { setPreguntasMeta(listaPreguntasEditor.filter((_, j) => j !== k)); setTimeout(() => document.getElementById("config-metaq-boton")?.focus(), 0); }}
+                            style={{ minHeight: 44, padding: "0 12px", borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "white", color: "#1e293b", fontWeight: 700, fontSize: 12, cursor: "pointer", flexShrink: 0 }}>
+                            {ta.cfgMetaQRemove}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button type="button" disabled={listaPreguntasEditor.length >= MAX_PREGUNTAS_META}
+                      onClick={() => { setPreguntasMeta([...listaPreguntasEditor, ""]); setTimeout(() => document.getElementById(`config-metaq-${listaPreguntasEditor.length + 1}`)?.focus(), 0); }}
+                      style={{ minHeight: 44, padding: "0 14px", borderRadius: 10, border: `2px dashed ${PALETA.gris}`, backgroundColor: "white", color: "#1e293b", fontWeight: 700, fontSize: 13, cursor: "pointer", opacity: listaPreguntasEditor.length >= MAX_PREGUNTAS_META ? 0.5 : 1 }}>
+                      {ta.cfgMetaQAdd}
+                    </button>
+                    <button type="button" onClick={() => setPreguntasMeta(null)}
+                      style={{ minHeight: 44, padding: "0 14px", borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "white", color: "#1e293b", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                      {ta.cfgMetaQReset}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              </fieldset>
+            )}
+
+            {/* ── Modo de respuesta: oral (por defecto) o escrita ── */}
+            {tema.trim() && (
+              <fieldset style={fieldsetReset}>
+                <legend style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", padding: 0, marginBottom: 8 }}>{ta.cfgAnswerMode}</legend>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+                  {([
+                    { id: "oral" as const, label: ta.cfgAnswerOral },
+                    { id: "escrita" as const, label: ta.cfgAnswerWritten },
+                  ]).map(m => (
+                    <button key={m.id} type="button" onClick={() => setModoRespuesta(m.id)} aria-pressed={modoRespuesta === m.id}
+                      style={{
+                        padding: "10px 6px", borderRadius: 10, minHeight: 44,
+                        border: `2px solid ${modoRespuesta === m.id ? accentColor : "#e2e8f0"}`,
+                        backgroundColor: modoRespuesta === m.id ? `${accentColor}12` : "white",
+                        color: modoRespuesta === m.id ? accentColor : "#64748b",
+                        fontWeight: 700, fontSize: 13, cursor: "pointer",
+                      }}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+                <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>
+                  {modoRespuesta === "escrita" ? ta.cfgAnswerWrittenHint : ta.cfgAnswerOralHint}
+                </p>
+              </fieldset>
+            )}
+
+                </div>
+              </fieldset>
             )}
 
             {/* Error */}
@@ -1285,7 +1408,8 @@ export default function ArbitroConfigPage() {
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
 
-const pageStyle: React.CSSProperties = { minHeight: "100vh", background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "32px 20px", fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif" };
+const FONDO_CONFIG = "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"; // se pinta en <html>/<body> con useFondoDocumento
+const pageStyle: React.CSSProperties = { minHeight: "100vh", background: "transparent", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "32px 20px", fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif" };
 const cardStyle: React.CSSProperties = { backgroundColor: "white", borderRadius: 20, width: "100%", maxWidth: 700, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", overflow: "hidden", display: "flex", flexDirection: "column" };
 // ─── ComoFuncionaAccordionES ───────────────────────────────────────────────────
 

@@ -141,6 +141,14 @@ function comprobarSesionEscrita(id, datos, rondas, revisiones) {
     const idsRondasDePartida = new Set(rondasDePartida.map((r) => r.id));
     const rev = revisiones[pid];
 
+    // ── Volcado de claves (diagnóstico, para comparar a mano — pedido del docente después del 404/not-found
+    // real: "la observación existe... pero el panel la pide con una clave distinta de la que se usó para
+    // guardarla"). Son ids generados por el sistema (nunca texto de pregunta/respuesta/nombres), no hay
+    // problema en imprimirlos completos. Siempre se imprime (resultado "OK"): no es un chequeo pasa/falla,
+    // es el dato crudo para diferenciar a ojo rondaId/partidaId del panel contra lo guardado.
+    const rondaIdsDelPanel = [...idsRondasDePartida].sort();
+    c(`${etq} rondaId que tiene el panel para esta partida (${rondaIdsDelPanel.length})`, true, rondaIdsDelPanel.join(", ") || "(ninguna)");
+
     if (!rev) {
       // Sin documento revisiones/{pid}: válido solo si esta partida no tenía nada revisable (p.ej. todas con
       // disputa). Si tenía candidatas pero no hay documento, es una falla real.
@@ -151,6 +159,8 @@ function comprobarSesionEscrita(id, datos, rondas, revisiones) {
     const observaciones = rev.observaciones || {};
     const intentos = rev.intentos || {};
     const idsConObservacion = new Set(Object.keys(observaciones));
+    c(`${etq} id del documento revisiones/ (= partidaId)`, true, pid);
+    c(`${etq} claves de observaciones guardadas (${idsConObservacion.size})`, true, [...idsConObservacion].sort().join(", ") || "(ninguna)");
 
     c(`${etq} estado "lista" (enProgreso liberado, sin corrida trabada)`, rev.enProgreso == null, `enProgreso=${JSON.stringify(rev.enProgreso ?? null)}`);
 
@@ -188,6 +198,14 @@ function comprobarSesionEscrita(id, datos, rondas, revisiones) {
     const pendientesReal = rondasFaltantesParaRevisar(rondasDePartida.map(paraFiltro), observaciones, intentos);
     c(`${etq} rondasFaltantesParaRevisar no deja ninguna ronda pendiente`, pendientesReal.length === 0, `${pendientesReal.length} pendientes: ${pendientesReal.map((r) => r.rondaId).join(", ")}`);
   }
+
+  // ── Documentos revisiones/{partidaId} que NO corresponden a ninguna partida con rondas en esta sesión
+  // (huérfanos: de una partida vieja, o guardados con un partidaId que no es el de ninguna ronda real).
+  // Esto es justo lo que un panel desactualizado podría seguir mostrando si guardó el pid en memoria antes de
+  // que cambiara: el bucle de arriba nunca los ve porque solo recorre partidas con rondas.
+  const pidsHuerfanos = Object.keys(revisiones).filter((pid) => !porPartida.has(pid));
+  c(`[${id}] documentos revisiones/ sin ninguna ronda real de esta sesión (huérfanos)`, pidsHuerfanos.length === 0,
+    pidsHuerfanos.length === 0 ? "" : `${pidsHuerfanos.length}: ${pidsHuerfanos.map((pid) => `${pid} (observaciones: ${Object.keys(revisiones[pid].observaciones || {}).sort().join(", ") || "ninguna"})`).join(" | ")}`);
 
   // ── 4) Revisión del docente, a nivel de sesión (confirmar/corregir/descartar pueden haberse hecho en
   // cualquier partida de la sesión) ──

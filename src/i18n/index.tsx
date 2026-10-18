@@ -204,7 +204,7 @@ export function fillArbitro(text: string, values: Record<string, string | number
 // Idiomas que ofrece el selector en las pantallas del árbitro (no tiene textos en portugués).
 export const IDIOMAS_ARBITRO: readonly Language[] = ['es', 'en'];
 
-export function LanguageSelector({ compact = false, tone = 'onDark', idiomas }: { compact?: boolean; tone?: 'onDark' | 'onColor' | 'onLight'; idiomas?: readonly Language[] }) {
+export function LanguageSelector({ compact = false, tone = 'onDark', idiomas, etiqueta }: { compact?: boolean; tone?: 'onDark' | 'onColor' | 'onLight'; idiomas?: readonly Language[]; etiqueta?: string }) {
   const { language: idiomaGuardado, setLanguage } = useI18n();
   // Con la lista limitada, si el idioma guardado no está en ella (p. ej. 'pt' en el árbitro) el
   // selector muestra el primero de la lista (español): es lo que ve el usuario en pantalla.
@@ -252,8 +252,8 @@ export function LanguageSelector({ compact = false, tone = 'onDark', idiomas }: 
           gap: 6,
           whiteSpace: 'nowrap',
         }}
-        title="Change language"
-        aria-label={nombreAccesible[language]}
+        title={etiqueta ?? "Change language"}
+        aria-label={etiqueta ? `${labels[language]} · ${etiqueta}` : nombreAccesible[language]}
       >
         {flags[language]} {labels[language]}
       </button>

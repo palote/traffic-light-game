@@ -6,6 +6,9 @@ import { useArbitroT, fillArbitro, useFormatoPuntos, useIdiomaSesion, useLocaleA
 import { textoInformePartida } from "../utils/arbitroDocumentos";
 import { etiquetaCalificacion } from "../utils/arbitroEtiquetas";
 import { nombreVisible } from "../utils/arbitroNombres";
+import { useFondoDocumento } from "../utils/useFondoDocumento";
+import { clavesRespuestas, preguntasMeta } from "../utils/arbitroMetaPreguntas";
+import { MAX_INTEGRANTES, MIN_CAMPOS, hayIntegrantes, listaIntegrantes, normalizarModoMetacognicion, normalizarModoRespuesta, textoIntegrantes } from "../utils/arbitroIntegrantes";
 import { calificacionPreguntaParaServidor } from "../utils/arbitroCalificacion";
 import { esIaNoDisponible, esRespuestaNoClara, textoErrorArbitro } from "../utils/arbitroErrores";
 import { PALETA, EQUIPO_COLORES, EQUIPO_COLOR_1, EQUIPO_COLOR_2 } from "../utils/arbitroPalette";
@@ -30,7 +33,14 @@ interface SesionData {
   docenteEmail?: string;
   permitirPreguntasPropias?: boolean; // «Permitir preguntas propias»; las sesiones viejas no lo traen (= permitido)
   idioma?: string; // 'es' | 'en'; las sesiones viejas no lo traen (= 'es')
+  modoMetacognicion?: string; // 'grupal' | 'individual'; las sesiones viejas no lo traen (= 'grupal')
+  preguntasMetacognicion?: string[]; // preguntas personalizadas (1 a 6); ausentes o vacías = las 4 por defecto del diccionario
+  modoRespuesta?: string; // 'oral' | 'escrita'; las sesiones viejas no lo traen (= 'oral')
 }
+
+// Debe coincidir con MAX_RESPUESTA_RONDA en functions/src/arbitroRondas.ts: el maxLength evita que el
+// alumno escriba de más y se lleve una sorpresa cuando el servidor recorte la respuesta sin avisar.
+const MAX_RESPUESTA_ESCRITA = 1500;
 
 interface Veredicto {
   resultado: "A" | "B" | "ambas_correctas" | "ambas_incorrectas" | "fuera_de_tema";
@@ -105,8 +115,9 @@ export default function ArbitroJuegoPage() {
   const [nombreEquipo2, setNombreEquipo2] = useState("");
   const [colorEquipo1, setColorEquipo1] = useState<string>(EQUIPO_COLOR_1); // rojo por defecto
   const [colorEquipo2, setColorEquipo2] = useState<string>(EQUIPO_COLOR_2); // azul por defecto
-  const [integrantesEquipo1, setIntegrantesEquipo1] = useState("");
-  const [integrantesEquipo2, setIntegrantesEquipo2] = useState("");
+  // Un campo por alumno (arranca con 2 por equipo). Los campos vacíos se ignoran al usarlos.
+  const [integrantesEquipo1, setIntegrantesEquipo1] = useState<string[]>(() => Array(MIN_CAMPOS).fill(""));
+  const [integrantesEquipo2, setIntegrantesEquipo2] = useState<string[]>(() => Array(MIN_CAMPOS).fill(""));
   const [vueltasTotales, setVueltasTotales] = useState(10);
 
   // ── Estado del juego ──────────────────────────────────────────────────────
@@ -202,10 +213,11 @@ export default function ArbitroJuegoPage() {
 
   // ── Metacognición ─────────────────────────────────────────────────────────
   const [metaEquipoActual, setMetaEquipoActual] = useState(0); // 0=equipo1, 1=equipo2
-  const [meta1E1, setMeta1E1] = useState(""); const [meta2E1, setMeta2E1] = useState("");
-  const [meta3E1, setMeta3E1] = useState(""); const [meta4E1, setMeta4E1] = useState("");
-  const [meta1E2, setMeta1E2] = useState(""); const [meta2E2, setMeta2E2] = useState("");
-  const [meta3E2, setMeta3E2] = useState(""); const [meta4E2, setMeta4E2] = useState("");
+  // Reflexión grupal: [equipo][pregunta] (hasta 6 preguntas).
+  const [metaG, setMetaG] = useState<string[][]>([[], []]);
+  // Metacognición individual: [equipo][alumno] → [respuesta 1..4] y turno actual (recorre a los alumnos del equipo 1 y luego los del 2).
+  const [metaInd, setMetaInd] = useState<string[][][]>([]);
+  const [metaTurno, setMetaTurno] = useState(0);
   const [metaEnviada, setMetaEnviada] = useState(false);
   const [metaEnviando, setMetaEnviando] = useState(false);
   const [metaError, setMetaError] = useState<string | null>(null);
@@ -240,8 +252,9 @@ export default function ArbitroJuegoPage() {
     setVeredictoArbitro(g.veredictoArbitro);
     setSegundos(g.segundos); setTiempoVencido(g.tiempoVencido); setCorriendo(g.corriendo); setSonidoActivo(g.sonidoActivo);
     setMetaEquipoActual(g.metaEquipoActual);
-    setMeta1E1(g.meta[0]); setMeta2E1(g.meta[1]); setMeta3E1(g.meta[2]); setMeta4E1(g.meta[3]);
-    setMeta1E2(g.meta[4]); setMeta2E2(g.meta[5]); setMeta3E2(g.meta[6]); setMeta4E2(g.meta[7]);
+    setMetaInd(g.metaInd ?? []); setMetaTurno(g.metaTurno ?? 0);
+    // Las partidas guardadas antes traían `meta` (8 casilleros: 4 por equipo): se leen igual.
+    setMetaG(g.metaG ?? (g.meta ? [g.meta.slice(0, 4), g.meta.slice(4, 8)] : [[], []]));
     // Una consulta al árbitro en vuelo no sobrevive a la recarga: sin veredicto se vuelve a la disputa.
     setPantalla(g.pantalla === "arbitro" && !g.veredictoArbitro ? "disputa" : g.pantalla);
     setErrorArbitro(null);
@@ -292,7 +305,7 @@ export default function ArbitroJuegoPage() {
     if (!sessionId || !sesion || !rec.resuelta) return;
     // Partida terminada (informe enviado) o sesión vencida: no queda nada guardado.
     if (metaEnviada || sesionVencida(sesion.expiresAt)) { borrarPartida(sessionId); return; }
-    const sinDatos = pantalla === "setup" && !nombreEquipo1 && !nombreEquipo2 && !integrantesEquipo1 && !integrantesEquipo2;
+    const sinDatos = pantalla === "setup" && !nombreEquipo1 && !nombreEquipo2 && !hayIntegrantes(integrantesEquipo1) && !hayIntegrantes(integrantesEquipo2);
     if (sinDatos) { borrarPartida(sessionId); return; }
     guardarPartida(sessionId, {
       v: 1, expiresAt: sesion.expiresAt, guardadoEn: Date.now(), partidaId,
@@ -303,7 +316,7 @@ export default function ArbitroJuegoPage() {
       preguntaActual, usarPreguntaPropia, preguntaBorrador, respuestaActual, calificacionActual, justificacionCalificacion,
       disputaPregunta, disputaRespuesta, disputaArgEquipoPregunta, disputaArgEquipoRespuesta,
       veredictoArbitro, segundos, tiempoVencido, corriendo, sonidoActivo, metaEquipoActual,
-      meta: [meta1E1, meta2E1, meta3E1, meta4E1, meta1E2, meta2E2, meta3E2, meta4E2],
+      metaG, metaInd, metaTurno,
     });
   }, [
     sessionId, sesion, rec.resuelta, metaEnviada, partidaId,
@@ -312,7 +325,7 @@ export default function ArbitroJuegoPage() {
     preguntaActual, usarPreguntaPropia, preguntaBorrador, respuestaActual, calificacionActual, justificacionCalificacion,
     disputaPregunta, disputaRespuesta, disputaArgEquipoPregunta, disputaArgEquipoRespuesta,
     veredictoArbitro, segundos, tiempoVencido, corriendo, sonidoActivo, metaEquipoActual,
-    meta1E1, meta2E1, meta3E1, meta4E1, meta1E2, meta2E2, meta3E2, meta4E2,
+    metaG, metaInd, metaTurno,
   ]);
 
   // ── Registro de rondas en el servidor ─────────────────────────────────────
@@ -334,7 +347,7 @@ export default function ArbitroJuegoPage() {
       fn({
         sessionId, partidaId, ronda: r.ronda,
         equipoPregunta: r.equipoPregunta, equipoResponde: r.equipoResponde,
-        pregunta: r.pregunta, calificacion: r.calificacion,
+        pregunta: r.pregunta, respuesta: r.respuesta, calificacion: r.calificacion,
         consultaId: r.consultaId, tiempoSegundos: r.tiempoSegundos,
       })
         .then(() => setRegistros(prev => prev.map(x => (x.ronda === r.ronda ? { ...x, registrada: true } : x))))
@@ -406,9 +419,38 @@ export default function ArbitroJuegoPage() {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const equipos = [
-    { nombre: nombreEquipo1, color: colorEquipo1, integrantes: integrantesEquipo1, puntos: puntosEquipo1 },
-    { nombre: nombreEquipo2, color: colorEquipo2, integrantes: integrantesEquipo2, puntos: puntosEquipo2 },
+    { nombre: nombreEquipo1, color: colorEquipo1, integrantes: textoIntegrantes(integrantesEquipo1), puntos: puntosEquipo1 },
+    { nombre: nombreEquipo2, color: colorEquipo2, integrantes: textoIntegrantes(integrantesEquipo2), puntos: puntosEquipo2 },
   ];
+  const modoInd = normalizarModoMetacognicion(sesion?.modoMetacognicion) === "individual";
+  // «Modo de respuesta»: oral (por defecto, como siempre) o escrita (cada equipo escribe y confirma su
+  // respuesta en cada ronda; el informe las incluye todas, no solo las disputas).
+  const modoEscrita = normalizarModoRespuesta(sesion?.modoRespuesta) === "escrita";
+  // Turnos de la metacognición individual: un turno por alumno con nombre (equipo 1 y después equipo 2).
+  const turnosMeta = [integrantesEquipo1, integrantesEquipo2].flatMap((campos, ei) => listaIntegrantes(campos).map((alumno, ai) => ({ ei, ai, alumno })));
+  // Preguntas de metacognición: las de la sesión si el docente las personalizó; si no, las 4 del diccionario.
+  const preguntasMetaLista = sesion ? preguntasMeta(t, sesion.preguntasMetacognicion, sesion.tema) : [];
+  const nPreg = preguntasMetaLista.length || 4;
+  const respuestasComoObjeto = (arr: string[]): Record<string, string> => Object.fromEntries(clavesRespuestas(nPreg).map((k, i) => [k, arr[i] ?? ""]));
+  const valG = (ei: number, i: number): string => metaG[ei]?.[i] ?? "";
+  const setValG = (ei: number, i: number, valor: string) => setMetaG(prev => {
+    const n = [[...(prev[0] ?? [])], [...(prev[1] ?? [])]];
+    while (n[ei].length <= i) n[ei].push("");
+    n[ei][i] = valor;
+    return n;
+  });
+  const respGrupal = (ei: number): string[] => Array.from({ length: nPreg }, (_, i) => valG(ei, i));
+  const respInd = (ei: number, ai: number): string[] => metaInd[ei]?.[ai] ?? Array(nPreg).fill("");
+  const setRespInd = (ei: number, ai: number, q: number, valor: string) => setMetaInd(prev => {
+    const n = prev.map(e => e.map(a => [...a]));
+    while (n.length <= ei) n.push([]);
+    while (n[ei].length <= ai) n[ei].push(Array(nPreg).fill(""));
+    n[ei][ai][q] = valor;
+    return n;
+  });
+  // Lo que se manda al docente en el modo individual: solo los alumnos que respondieron algo.
+  const individualesDe = (ei: number) => turnosMeta.filter(tu => tu.ei === ei).map(tu => ({ alumno: tu.alumno, r: respInd(tu.ei, tu.ai) }))
+    .filter(x => x.r.some(v => v.trim()));
   const equipoPregunta = equipos[equipoPreguntaIdx];
   const equipoRespuesta = equipos[equipoPreguntaIdx === 0 ? 1 : 0];
 
@@ -449,9 +491,12 @@ export default function ArbitroJuegoPage() {
     fecha: new Date().toLocaleDateString(locale),
     equipos: equipos.map(eq => ({ nombre: eq.nombre, integrantes: eq.integrantes, puntos: eq.puntos })),
     reflexiones: [
-      { nombre: nombreEquipo1, integrantes: integrantesEquipo1, respuestas: [meta1E1, meta2E1, meta3E1, meta4E1] },
-      { nombre: nombreEquipo2, integrantes: integrantesEquipo2, respuestas: [meta1E2, meta2E2, meta3E2, meta4E2] },
+      { nombre: nombreEquipo1, integrantes: equipos[0].integrantes, respuestas: respGrupal(0),
+        ...(modoInd ? { individuales: individualesDe(0).map(x => ({ alumno: x.alumno, respuestas: x.r })) } : {}) },
+      { nombre: nombreEquipo2, integrantes: equipos[1].integrantes, respuestas: respGrupal(1),
+        ...(modoInd ? { individuales: individualesDe(1).map(x => ({ alumno: x.alumno, respuestas: x.r })) } : {}) },
     ],
+    preguntasPersonalizadas: sesion?.preguntasMetacognicion,
     formatoPuntos: fmt,
   });
 
@@ -710,7 +755,10 @@ export default function ArbitroJuegoPage() {
 
   // ── SETUP ─────────────────────────────────────────────────────────────────
   if (pantalla === "setup") {
-    const puedeEmpezar = nombreEquipo1.trim() && nombreEquipo2.trim() && integrantesEquipo1.trim() && integrantesEquipo2.trim();
+    const puedeEmpezar = nombreEquipo1.trim() && nombreEquipo2.trim() && hayIntegrantes(integrantesEquipo1) && hayIntegrantes(integrantesEquipo2);
+    const camposDe = (idx: number) => idx === 0 ? integrantesEquipo1 : integrantesEquipo2;
+    const cambiarCampos = (idx: number, v: string[]) => idx === 0 ? setIntegrantesEquipo1(v) : setIntegrantesEquipo2(v);
+    const enfocar = (id: string) => setTimeout(() => document.getElementById(id)?.focus(), 0);
     return (
       <FullPage gradient={colors.gradient}>
         <div style={cardWhite}>
@@ -735,13 +783,42 @@ export default function ArbitroJuegoPage() {
                     placeholder={t.jgTeamNamePlaceholder}
                     style={inp} />
                 </div>
-                <div style={{ marginBottom: 10 }}>
-                  <label htmlFor={`equipo-${idx + 1}-integrantes`} style={lbl}>{t.jgMembersLabel}</label>
-                  <input id={`equipo-${idx + 1}-integrantes`} type="text" value={idx === 0 ? integrantesEquipo1 : integrantesEquipo2}
-                    onChange={e => idx === 0 ? setIntegrantesEquipo1(e.target.value) : setIntegrantesEquipo2(e.target.value)}
-                    placeholder={t.jgMembersPlaceholder}
-                    style={inp} />
-                </div>
+                <fieldset style={{ ...fieldsetReset, marginBottom: 10 }}>
+                  <legend style={{ ...legendReset, ...lbl }}>{t.jgMembersLabel}</legend>
+                  {camposDe(idx).map((valor, k) => {
+                    const idCampo = `equipo-${idx + 1}-alumno-${k + 1}`;
+                    const nombreEq = (idx === 0 ? nombreEquipo1 : nombreEquipo2).trim() || fillArbitro(t.jgTeamN, { n: idx + 1 });
+                    return (
+                      <div key={k} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 8 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <label htmlFor={idCampo} style={{ ...lbl, fontSize: 12 }}>{fillArbitro(t.jgStudentN, { n: k + 1 })}</label>
+                          <input id={idCampo} type="text" value={valor} maxLength={40}
+                            onChange={e => cambiarCampos(idx, camposDe(idx).map((v, j) => j === k ? e.target.value : v))}
+                            placeholder={t.jgStudentPlaceholder}
+                            aria-describedby={`equipo-${idx + 1}-aviso`}
+                            style={inp} />
+                        </div>
+                        {camposDe(idx).length > 1 && (
+                          <button type="button"
+                            onClick={() => { cambiarCampos(idx, camposDe(idx).filter((_, j) => j !== k)); enfocar(`equipo-${idx + 1}-alumno-${Math.max(1, k)}`); }}
+                            aria-label={fillArbitro(t.jgRemoveStudentLabel, { n: k + 1, team: nombreEq })}
+                            style={{ minHeight: 44, padding: "0 12px", borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "white", color: PALETA.texto, fontWeight: 700, fontSize: 12, cursor: "pointer", flexShrink: 0 }}>
+                            {t.jgRemoveStudent}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <button type="button" disabled={camposDe(idx).length >= MAX_INTEGRANTES}
+                    onClick={() => { cambiarCampos(idx, [...camposDe(idx), ""]); enfocar(`equipo-${idx + 1}-alumno-${camposDe(idx).length + 1}`); }}
+                    aria-label={fillArbitro(t.jgAddStudentTo, { n: idx + 1 })}
+                    style={{ minHeight: 44, padding: "0 14px", borderRadius: 10, border: `2px dashed ${PALETA.gris}`, backgroundColor: "white", color: PALETA.texto, fontWeight: 700, fontSize: 13, cursor: camposDe(idx).length >= MAX_INTEGRANTES ? "default" : "pointer", opacity: camposDe(idx).length >= MAX_INTEGRANTES ? 0.5 : 1 }}>
+                    {t.jgAddStudent}
+                  </button>
+                  <p id={`equipo-${idx + 1}-aviso`} style={{ margin: "8px 0 0", fontSize: 12, lineHeight: 1.5, color: PALETA.grisOscuro }}>
+                    {t.jgMembersNotice}{modoInd && <><br />{t.jgMembersNoticeInd}</>}
+                  </p>
+                </fieldset>
                 <fieldset style={fieldsetReset}>
                   <legend style={{ ...legendReset, ...lbl }}>{fillArbitro(t.teamColorGroup, { team: (idx === 0 ? nombreEquipo1 : nombreEquipo2).trim() || fillArbitro(t.teamColorNumber, { n: idx + 1 }) })}</legend>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1029,17 +1106,34 @@ export default function ArbitroJuegoPage() {
                   </button>
                 </div>
 
-                <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5, marginBottom: 16, textAlign: "center" }}>
-                  <strong>{equipoRespuesta.nombre}</strong> {t.jgAnswersAloud}
-                </div>
+                {modoEscrita ? (
+                  <div style={{ marginBottom: 16 }}>
+                    <label htmlFor="respuesta-escrita" style={{ ...lbl, color: "#166534" }}>
+                      {fillArbitro(t.jgWriteAnswerLabel, { team: equipoRespuesta.nombre })}
+                    </label>
+                    <textarea
+                      id="respuesta-escrita"
+                      value={respuestaActual}
+                      onChange={e => setRespuestaActual(e.target.value)}
+                      rows={3}
+                      maxLength={MAX_RESPUESTA_ESCRITA}
+                      placeholder={t.jgWriteAnswerPlaceholder}
+                      style={{ ...inp, resize: "none", fontFamily: "inherit", borderColor: "#86efac" }}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5, marginBottom: 16, textAlign: "center" }}>
+                    <strong>{equipoRespuesta.nombre}</strong> {t.jgAnswersAloud}
+                  </div>
+                )}
               </>
             )}
 
             <button
               onClick={() => { detenerTimer(); setPantalla("calificacion"); }}
-              disabled={!preguntaActual.trim()}
-              style={btnPrimario(colors.gradient, !preguntaActual.trim())}>
-              {t.jgAnswered}
+              disabled={!preguntaActual.trim() || (modoEscrita && !respuestaActual.trim())}
+              style={btnPrimario(colors.gradient, !preguntaActual.trim() || (modoEscrita && !respuestaActual.trim()))}>
+              {modoEscrita ? t.jgConfirmAnswer : t.jgAnswered}
             </button>
 
             {preguntaActual && (
@@ -1077,7 +1171,7 @@ export default function ArbitroJuegoPage() {
             </div>
             <div style={{ backgroundColor: "#f0fdf4", borderRadius: 12, padding: "14px 16px", border: "1px solid #86efac", marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: "#166534", marginBottom: 4, textTransform: "uppercase" }}>{fillArbitro(t.jgAnswerOf, { team: equipoRespuesta.nombre })}</div>
-              <div style={{ fontSize: 13, color: "#14532d", lineHeight: 1.5 }}>{respuestaActual}</div>
+              <div style={{ fontSize: 13, color: "#14532d", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{respuestaActual}</div>
             </div>
 
             <fieldset style={{ ...fieldsetReset, marginBottom: 20 }}>
@@ -1171,6 +1265,8 @@ export default function ArbitroJuegoPage() {
               </button>
               <button onClick={() => {
                 setDisputaPregunta(preguntaActual);
+                // En modo escrito la respuesta ya se escribió y se confirmó: se usa tal cual, no se vuelve a tipear.
+                if (modoEscrita) setDisputaRespuesta(respuestaActual);
                 setDisputaArgEquipoPregunta(justificacionCalificacion);
                 setPantalla("disputa");
               }}
@@ -1221,19 +1317,27 @@ export default function ArbitroJuegoPage() {
               />
             </div>
 
-            {/* Respuesta */}
+            {/* Respuesta: en modo escrito ya se escribió y se confirmó antes — se muestra, no se vuelve a tipear. */}
             <div style={{ marginBottom: 14 }}>
               <label htmlFor="disputa-respuesta" style={{ ...lbl, color: "#166534" }}>
-                {conEquipo(t.jgWhatAnswered, <TeamName color={equipoRespuesta.color}>{equipoRespuesta.nombre}</TeamName>)}
+                {modoEscrita
+                  ? conEquipo(t.jgWrittenAnswerLabel, <TeamName color={equipoRespuesta.color}>{equipoRespuesta.nombre}</TeamName>)
+                  : conEquipo(t.jgWhatAnswered, <TeamName color={equipoRespuesta.color}>{equipoRespuesta.nombre}</TeamName>)}
               </label>
-              <textarea
-                id="disputa-respuesta"
-                value={disputaRespuesta}
-                onChange={e => setDisputaRespuesta(e.target.value)}
-                rows={2}
-                placeholder={t.jgWhatAnsweredPlaceholder}
-                style={{ ...inp, resize: "none", fontFamily: "inherit", borderColor: "#86efac" }}
-              />
+              {modoEscrita ? (
+                <div id="disputa-respuesta" style={{ ...inp, backgroundColor: "#f8fafc", color: "#14532d", whiteSpace: "pre-wrap" as const }}>
+                  {disputaRespuesta}
+                </div>
+              ) : (
+                <textarea
+                  id="disputa-respuesta"
+                  value={disputaRespuesta}
+                  onChange={e => setDisputaRespuesta(e.target.value)}
+                  rows={2}
+                  placeholder={t.jgWhatAnsweredPlaceholder}
+                  style={{ ...inp, resize: "none", fontFamily: "inherit", borderColor: "#86efac" }}
+                />
+              )}
             </div>
 
             {/* Argumento equipo que calificó */}
@@ -1495,7 +1599,7 @@ export default function ArbitroJuegoPage() {
                 style={{ padding: "12px", borderRadius: 10, border: `2px solid ${colors.primary}`, backgroundColor: "white", color: colors.primary, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                 {t.jgAddFive}
               </button>
-              <button onClick={() => { setMetaEquipoActual(0); setPantalla("metacognicion"); }}
+              <button onClick={() => { setMetaEquipoActual(0); setMetaTurno(0); setPantalla("metacognicion"); }}
                 style={btnPrimario(colors.gradient, false)}>
                 {t.jgDoReport}
               </button>
@@ -1509,38 +1613,29 @@ export default function ArbitroJuegoPage() {
   // ── METACOGNICIÓN ─────────────────────────────────────────────────────────
   if (pantalla === "metacognicion") {
     const eq = equipos[metaEquipoActual];
-    const setters = metaEquipoActual === 0
-      ? [setMeta1E1, setMeta2E1, setMeta3E1, setMeta4E1]
-      : [setMeta1E2, setMeta2E2, setMeta3E2, setMeta4E2];
-    const values = metaEquipoActual === 0
-      ? [meta1E1, meta2E1, meta3E1, meta4E1]
-      : [meta1E2, meta2E2, meta3E2, meta4E2];
+    const values = respGrupal(metaEquipoActual);
+    const preguntas = preguntasMetaLista; // la primera es obligatoria
 
-    const preguntas = [
-      { label: fillArbitro(t.jgMetaQ1, { tema: sesion.tema }), required: true },
-      { label: t.jgMetaQ2, required: false },
-      { label: t.jgMetaQ3, required: false },
-      { label: t.jgMetaQ4, required: false },
-    ];
-
-    const handleSiguienteEquipo = async () => {
-      if (metaEquipoActual === 0) {
-        setMetaEquipoActual(1);
-      } else {
+    const enviarInforme = async () => {
         // Guardar en Firestore
         setMetaEnviando(true);
         setMetaError(null);
         try {
           const fn = httpsCallable(getFunctions(app, "us-central1"), "guardarInformeArbitro");
+          // Modo individual: cada equipo manda `individuales` (una entrada por alumno que respondió) en lugar de la reflexión del equipo.
+          const reflexionEquipo = (ei: number, grupal: Record<string, string>) => modoInd
+            ? { individuales: individualesDe(ei).map(x => ({ alumno: x.alumno, respuestas: respuestasComoObjeto(x.r) })) }
+            : { respuestas: grupal };
           await fn({
             sessionId,
             partidaId,
             modo: "competitivo",
+            modoMetacognicion: modoInd ? "individual" : "grupal",
             equipos: [
-              { nombre: nombreEquipo1, color: colorEquipo1, integrantes: integrantesEquipo1, puntos: puntosEquipo1,
-                respuestas: { q1: meta1E1, q2: meta2E1, q3: meta3E1, q4: meta4E1 } },
-              { nombre: nombreEquipo2, color: colorEquipo2, integrantes: integrantesEquipo2, puntos: puntosEquipo2,
-                respuestas: { q1: meta1E2, q2: meta2E2, q3: meta3E2, q4: meta4E2 } },
+              { nombre: nombreEquipo1, color: colorEquipo1, integrantes: listaIntegrantes(integrantesEquipo1), puntos: puntosEquipo1,
+                ...reflexionEquipo(0, respuestasComoObjeto(respGrupal(0))) },
+              { nombre: nombreEquipo2, color: colorEquipo2, integrantes: listaIntegrantes(integrantesEquipo2), puntos: puntosEquipo2,
+                ...reflexionEquipo(1, respuestasComoObjeto(respGrupal(1))) },
             ],
             registros: registros.map(({ consultaId: _c, registrada: _r, ...resto }) => resto),
           });
@@ -1552,7 +1647,17 @@ export default function ArbitroJuegoPage() {
         } finally {
           setMetaEnviando(false);
         }
-      }
+    };
+
+    const handleSiguienteEquipo = async () => {
+      if (metaEquipoActual === 0) setMetaEquipoActual(1);
+      else await enviarInforme();
+    };
+
+    // Metacognición individual: avanza al alumno que sigue (o envía si era el último).
+    const avanzarTurno = async () => {
+      if (metaTurno < turnosMeta.length - 1) { setMetaTurno(metaTurno + 1); window.scrollTo?.(0, 0); }
+      else await enviarInforme();
     };
 
     if (metaEnviada) {
@@ -1666,6 +1771,63 @@ export default function ArbitroJuegoPage() {
       );
     }
 
+    if (modoInd && turnosMeta.length > 0) {
+      const k = Math.min(metaTurno, turnosMeta.length - 1);
+      const turno = turnosMeta[k];
+      const eqT = equipos[turno.ei];
+      const esUltimo = k === turnosMeta.length - 1;
+      const vals = respInd(turno.ei, turno.ai);
+      const etiquetaBoton = esUltimo
+        ? (metaEnviando ? t.jgSending : metaError ? t.jgRetrySend : t.jgSendReport)
+        : fillArbitro(t.jgMetaIndNext, { alumno: turnosMeta[k + 1].alumno });
+      return (
+        <FullPage gradient={colors.gradient}>
+          <div style={cardWhite}>
+            <Header colors={colors} materia={sesion.materia} tema={sesion.tema} titulo={t.gameScreenReflect} />
+            <div style={{ padding: "20px 24px" }}>
+              <div style={{ backgroundColor: `${eqT.color}15`, borderRadius: 12, padding: "12px 16px", border: `2px solid ${eqT.color}`, marginBottom: 12, textAlign: "center" }}>
+                <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, display: "flex", justifyContent: "center" }}>
+                  <TeamName color={eqT.color}>{fillArbitro(t.jgMetaIndTurn, { alumno: turno.alumno, k: k + 1, n: turnosMeta.length })}</TeamName>
+                </h2>
+                <div style={{ fontSize: 12, color: PALETA.grisOscuro }}>{eqT.nombre}</div>
+              </div>
+              <p style={{ margin: "0 0 14px", fontSize: 12, lineHeight: 1.5, color: PALETA.grisOscuro }}>{t.jgMetaIndIntro}</p>
+
+              {preguntas.map((q, i) => {
+                const id = `meta-ind-e${turno.ei + 1}-a${turno.ai + 1}-q${i + 1}`;
+                return (
+                  <div key={id} style={{ marginBottom: 14 }}>
+                    <label htmlFor={id} style={{ ...lbl, fontSize: 12 }}>
+                      {q.label} {q.required && <span style={{ color: PALETA.rojo }}>*</span>}
+                    </label>
+                    <textarea id={id} value={vals[i]} onChange={e => setRespInd(turno.ei, turno.ai, i, e.target.value)} rows={2}
+                      style={{ ...inp, resize: "none", fontFamily: "inherit" }} />
+                  </div>
+                );
+              })}
+
+              {metaError && (
+                <div role="alert" style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: "#991b1b" }}>
+                  ⚠️ {metaError}
+                </div>
+              )}
+
+              <button onClick={avanzarTurno}
+                disabled={!vals[0].trim() || metaEnviando}
+                style={btnPrimario(colors.gradient, !vals[0].trim() || metaEnviando)}>
+                {etiquetaBoton}
+              </button>
+              {/* Si falta un alumno, se puede saltear su turno para que la partida no se trabe. */}
+              <button type="button" onClick={avanzarTurno} disabled={metaEnviando}
+                style={{ marginTop: 10, width: "100%", minHeight: 44, padding: "10px 12px", borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "white", color: PALETA.texto, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                {fillArbitro(t.jgMetaIndSkip, { alumno: turno.alumno })}
+              </button>
+            </div>
+          </div>
+        </FullPage>
+      );
+    }
+
     return (
       <FullPage gradient={colors.gradient}>
         <div style={cardWhite}>
@@ -1681,7 +1843,7 @@ export default function ArbitroJuegoPage() {
                 <label htmlFor={`meta-equipo${metaEquipoActual + 1}-q${i + 1}`} style={{ ...lbl, fontSize: 12 }}>
                   {q.label} {q.required && <span style={{ color: PALETA.rojo }}>*</span>}
                 </label>
-                <textarea id={`meta-equipo${metaEquipoActual + 1}-q${i + 1}`} value={values[i]} onChange={e => setters[i](e.target.value)} rows={2}
+                <textarea id={`meta-equipo${metaEquipoActual + 1}-q${i + 1}`} value={values[i]} onChange={e => setValG(metaEquipoActual, i, e.target.value)} rows={2}
                   style={{ ...inp, resize: "none", fontFamily: "inherit" }} />
               </div>
             ))}
@@ -1722,8 +1884,10 @@ function TeamName({ color, children }: { color: string; children: React.ReactNod
 }
 
 function FullPage({ children, gradient }: { children: React.ReactNode; gradient?: string }) {
+  // El fondo se pinta en <html>/<body> (no solo en este contenedor): acompaña todo el scroll y el rebote en el celular.
+  useFondoDocumento(gradient || "linear-gradient(135deg, #1e3a5f 0%, #3730a3 100%)");
   return (
-    <main style={{ minHeight: "100vh", background: gradient || "linear-gradient(135deg, #1e3a5f 0%, #3730a3 100%)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
+    <main style={{ minHeight: "100vh", background: "transparent", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
       {children}
     </main>
   );

@@ -2299,7 +2299,14 @@ export const revisarPartidaArbitro = onCall(
           if (actuales[ronda.rondaId]) continue; // ya tiene observación (otra corrida la resolvió mientras tanto)
           patch[`intentos.${ronda.rondaId}`] = (intentosActuales[ronda.rondaId] ?? 0) + 1;
         }
-        tx.set(revisionRef, patch, { merge: true });
+        // OJO: nunca tx.set(ref, patch, { merge: true }) con patch armado con claves "observaciones.<id>" /
+        // "intentos.<id>": a diferencia de tx.update(), el merge de .set() NO separa por puntos las claves
+        // del objeto de entrada (cada clave, aunque tenga puntos, se trata como UN solo nombre de campo
+        // literal) — así, "observaciones" como mapa anidado nunca llegaba a existir de verdad. Esta fue,
+        // confirmado con datos reales de producción (sesión YVBRKD), la causa exacta del "not-found /
+        // observacion_no_encontrada" al confirmar o corregir: la IA sí respondía, pero nada quedaba
+        // guardado. tx.update() sí separa las claves con punto en campos anidados reales.
+        tx.update(revisionRef, patch);
         const observacionesFinal: Record<string, any> = { ...actuales };
         const intentosFinal: Record<string, number> = { ...intentosActuales };
         for (const k of Object.keys(patch)) {
@@ -2370,7 +2377,10 @@ export const revisarObservacionArbitro = onCall(
           notaDocente: notaTexto || null,
           revisadoPorDocenteEn: ahoraISO,
         };
-        tx.set(revisionRef, { [`observaciones.${rondaId}`]: actualizada }, { merge: true });
+        // Mismo motivo que en revisarPartidaArbitro (ver comentario ahí): tx.update() sí separa
+        // "observaciones.<rondaId>" en un campo anidado real; tx.set(..., { merge: true }) lo hubiera
+        // guardado como un campo literal con un punto en el nombre, sin tocar el mapa "observaciones".
+        tx.update(revisionRef, { [`observaciones.${rondaId}`]: actualizada });
         return actualizada;
       });
 
@@ -2380,7 +2390,16 @@ export const revisarObservacionArbitro = onCall(
       // permission-denied o datos inválidos) para poder auditar incidentes de producción — pero nunca la nota
       // del docente ni ningún otro texto de la sesión: solo code/motivo, como en revisarPartidaArbitro.
       if (error instanceof HttpsError) {
-        console.warn(JSON.stringify({ evento: "revisarObservacionArbitro_rechazada", code: error.code, motivo: (error.details as any)?.motivo ?? null }));
+        // sessionId/partidaId/rondaId/accion son ids/enum del sistema (nunca texto del docente ni del alumno):
+        // sin esto, un rechazo en los logs no se puede atar a una sesión real para investigarlo (como este).
+        const d = (request.data || {}) as Record<string, unknown>;
+        console.warn(JSON.stringify({
+          evento: "revisarObservacionArbitro_rechazada", code: error.code, motivo: (error.details as any)?.motivo ?? null,
+          sessionId: typeof d.sessionId === "string" ? d.sessionId : null,
+          partidaId: typeof d.partidaId === "string" ? d.partidaId : null,
+          rondaId: typeof d.rondaId === "string" ? d.rondaId : null,
+          accion: typeof d.accion === "string" ? d.accion : null,
+        }));
         throw error;
       }
       console.error("revisarObservacionArbitro:", error);

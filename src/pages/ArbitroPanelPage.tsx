@@ -5,7 +5,7 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { useArbitroT, useFormatoPuntos, fillArbitro, useLocaleArbitro, useTituloPagina, LanguageSelector, IDIOMAS_ARBITRO } from "../i18n";
 import { etiquetaCalificacion } from "../utils/arbitroEtiquetas";
 import { nombreVisible } from "../utils/arbitroNombres";
-import { esIaNoDisponible, textoErrorArbitro } from "../utils/arbitroErrores";
+import { esIaNoDisponible, motivoDeError, textoErrorArbitro } from "../utils/arbitroErrores";
 import { useNavigate } from "react-router-dom";
 import { app } from "../firebase.config";
 import { useAuth } from "../contexts/AuthContext";
@@ -316,6 +316,13 @@ export default function ArbitroPanelPage() {
       setCorregirAbierto(prev => { const n = { ...prev }; delete n[rondaId]; return n; });
     } catch (e: any) {
       setErrorObservacion({ id: rondaId, msg: textoErrorArbitro(e, ta, ta.revSaveError) });
+      // "observacion_no_encontrada": lo que el panel tenía en pantalla para esta ronda ya no existe en el
+      // servidor (vista vieja, de antes de algún cambio). Se vuelve a pedir todo para que el botón fantasma
+      // desaparezca solo, en vez de quedar ahí repitiendo siempre el mismo error.
+      if (motivoDeError(e) === "observacion_no_encontrada" && sesionSeleccionada) {
+        const lista = httpsCallable(functions, "listarRondasSesion");
+        lista({ sessionId: sesionSeleccionada.id }).then((res: any) => setRondasData(res.data as RondasData)).catch(() => {});
+      }
     }
     setGuardandoObservacion(null);
   };

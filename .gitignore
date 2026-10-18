@@ -33,3 +33,4 @@ credentials.json
 functions/scripts/salida/
 
 vite.config.local.ts
+stage_tmp*.tgz 

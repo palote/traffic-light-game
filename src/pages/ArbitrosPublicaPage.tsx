@@ -9,10 +9,28 @@ import { nombreVisible } from "../utils/arbitroNombres";
 import { AREAS_ORDEN, AREA_EMOJI, AREA_LABELS_ES } from "../utils/arbitroAreas";
 import { AREA_COLORS, PALETA } from "../utils/arbitroPalette";
 import { pasosArbitro } from "../utils/arbitroPasos";
-import { ARBITROS_VIDEO } from "../config/arbitrosVideo";
+import { ARBITROS_VIDEO, ARBITROS_FORM_URL } from "../config/arbitrosVideo";
 
 const FUENTE = "'Segoe UI', system-ui, -apple-system, sans-serif";
 const AZUL = "#0369a1";
+
+// Botón destacado hacia el formulario de la prueba piloto (pestaña nueva). El texto visible es el nombre accesible;
+// «se abre en una pestaña nueva» se agrega solo para lectores de pantalla.
+function BotonProbar({ ta, variante }: { ta: { pubTryClass: string; pubNewTab: string }; variante: "hero" | "pie" }) {
+  const hero = variante === "hero";
+  return (
+    <a href={ARBITROS_FORM_URL} target="_blank" rel="noopener noreferrer" className="arb-pub-btn"
+      style={{
+        position: "relative", padding: hero ? "14px 30px" : "14px 32px", fontSize: 16, fontWeight: 800, borderRadius: 14, textDecoration: "none", display: "inline-block",
+        ...(hero
+          ? { backgroundColor: "#fde047", color: "#1e293b", boxShadow: "0 6px 20px rgba(0,0,0,0.2)" }
+          : { backgroundColor: "#0369a1", color: "white", boxShadow: "0 6px 20px rgba(3,105,161,0.3)" }),
+      }}>
+      {ta.pubTryClass}
+      <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" }}> {ta.pubNewTab}</span>
+    </a>
+  );
+}
 
 export default function ArbitrosPublicaPage() {
   const ta = useArbitroT();
@@ -23,6 +41,9 @@ export default function ArbitrosPublicaPage() {
 
   const hayVideo = ARBITROS_VIDEO.mostrar;
   const pasos = pasosArbitro(ta);
+  // Enlace de respaldo «Ver en YouTube» (por si el navegador o una extensión bloquea el video incrustado)
+  const idVideo = /\/embed\/([\w-]+)/.exec(ARBITROS_VIDEO.url)?.[1];
+  const enlaceYoutube = idVideo ? `https://www.youtube.com/watch?v=${idVideo}` : null;
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: FUENTE, color: "#1e293b" }}>
@@ -65,6 +86,9 @@ export default function ArbitrosPublicaPage() {
                 {ta.landConfigure}
               </Link>
             </div>
+            <div style={{ marginTop: 16 }}>
+              <BotonProbar ta={ta} variante="hero" />
+            </div>
           </div>
         </section>
 
@@ -77,7 +101,7 @@ export default function ArbitrosPublicaPage() {
               <div style={{ maxWidth: 760, margin: "0 auto" }}>
                 {ARBITROS_VIDEO.url ? (
                   <div style={{ position: "relative", aspectRatio: "16 / 9", borderRadius: 16, overflow: "hidden", boxShadow: "0 8px 28px rgba(15,23,42,0.18)", background: "#0f172a" }}>
-                    <iframe src={ARBITROS_VIDEO.url} title={ta.pubVideoFrameTitle} loading="lazy" allowFullScreen
+                    <iframe src={ARBITROS_VIDEO.url} title={ta.pubVideoFrameTitle} loading="lazy" allowFullScreen referrerPolicy="strict-origin-when-cross-origin"
                       allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }} />
                   </div>
@@ -87,6 +111,13 @@ export default function ArbitrosPublicaPage() {
                     <strong style={{ fontSize: 18 }}>{ta.pubDemoSoonTitle}</strong>
                     <span style={{ fontSize: 14, maxWidth: 420, lineHeight: 1.5 }}>{ta.pubDemoSoonText}</span>
                   </div>
+                )}
+                {enlaceYoutube && (
+                  <p style={{ margin: "12px 0 0", textAlign: "center", fontSize: 14 }}>
+                    <a href={enlaceYoutube} target="_blank" rel="noopener noreferrer" className="arb-pub-link" style={{ color: AZUL, fontWeight: 600, textDecoration: "underline", padding: "6px 4px" }}>
+                      {ta.pubVideoYoutube}
+                    </a>
+                  </p>
                 )}
               </div>
             </section>
@@ -131,6 +162,9 @@ export default function ArbitrosPublicaPage() {
       </main>
 
       <footer style={{ textAlign: "center", padding: "40px 24px 48px", fontSize: 13, color: PALETA.grisOscuro }}>
+        <div style={{ marginBottom: 24 }}>
+          <BotonProbar ta={ta} variante="pie" />
+        </div>
         <p style={{ margin: "0 0 8px" }}>{ta.infFreeNoReg}</p>
         <Link to="/arbitros-info" className="arb-pub-link" style={{ color: AZUL, fontWeight: 600, textDecoration: "underline", padding: "6px 4px" }}>{ta.pubMoreInfo}</Link>
       </footer>

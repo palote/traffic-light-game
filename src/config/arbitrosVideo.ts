@@ -4,5 +4,8 @@
 // - url: dirección de embed (p. ej. "https://www.youtube-nocookie.com/embed/<ID>") → muestra el video.
 export const ARBITROS_VIDEO: { mostrar: boolean; url: string } = {
   mostrar: true,
-  url: "",
+  url: "https://www.youtube-nocookie.com/embed/fJgtO0mOq7Q",
 };
+
+// Formulario de la prueba piloto («Quiero probarlo con mi curso»): se abre en una pestaña nueva.
+export const ARBITROS_FORM_URL = "https://forms.gle/2aMY559en2orTP1o8";
