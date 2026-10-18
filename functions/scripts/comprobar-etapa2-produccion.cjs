@@ -48,11 +48,6 @@ async function leerSesion(db, id) {
   return { ref, existe: snap.exists, datos: snap.exists ? snap.data() : null };
 }
 
-async function leerRevisionesVacio(sessionRef) {
-  const snap = await sessionRef.collection("revisiones").limit(1).get();
-  return snap.empty;
-}
-
 // Campos pedidos: ni equipoPregunta ni equipoResponde (nombres de equipo) — no hacen falta para ninguna
 // comprobación, así que ni se piden. pregunta/respuesta sí hace falta leerlos (longitud, saltos de línea, y
 // para alimentar rondasFaltantesParaRevisar), pero se convierten a booleano antes de volver de esta función.
@@ -96,12 +91,26 @@ const paraFiltro = (r) => ({ id: r.id, fueAlArbitro: r.fueAlArbitro, respuesta: 
 
 // ── Comprobaciones (puras: reciben los datos ya leídos, nunca tocan Firestore) ──────────────────────────────
 
-// 1) Sesión oral: modoRespuesta normaliza a "oral" y no tiene ningún documento en revisiones/ (esa colección es
-// exclusiva del modo escrito).
-function comprobarSesionOral(id, datos, revisionesVacio) {
+// 1) Sesión oral: modoRespuesta normaliza a "oral". Desde la Etapa 3 (nota general del docente por partida, en
+// los DOS modos), un documento revisiones/{partidaId} SÍ puede existir en una sesión oral — con solo el campo
+// notaGeneral, si el docente dejó una nota — porque guardarNotaPartidaArbitro escribe ahí en cualquier modo. Lo
+// que NO puede pasar en modo oral es que un documento tenga observaciones o intentos: revisarPartidaArbitro (la
+// revisión con IA) nunca corre en modo oral (el panel solo la dispara en modo escrito), así que esos dos campos
+// solo pueden venir de ahí.
+function comprobarSesionOral(id, datos, revisiones) {
   const modo = normalizarModoRespuesta(datos.modoRespuesta);
   c(`[${id}] sesión oral: modoRespuesta normaliza a "oral"`, modo === "oral", `valor crudo: ${JSON.stringify(datos.modoRespuesta ?? null)}`);
-  c(`[${id}] sesión oral: sin documentos en revisiones/`, revisionesVacio === true);
+  const pids = Object.keys(revisiones);
+  const conObservacionesOIntentos = pids.filter((pid) => {
+    const rev = revisiones[pid] || {};
+    return Object.keys(rev.observaciones || {}).length > 0 || Object.keys(rev.intentos || {}).length > 0;
+  });
+  c(`[${id}] sesión oral: ningún documento revisiones/ tiene observaciones ni intentos (solo pueden tener notaGeneral)`,
+    conObservacionesOIntentos.length === 0, `${conObservacionesOIntentos.length} de ${pids.length} documentos: ${conObservacionesOIntentos.join(", ")}`);
+  // Diagnóstico (no es un chequeo pasa/falla): cuántas partidas tienen nota general. Nunca se imprime la nota
+  // en sí, solo si está presente (igual criterio de privacidad que el resto del script).
+  const conNotaGeneral = pids.filter((pid) => typeof (revisiones[pid] || {}).notaGeneral === "string" && revisiones[pid].notaGeneral.trim());
+  c(`[${id}] sesión oral: partidas con nota general del docente`, true, `${conNotaGeneral.length} de ${pids.length} documentos revisiones/`);
 }
 
 // 2–5) Sesión escrita: rondas, revisiones/{partidaId} por partida, acciones del docente a nivel de sesión, y
@@ -133,6 +142,12 @@ function comprobarSesionEscrita(id, datos, rondas, revisiones) {
   }
   const porEstadoDocente = { pendiente: 0, confirmada: 0, corregida: 0, descartada: 0 };
   const corregidasSinNota = [];
+  // Etapa 3: el servidor exige veredictoDocente en TODO "corregir" nuevo (revisarObservacionArbitro) — una
+  // observación corregida sin este campo es un dato LEGADO (de antes de esta etapa, como la de la sesión
+  // YVBRKD) que el docente todavía no completó, y por eso no entra al PDF del curso (ver comparacionEfectiva en
+  // arbitroRevision.ts, que le da null hasta que se complete).
+  const corregidasSinVeredicto = [];
+  let partidasConNotaGeneral = 0;
 
   for (const [pid, rondasDePartida] of porPartida) {
     const etq = `[${id}/${pid}]`;
@@ -189,10 +204,12 @@ function comprobarSesionEscrita(id, datos, rondas, revisiones) {
     const marcadasNoRevisables = rondasDePartida.filter((r) => esNoRevisable(intentos[r.id])).length;
     c(`${etq} sin rondas marcadas no revisables`, marcadasNoRevisables === 0, `${marcadasNoRevisables}`);
 
-    for (const o of Object.values(observaciones)) {
+    for (const [rid, o] of Object.entries(observaciones)) {
       if (porEstadoDocente[o.estadoDocente] !== undefined) porEstadoDocente[o.estadoDocente]++;
       if (o.estadoDocente === "corregida" && !(typeof o.notaDocente === "string" && o.notaDocente.trim())) corregidasSinNota.push(true);
+      if (o.estadoDocente === "corregida" && !VEREDICTOS_IA.includes(o.veredictoDocente)) corregidasSinVeredicto.push(rid);
     }
+    if (typeof rev.notaGeneral === "string" && rev.notaGeneral.trim()) partidasConNotaGeneral++;
 
     // ── 5) rondasFaltantesParaRevisar con el estado REAL no deja nada pendiente en esta partida ──
     const pendientesReal = rondasFaltantesParaRevisar(rondasDePartida.map(paraFiltro), observaciones, intentos);
@@ -213,6 +230,11 @@ function comprobarSesionEscrita(id, datos, rondas, revisiones) {
   c(`[${id}] hay al menos una observación corregida`, porEstadoDocente.corregida > 0, `corregida=${porEstadoDocente.corregida}`);
   c(`[${id}] hay al menos una observación descartada`, porEstadoDocente.descartada > 0, `descartada=${porEstadoDocente.descartada}`);
   c(`[${id}] toda observación corregida tiene nota`, corregidasSinNota.length === 0, `${corregidasSinNota.length} sin nota`);
+  c(`[${id}] toda observación corregida tiene veredictoDocente (si no, queda pendiente de completar y no entra al PDF del curso)`,
+    corregidasSinVeredicto.length === 0, `${corregidasSinVeredicto.length}: ${corregidasSinVeredicto.join(", ")}`);
+  // Diagnóstico (no es un chequeo pasa/falla): cuántas partidas tienen nota general. Nunca se imprime la nota
+  // en sí, solo si está presente.
+  c(`[${id}] partidas con nota general del docente`, true, `${partidasConNotaGeneral} de ${porPartida.size}`);
 }
 
 // ── Orquestación ─────────────────────────────────────────────────────────────────────────────────────────
@@ -223,11 +245,13 @@ async function comprobarSesion(db, id) {
     return;
   }
   const modo = normalizarModoRespuesta(datos.modoRespuesta);
+  // Etapa 3: en los dos modos, revisiones/ puede tener documentos (nota general del docente); se lee completo
+  // en los dos casos, con la misma leerRevisiones.
+  const revisiones = await leerRevisiones(ref);
   if (modo === "oral") {
-    const revisionesVacio = await leerRevisionesVacio(ref);
-    comprobarSesionOral(id, datos, revisionesVacio);
+    comprobarSesionOral(id, datos, revisiones);
   } else {
-    const [rondas, revisiones] = await Promise.all([leerRondas(ref), leerRevisiones(ref)]);
+    const rondas = await leerRondas(ref);
     comprobarSesionEscrita(id, datos, rondas, revisiones);
   }
 }
@@ -258,5 +282,5 @@ async function main() {
   process.exit(0);
 }
 
-module.exports = { leerSesion, leerRevisionesVacio, leerRondas, leerRevisiones, comprobarSesionOral, comprobarSesionEscrita, filas, paraFiltro };
+module.exports = { leerSesion, leerRondas, leerRevisiones, comprobarSesionOral, comprobarSesionEscrita, filas, paraFiltro };
 if (require.main === module) main().catch((e) => { console.error("ERROR:", e.message || e); process.exit(1); });

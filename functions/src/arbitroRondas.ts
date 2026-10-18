@@ -28,7 +28,9 @@ const texto = (v: unknown, max: number): string => (typeof v === "string" ? v.re
 // Como `texto`, pero conserva los saltos de línea (la respuesta escrita puede venir en varias líneas:
 // listas, pasos, tablas armadas a mano). Solo colapsa los espacios/tabs DENTRO de cada línea y el
 // exceso de líneas en blanco seguidas, y recorta los bordes.
-const textoMultilinea = (v: unknown, max: number): string =>
+// Exportada: la reusa guardarNotaPartidaArbitro (index.ts) para normalizar la nota general del docente por
+// partida (Etapa 3), con el mismo criterio que la respuesta escrita.
+export const textoMultilinea = (v: unknown, max: number): string =>
   typeof v === "string"
     ? v
         .replace(/\r\n/g, "\n")

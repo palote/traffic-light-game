@@ -28,6 +28,11 @@ const hijos = (path) => [...store.keys()].filter((k) => k.startsWith(path + "/")
 // esperando que anidara, y en Firestore real NUNCA anidaba (ver index.ts). Separado en dos funciones para que
 // una prueba que llame a la función real y después LEA el documento (no el valor que la función devolvió)
 // pueda detectar justamente esta clase de bug.
+// admin.firestore.FieldValue.delete() (ver FieldValue más abajo) llega acá como un objeto sentinela
+// ({ __delete: true }): en Firestore real borra el campo (o, si el documento no existía, simplemente no lo
+// crea) en vez de guardar el sentinela como valor. guardarNotaPartidaArbitro (index.ts) lo usa para borrar
+// notaGeneral cuando la nota queda vacía.
+const esBorrado = (v) => !!(v && typeof v === "object" && v.__delete);
 function aplicarMergeUpdate(path, patch) { // semántica real de .update(patch): SIEMPRE separa por puntos
   const actual = { ...(store.get(path) || {}) };
   for (const [k, v] of Object.entries(patch)) {
@@ -38,7 +43,10 @@ function aplicarMergeUpdate(path, patch) { // semántica real de .update(patch):
         obj[partes[i]] = obj[partes[i]] && typeof obj[partes[i]] === "object" ? obj[partes[i]] : {};
         obj = obj[partes[i]];
       }
-      obj[partes[partes.length - 1]] = clone(v);
+      if (esBorrado(v)) delete obj[partes[partes.length - 1]];
+      else obj[partes[partes.length - 1]] = clone(v);
+    } else if (esBorrado(v)) {
+      delete actual[k];
     } else {
       actual[k] = clone(v);
     }
@@ -49,6 +57,7 @@ function aplicarMergeSet(path, patch) { // semántica real de .set(patch, {merge
   const actual = { ...(store.get(path) || {}) };                 // en las claves; solo fusiona objetos anidados reales
   function fusionar(destino, origen) {
     for (const [k, v] of Object.entries(origen)) {
+      if (esBorrado(v)) { delete destino[k]; continue; }
       const esObjetoReal = (x) => x && typeof x === "object" && !Array.isArray(x);
       if (esObjetoReal(v) && esObjetoReal(destino[k])) fusionar(destino[k], v);
       else destino[k] = clone(v); // la clave (aunque tenga puntos) se guarda LITERAL, sin separarla
@@ -80,7 +89,7 @@ fakeDb.runTransaction = (fn) => {
   colaTx = corrida.catch(() => {});
   return corrida;
 };
-const fakeAdmin = { apps: [{}], initializeApp() {}, firestore: Object.assign(() => fakeDb, { FieldValue: { increment: (n) => ({ __inc: n }) }, Timestamp: {} }), auth: () => ({}), storage: () => ({}) };
+const fakeAdmin = { apps: [{}], initializeApp() {}, firestore: Object.assign(() => fakeDb, { FieldValue: { increment: (n) => ({ __inc: n }), delete: () => ({ __delete: true }) }, Timestamp: {} }), auth: () => ({}), storage: () => ({}) };
 let respuestaGemini = ""; let ultimoPrompt = ""; let llamadasGemini = 0;
 class FakeAI { getGenerativeModel() { return { generateContent: async (c) => { llamadasGemini++; ultimoPrompt = typeof c === "string" ? c : JSON.stringify(c); if (respuestaGemini === "__ERROR__") { const e = new Error("503"); e.status = 503; throw e; } return { response: { text: () => respuestaGemini } }; } }; } }
 const load = Module._load;
@@ -255,8 +264,12 @@ const obsDe = () => (store.get(`sesiones_arbitro/TSTK7M/revisiones/${P}`) || {})
   t("confirmar: estado y sin nota", "confirmada/null", `${conf.r.observacion.estadoDocente}/${conf.r.observacion.notaDocente}`);
   const sinNota = await run(fns.revisarObservacionArbitro, { sessionId: "TSTK7M", partidaId: P, rondaId: rid(5), accion: "corregir" }, "docente1");
   t("corregir sin nota → invalid-argument (nota_requerida)", "invalid-argument/nota_requerida", `${sinNota.code}/${sinNota.motivo}`);
-  const conNota = await run(fns.revisarObservacionArbitro, { sessionId: "TSTK7M", partidaId: P, rondaId: rid(5), accion: "corregir", nota: "En realidad la respuesta sí defendía el concepto: vale completa." }, "docente1");
-  t("corregir con nota: estado corregida, nota guardada, la explicación de la IA queda (para auditoría) pero deja de ser la que se muestra", "corregida/true/true", `${conNota.r.observacion.estadoDocente}/${conNota.r.observacion.notaDocente.startsWith("En realidad")}/${!!conNota.r.observacion.explicacionIA}`);
+  const sinVeredicto = await run(fns.revisarObservacionArbitro, { sessionId: "TSTK7M", partidaId: P, rondaId: rid(5), accion: "corregir", nota: "Nota sin veredicto." }, "docente1");
+  t("corregir con nota pero sin veredictoDocente → invalid-argument (veredicto_requerido)", "invalid-argument/veredicto_requerido", `${sinVeredicto.code}/${sinVeredicto.motivo}`);
+  const veredictoInvalido = await run(fns.revisarObservacionArbitro, { sessionId: "TSTK7M", partidaId: P, rondaId: rid(5), accion: "corregir", nota: "Nota con veredicto raro.", veredictoDocente: "excelente" }, "docente1");
+  t("corregir con veredictoDocente inválido → igual invalid-argument (veredicto_requerido)", "invalid-argument/veredicto_requerido", `${veredictoInvalido.code}/${veredictoInvalido.motivo}`);
+  const conNota = await run(fns.revisarObservacionArbitro, { sessionId: "TSTK7M", partidaId: P, rondaId: rid(5), accion: "corregir", nota: "En realidad la respuesta sí defendía el concepto: vale completa.", veredictoDocente: "completa" }, "docente1");
+  t("corregir con nota y veredicto: estado corregida, nota guardada, veredictoDocente guardado, la explicación de la IA queda (para auditoría) pero deja de ser la que se muestra", "corregida/true/completa/true", `${conNota.r.observacion.estadoDocente}/${conNota.r.observacion.notaDocente.startsWith("En realidad")}/${conNota.r.observacion.veredictoDocente}/${!!conNota.r.observacion.explicacionIA}`);
   const desc = await run(fns.revisarObservacionArbitro, { sessionId: "TSTK7M", partidaId: P, rondaId: rid(6), accion: "descartar" }, "docente1");
   t("descartar: estado descartada", "descartada", desc.r.observacion.estadoDocente);
   t("acción inválida → invalid-argument", "invalid-argument", (await run(fns.revisarObservacionArbitro, { sessionId: "TSTK7M", partidaId: P, rondaId: rid(3), accion: "ignorar" }, "docente1")).code);
@@ -340,7 +353,7 @@ const obsDe = () => (store.get(`sesiones_arbitro/TSTK7M/revisiones/${P}`) || {})
   const NOTA_SECRETA = "TEXTO_SECRETO_DE_LA_NOTA_QUE_NO_DEBE_APARECER_EN_LOS_LOGS";
   let warnsCapturados = [];
   console.warn = (...args) => warnsCapturados.push(args.join(" "));
-  const ajenoConNota = await run(fns.revisarObservacionArbitro, { sessionId: "TSTK7M", partidaId: P, rondaId: rid(20), accion: "corregir", nota: NOTA_SECRETA }, "docente2");
+  const ajenoConNota = await run(fns.revisarObservacionArbitro, { sessionId: "TSTK7M", partidaId: P, rondaId: rid(20), accion: "corregir", nota: NOTA_SECRETA, veredictoDocente: "completa" }, "docente2");
   console.warn = warnOriginal;
   t("docente ajeno con nota: igual permission-denied (la nota no cambia el chequeo de permisos)", "permission-denied", ajenoConNota.code);
   let logsUnidos = warnsCapturados.join(" | ");
@@ -371,9 +384,9 @@ const obsDe = () => (store.get(`sesiones_arbitro/TSTK7M/revisiones/${P}`) || {})
   respuestaGemini = geminiResp([[rid(22), "incompleta"]]);
   await run(fns.revisarPartidaArbitro, { sessionId: "TSTK7M", partidaId: P }, "docente1");
   const notaDelTextarea = "La respuesta sí tenía los dos elementos pedidos.";
-  const pedidoPanelCorregir = { sessionId: "TSTK7M", partidaId: P, rondaId: rid(22), accion: "corregir", nota: notaDelTextarea };
+  const pedidoPanelCorregir = { sessionId: "TSTK7M", partidaId: P, rondaId: rid(22), accion: "corregir", nota: notaDelTextarea, veredictoDocente: "completa" };
   const panelCorregir = await run(fns.revisarObservacionArbitro, pedidoPanelCorregir, "docente1");
-  t("pedido armado como el panel (corregir, con nota del textarea): funciona", "true/corregida/true", `${panelCorregir.ok}/${panelCorregir.r.observacion.estadoDocente}/${panelCorregir.r.observacion.notaDocente === notaDelTextarea}`);
+  t("pedido armado como el panel (corregir, con nota y veredicto): funciona", "true/corregida/true", `${panelCorregir.ok}/${panelCorregir.r.observacion.estadoDocente}/${panelCorregir.r.observacion.notaDocente === notaDelTextarea}`);
 
   agregarRonda(23);
   respuestaGemini = geminiResp([[rid(23), "no"]]);
@@ -404,12 +417,87 @@ const obsDe = () => (store.get(`sesiones_arbitro/TSTK7M/revisiones/${P}`) || {})
   t("persistencia real: lo que guardó revisarPartidaArbitro se puede releer después, por listarRondasSesion (no por el valor que devolvió la función)",
     "completa", ((leidoTrasRevisar.r.revisiones[P] || {}).observaciones || {})[rid(24)] && leidoTrasRevisar.r.revisiones[P].observaciones[rid(24)].veredictoIA);
 
-  const corregirReal = await run(fns.revisarObservacionArbitro, { sessionId: "TSTK7M", partidaId: P, rondaId: rid(24), accion: "corregir", nota: "Nota de prueba de persistencia." }, "docente1");
+  const corregirReal = await run(fns.revisarObservacionArbitro, { sessionId: "TSTK7M", partidaId: P, rondaId: rid(24), accion: "corregir", nota: "Nota de prueba de persistencia.", veredictoDocente: "incompleta" }, "docente1");
   assert.ok(corregirReal.ok, "revisarObservacionArbitro (persistencia): " + corregirReal.msg);
   const leidoTrasCorregir = await run(fns.listarRondasSesion, { sessionId: "TSTK7M" }, "docente1");
   const obsTrasCorregir = (leidoTrasCorregir.r.revisiones[P] || {}).observaciones?.[rid(24)] || {};
   t("  y lo que corregirla guardó TAMBIÉN se puede releer después, no solo en lo que la función devolvió",
-    "corregida/true", `${obsTrasCorregir.estadoDocente}/${obsTrasCorregir.notaDocente === "Nota de prueba de persistencia."}`);
+    "corregida/true/incompleta", `${obsTrasCorregir.estadoDocente}/${obsTrasCorregir.notaDocente === "Nota de prueba de persistencia."}/${obsTrasCorregir.veredictoDocente}`);
+  // La ronda 24 la calificó el otro equipo como "completa" (agregarRonda, calificación por defecto) y el
+  // docente corrigió con veredictoDocente "incompleta" (distinto del "completa" de la IA en respuestaGemini):
+  // el otro equipo calificó MÁS ALTO que el veredicto del docente → "error_no_detectado". comparacionEfectiva
+  // se calcula en listarRondasSesion con el veredicto del DOCENTE, no el de la IA (que seguía siendo "completa").
+  t("  comparacionEfectiva se recalcula con el veredicto del DOCENTE (no el de la IA) contra la calificación de la ronda",
+    "error_no_detectado", obsTrasCorregir.comparacionEfectiva);
+
+  // ════ 19) veredictoDocente: una observación "corregida" sin el campo (dato legado, de antes de que
+  // existiera, como la de la sesión YVBRKD en producción) queda con comparacionEfectiva null — ni el panel ni
+  // el futuro PDF del curso pueden decidir el tipo todavía. Completar el veredicto (volver a "corregir", esta
+  // vez con veredictoDocente) la resuelve. ════
+  agregarRonda(25);
+  respuestaGemini = geminiResp([[rid(25), "incompleta"]]);
+  await run(fns.revisarPartidaArbitro, { sessionId: "TSTK7M", partidaId: P }, "docente1");
+  const refRevisionP = `sesiones_arbitro/TSTK7M/revisiones/${P}`;
+  const docRevisionP = store.get(refRevisionP);
+  // Simula el dato legado: "corregida" pero SIN veredictoDocente (el campo no existía antes de esta etapa).
+  store.set(refRevisionP, { ...docRevisionP, observaciones: { ...docRevisionP.observaciones, [rid(25)]: { ...docRevisionP.observaciones[rid(25)], estadoDocente: "corregida", notaDocente: "Nota vieja, de antes del veredicto obligatorio." } } });
+  const legadoListado = await run(fns.listarRondasSesion, { sessionId: "TSTK7M" }, "docente1");
+  const obsLegado = legadoListado.r.revisiones[P].observaciones[rid(25)];
+  t("observación corregida sin veredictoDocente (dato legado): comparacionEfectiva null, no entra al PDF del curso todavía", "corregida/true/true", `${obsLegado.estadoDocente}/${obsLegado.veredictoDocente === undefined}/${obsLegado.comparacionEfectiva === null}`);
+  const completarVeredicto = await run(fns.revisarObservacionArbitro, { sessionId: "TSTK7M", partidaId: P, rondaId: rid(25), accion: "corregir", nota: "Nota vieja, de antes del veredicto obligatorio.", veredictoDocente: "no" }, "docente1");
+  t("completar el veredicto de una observación legada: funciona (vuelve a pasar por 'corregir')", "true/corregida/no", `${completarVeredicto.ok}/${completarVeredicto.r.observacion.estadoDocente}/${completarVeredicto.r.observacion.veredictoDocente}`);
+  const trasCompletar = await run(fns.listarRondasSesion, { sessionId: "TSTK7M" }, "docente1");
+  const obsTrasCompletar = trasCompletar.r.revisiones[P].observaciones[rid(25)];
+  // calificacion de la ronda 25 es "completa" (default de agregarRonda) y el docente puso veredictoDocente "no": el
+  // otro equipo calificó MÁS ALTO que el veredicto del docente → "error_no_detectado" (ya no es null).
+  t("  ya completado: comparacionEfectiva deja de ser null", "error_no_detectado", obsTrasCompletar.comparacionEfectiva);
+
+  // ════ 20) Nota general del docente por partida (guardarNotaPartidaArbitro, Etapa 3) ════
+  t("guardarNota sin login → unauthenticated", "unauthenticated", (await run(fns.guardarNotaPartidaArbitro, { sessionId: "TSTK7M", partidaId: P, nota: "x" })).code);
+  t("guardarNota sessionId vacío → invalid-argument", "invalid-argument", (await run(fns.guardarNotaPartidaArbitro, { sessionId: "", partidaId: P, nota: "x" }, "docente1")).code);
+  t("guardarNota partidaId inválido → invalid-argument", "invalid-argument", (await run(fns.guardarNotaPartidaArbitro, { sessionId: "TSTK7M", partidaId: "x", nota: "x" }, "docente1")).code);
+  t("guardarNota sesión inexistente → not-found", "not-found", (await run(fns.guardarNotaPartidaArbitro, { sessionId: "NOEXISTE", partidaId: P, nota: "x" }, "docente1")).code);
+  t("guardarNota docente ajeno → permission-denied", "permission-denied", (await run(fns.guardarNotaPartidaArbitro, { sessionId: "TSTK7M", partidaId: P, nota: "x" }, "docente2")).code);
+  t("guardarNota admin (no dueño) → permission-denied (sin bypass, igual que corregirRonda/revisarObservacionArbitro)", "permission-denied", (await run(fns.guardarNotaPartidaArbitro, { sessionId: "TSTK7M", partidaId: P, nota: "x" }, ADMIN)).code);
+
+  const notaConEspacios = "  Buen trabajo en general.  \n\n\n   Les faltó  justificar   el paso 3.  \r\n";
+  const guardarNota1 = await run(fns.guardarNotaPartidaArbitro, { sessionId: "TSTK7M", partidaId: P, nota: notaConEspacios }, "docente1");
+  t("guardar nota general: la normaliza con el mismo criterio que la respuesta escrita (textoMultilinea)", "true/Buen trabajo en general.\n\nLes faltó justificar el paso 3.",
+    `${guardarNota1.ok}/${guardarNota1.r.notaGeneral}`);
+  const releidaTrasGuardar = await run(fns.listarRondasSesion, { sessionId: "TSTK7M" }, "docente1");
+  t("  persistencia real: se puede releer por listarRondasSesion, no solo por lo que devolvió la función", guardarNota1.r.notaGeneral, releidaTrasGuardar.r.revisiones[P].notaGeneral);
+  t("  guardar la nota general no toca las observaciones ya guardadas de la misma partida", "true", Object.keys(releidaTrasGuardar.r.revisiones[P].observaciones).length > 0);
+
+  const notaLarga = "x".repeat(2000);
+  const guardarNotaLarga = await run(fns.guardarNotaPartidaArbitro, { sessionId: "TSTK7M", partidaId: P, nota: notaLarga }, "docente1");
+  t("guardar nota general: respeta el largo máximo (MAX_NOTA_GENERAL_PARTIDA = 1500)", "1500", String(guardarNotaLarga.r.notaGeneral.length));
+
+  const guardarNotaVacia = await run(fns.guardarNotaPartidaArbitro, { sessionId: "TSTK7M", partidaId: P, nota: "   " }, "docente1");
+  t("guardar nota vacía (solo espacios): se borra (no queda como string vacío)", "true/", `${guardarNotaVacia.ok}/${guardarNotaVacia.r.notaGeneral}`);
+  const releidaTrasBorrar = await run(fns.listarRondasSesion, { sessionId: "TSTK7M" }, "docente1");
+  t("  y al releer, el campo notaGeneral ya no está en el documento", "undefined", String(releidaTrasBorrar.r.revisiones[P].notaGeneral));
+
+  // ════ 21) Nota general en modo ORAL: el documento revisiones/{partidaId} puede llegar a existir con SOLO
+  // notaGeneral (sin observaciones ni intentos, porque revisarPartidaArbitro nunca corre en modo oral). Nada
+  // debe interpretar "existe el documento" como "hay revisión de IA": listarRondasSesion/faltantesPorPartida
+  // tienen que seguir funcionando igual que si el documento no existiera. ════
+  const PID_ORAL = "oral1partida1pid00000001";
+  store.set(`sesiones_arbitro/ORAL/rondas/${idDeRonda(PID_ORAL, 1)}`, {
+    partidaId: PID_ORAL, ronda: 1, equipoPregunta: "Verdes", equipoResponde: "Amarillos",
+    pregunta: "Pregunta oral 1", respuesta: "", calificacion: "completa", fueAlArbitro: false, estado: "jugada",
+    creadoEn: new Date(ahora + 1000).toISOString(), disputa: null, correccion: null,
+    reparto: { puntosPregunta: 0, puntosResponde: 1, tieneRazon: null, grado: null },
+  });
+  t("modo oral: antes de guardar la nota, no existe el documento revisiones/{partidaId}", "false", !!store.get(`sesiones_arbitro/ORAL/revisiones/${PID_ORAL}`));
+  const notaOral = await run(fns.guardarNotaPartidaArbitro, { sessionId: "ORAL", partidaId: PID_ORAL, nota: "Buena participación oral." }, "docente1");
+  t("modo oral: guardar la nota general funciona igual que en modo escrito", "true/Buena participación oral.", `${notaOral.ok}/${notaOral.r.notaGeneral}`);
+  const docOralTrasNota = store.get(`sesiones_arbitro/ORAL/revisiones/${PID_ORAL}`);
+  t("  el documento queda con SOLO notaGeneral — sin observaciones ni intentos", "true/false/false",
+    `${!!docOralTrasNota.notaGeneral}/${"observaciones" in docOralTrasNota}/${"intentos" in docOralTrasNota}`);
+  const listadoOralTrasNota = await run(fns.listarRondasSesion, { sessionId: "ORAL" }, "docente1");
+  t("  listarRondasSesion sigue sin contar nada como faltante para esa partida (modo oral, como si el documento no existiera)", "0", listadoOralTrasNota.r.faltantesPorPartida[PID_ORAL]);
+  const rondaOralTrasNota = listadoOralTrasNota.r.rondas.find((x) => x.id === idDeRonda(PID_ORAL, 1));
+  t("  y la ronda oral no queda marcada noRevisable", "undefined", String(rondaOralTrasNota.noRevisable));
 
   console.error = ce; console.table(filas); console.log(`OK: ${filas.length} comprobaciones.`); process.exit(0);
 })().catch((e) => { console.error = ce; console.error("FALLÓ:", e.message); process.exit(1); });

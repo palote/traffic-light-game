@@ -17,8 +17,8 @@ import { buildArbitroPrompt, buildPromptPreguntaPropia, buildPromptConsignas, bu
 import { normalizarIdiomaSesion, advertirIdiomaSalida } from "./arbitroIdioma";
 import { normalizarModoMetacognicion, normalizarModoRespuesta, sanearEquipoInforme } from "./arbitroIntegrantes";
 import { normalizarPreguntasMeta } from "./arbitroMetaPreguntas";
-import { validarEntradaRonda, construirRonda, idDeRonda, aplicarCorreccion, calcularTotales, OPCIONES_REPARTO, ID_RE } from "./arbitroRondas";
-import { rondasFaltantesParaRevisar, construirPromptRevision, parsearRevisionGemini, compararConOtroEquipo, esNoRevisable, type EstadoDocenteObservacion } from "./arbitroRevision";
+import { validarEntradaRonda, construirRonda, idDeRonda, aplicarCorreccion, calcularTotales, OPCIONES_REPARTO, ID_RE, textoMultilinea } from "./arbitroRondas";
+import { rondasFaltantesParaRevisar, construirPromptRevision, parsearRevisionGemini, compararConOtroEquipo, comparacionEfectiva, esNoRevisable, VEREDICTOS_IA, MAX_NOTA_GENERAL_PARTIDA, type EstadoDocenteObservacion, type VeredictoIA } from "./arbitroRevision";
 
 // Inicializar Firebase Admin UNA SOLA VEZ
 if (!admin.apps.length) {
@@ -2125,8 +2125,21 @@ export const listarRondasSesion = onCall(
       const rev = revisiones[pid] || {};
       const intentos: Record<string, number> = rev.intentos || {};
       faltantesPorPartida[pid] = rondasFaltantesParaRevisar(rondasDePartida, rev.observaciones || {}, intentos).length;
+      const calificacionPorRonda = new Map<string, string>();
       for (const r of rondasDePartida) {
         if (esNoRevisable(intentos[r.id])) r.noRevisable = true;
+        calificacionPorRonda.set(r.id, r.calificacion);
+      }
+      // Etapa 3: comparación EFECTIVA de cada observación (la que decide si entra al PDF del curso), calculada
+      // UNA SOLA VEZ acá para que el panel y el futuro PDF del curso usen siempre el mismo valor (ver
+      // comparacionEfectiva en arbitroRevision.ts). Es un campo nuevo (comparacionEfectiva); `comparacion`
+      // sigue intacto, con el hallazgo original de la IA al crear la observación.
+      const observacionesDePartida = rev.observaciones as Record<string, any> | undefined;
+      if (observacionesDePartida) {
+        for (const [rondaId, obs] of Object.entries(observacionesDePartida)) {
+          const calificacionRonda = calificacionPorRonda.get(rondaId);
+          obs.comparacionEfectiva = calificacionRonda !== undefined ? comparacionEfectiva(obs, calificacionRonda) : null;
+        }
       }
     }
 
@@ -2340,7 +2353,7 @@ export const revisarObservacionArbitro = onCall(
     try {
       const uid = request.auth?.uid;
       if (!uid) throw new HttpsError("unauthenticated", "Tenés que iniciar sesión para revisar una observación.", { motivo: "login_requerido" });
-      const { sessionId, partidaId, rondaId, accion, nota } = (request.data || {}) as Record<string, unknown>;
+      const { sessionId, partidaId, rondaId, accion, nota, veredictoDocente } = (request.data || {}) as Record<string, unknown>;
       if (typeof sessionId !== "string" || !sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.", { motivo: "datos_incompletos" });
       if (typeof partidaId !== "string" || !ID_RE.test(partidaId)) throw new HttpsError("invalid-argument", "partidaId inválido.", { motivo: "datos_incompletos" });
       if (typeof rondaId !== "string" || !/^[A-Za-z0-9_-]{8,60}$/.test(rondaId)) throw new HttpsError("invalid-argument", "rondaId inválido.", { motivo: "datos_incompletos" });
@@ -2350,6 +2363,17 @@ export const revisarObservacionArbitro = onCall(
       const notaTexto = typeof nota === "string" ? nota.trim().slice(0, 1200) : "";
       if (accion === "corregir" && !notaTexto) {
         throw new HttpsError("invalid-argument", "La nota es obligatoria para corregir un veredicto.", { motivo: "nota_requerida" });
+      }
+      // Etapa 3: el veredicto del DOCENTE (no el de la IA) es obligatorio al corregir — es lo que permite
+      // recalcular la comparación efectiva (comparacionEfectiva, arbitroRevision.ts) sin adivinar. Se exige acá,
+      // en el servidor, y no solo en el panel: un pedido directo a la función (sin pasar por la UI) tiene que
+      // quedar con la misma validación.
+      const veredictoDocenteValido: VeredictoIA | null =
+        typeof veredictoDocente === "string" && (VEREDICTOS_IA as readonly string[]).includes(veredictoDocente)
+          ? (veredictoDocente as VeredictoIA)
+          : null;
+      if (accion === "corregir" && !veredictoDocenteValido) {
+        throw new HttpsError("invalid-argument", "El veredicto del docente es obligatorio para corregir un veredicto.", { motivo: "veredicto_requerido" });
       }
 
       const sessionRef = db.collection("sesiones_arbitro").doc(sessionId);
@@ -2375,6 +2399,10 @@ export const revisarObservacionArbitro = onCall(
           ...existente,
           estadoDocente,
           notaDocente: notaTexto || null,
+          // Solo tiene sentido en "corregida" (ver veredictoDocenteValido arriba); confirmar/descartar lo dejan
+          // en null a propósito, para no arrastrar un veredicto de una corrección anterior si se vuelve a actuar
+          // sobre la misma observación.
+          veredictoDocente: accion === "corregir" ? veredictoDocenteValido : null,
           revisadoPorDocenteEn: ahoraISO,
         };
         // Mismo motivo que en revisarPartidaArbitro (ver comentario ahí): tx.update() sí separa
@@ -2408,6 +2436,49 @@ export const revisarObservacionArbitro = onCall(
   }
 );
 
+// ── Nota general del docente por partida (Etapa 3) ───────────────────────────────────────────────────────
+// Una nota libre por partida (par de equipos), en los DOS modos (oral y escrito) — aparte de la nota puntual
+// que puede dejar al corregir una observación. Se guarda en sesiones_arbitro/{sessionId}/revisiones/{partidaId}
+// .notaGeneral y sale en el PDF del curso (plan acordado con el docente). Mismo normalizador que la respuesta
+// escrita (textoMultilinea) y mismo tope de longitud (MAX_NOTA_GENERAL_PARTIDA) que el panel usa en el
+// textarea. Si la nota normalizada queda vacía, se borra el campo (FieldValue.delete) en vez de guardar "".
+//
+// Como revisarPartidaArbitro solo corre en modo escrito (el panel nunca dispara la revisión con IA en modo
+// oral: ver el useEffect en ArbitroPanelPage.tsx), guardar acá la primera nota general de una partida ORAL crea
+// el documento revisiones/{partidaId} con ÚNICAMENTE este campo, sin "observaciones" ni "intentos". Nada debe
+// interpretar "existe el documento revisiones/{partidaId}" como "hay revisión de IA": listarRondasSesion y
+// rondasFaltantesParaRevisar ya miran solo .observaciones/.intentos (con `|| {}` si faltan), nunca la existencia
+// del documento en sí, así que esto no les cambia el comportamiento.
+export const guardarNotaPartidaArbitro = onCall(
+  { invoker: "public", timeoutSeconds: 30 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Tenés que iniciar sesión para guardar una nota.", { motivo: "login_requerido" });
+    const { sessionId, partidaId, nota } = (request.data || {}) as Record<string, unknown>;
+    if (typeof sessionId !== "string" || !sessionId) throw new HttpsError("invalid-argument", "sessionId requerido.", { motivo: "datos_incompletos" });
+    if (typeof partidaId !== "string" || !ID_RE.test(partidaId)) throw new HttpsError("invalid-argument", "partidaId inválido.", { motivo: "datos_incompletos" });
+
+    const sessionRef = db.collection("sesiones_arbitro").doc(sessionId);
+    const sessionDoc = await sessionRef.get();
+    if (!sessionDoc.exists) throw new HttpsError("not-found", "Sesión no encontrada.", { motivo: "sesion_no_encontrada" });
+    // Igual que corregirRonda/revisarObservacionArbitro: solo el docente dueño (sin bypass de admin) puede
+    // escribir esta nota.
+    if (sessionDoc.data()!.docenteUid !== uid) {
+      throw new HttpsError("permission-denied", "Solo el docente dueño de la sesión puede guardar esta nota.", { motivo: "sesion_de_otro_docente" });
+    }
+
+    const notaNormalizada = textoMultilinea(nota, MAX_NOTA_GENERAL_PARTIDA);
+    const revisionRef = sessionRef.collection("revisiones").doc(partidaId);
+    // Clave literal sin punto ("notaGeneral"): un .set(..., {merge:true}) fusiona esta clave tal cual (no hace
+    // falta separarla), así que es seguro aunque el documento tenga ya "observaciones"/"intentos" de la
+    // revisión con IA — no los toca. Ver el comentario sobre .set(merge) vs .update() en revisarPartidaArbitro.
+    await revisionRef.set(
+      { notaGeneral: notaNormalizada ? notaNormalizada : admin.firestore.FieldValue.delete() },
+      { merge: true },
+    );
+    return { ok: true, notaGeneral: notaNormalizada };
+  }
+);
 
 // ── validarPreguntaPropia ───────────────────────────────────────────────────
 // Antes de pasarle al otro equipo la pregunta que escribió un equipo, se verifica con Gemini que corresponda

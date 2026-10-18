@@ -47,6 +47,27 @@ export function compararConOtroEquipo(calificacionOtroEquipo: string, veredictoI
   return otro > ia ? "error_no_detectado" : "acierto_no_defendido";
 }
 
+/**
+ * Comparación "efectiva" de una observación: la que muestra el panel y la que decide si entra al PDF del
+ * curso (Etapa 3, plan acordado punto b). Para toda observación que el docente no corrigió (pendiente,
+ * confirmada o descartada) es la comparación original, calculada por la IA al crearla (revisarPartidaArbitro).
+ * Para una "corregida", se recalcula con el VEREDICTO DEL DOCENTE (veredictoDocente) contra la calificación
+ * que ya puso el otro equipo en esa ronda — la misma que ya tiene listarRondasSesion/leerRondasYTotales
+ * (calificacionRonda, el campo `calificacion` de la ronda): no se guarda una copia en la observación a
+ * propósito (ver el comentario de revisarObservacionArbitro), para no tener dos fuentes del mismo dato.
+ * Si quedó "corregida" sin veredictoDocente (dato legado, de antes de que este campo fuera obligatorio),
+ * devuelve null: ni el panel ni el PDF del curso pueden decidir el tipo todavía — hace falta que el docente
+ * complete el veredicto primero (ver revCompleteVerdict* en el panel).
+ */
+export function comparacionEfectiva(
+  obs: { estadoDocente: EstadoDocenteObservacion; comparacion: ComparacionObservacion | null; veredictoDocente?: VeredictoIA | null },
+  calificacionRonda: string,
+): ComparacionObservacion | null {
+  if (obs.estadoDocente !== "corregida") return obs.comparacion;
+  if (!obs.veredictoDocente || !(VEREDICTOS_IA as readonly string[]).includes(obs.veredictoDocente)) return null;
+  return compararConOtroEquipo(calificacionRonda, obs.veredictoDocente);
+}
+
 export interface RondaParaRevisar {
   rondaId: string;
   ronda: number;
@@ -65,6 +86,11 @@ type RondaDocComo = Record<string, any>;
 // conteste nada válido para ella. Lo cuenta revisarPartidaArbitro en revisiones/{partidaId}.intentos[rondaId];
 // al llegar acá, rondasFaltantesParaRevisar deja de incluirla (queda "no revisable", ver esNoRevisable).
 export const LIMITE_INTENTOS_REVISION = 3;
+
+// Nota general del docente por partida (Etapa 3, ambos modos): límite de longitud, con el mismo normalizador
+// multilínea que la respuesta escrita (textoMultilinea, arbitroRondas.ts). Se guarda en
+// revisiones/{partidaId}.notaGeneral (guardarNotaPartidaArbitro, index.ts) y sale en el PDF del curso.
+export const MAX_NOTA_GENERAL_PARTIDA = 1500;
 
 /** true si esta ronda ya agotó los intentos de revisión automática (ver LIMITE_INTENTOS_REVISION). */
 export function esNoRevisable(intentos: number | undefined): boolean {

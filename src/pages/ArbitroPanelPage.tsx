@@ -121,8 +121,18 @@ interface ObservacionIA {
   comparacion: "sin_observacion" | "error_no_detectado" | "acierto_no_defendido";
   estadoDocente: "pendiente" | "confirmada" | "corregida" | "descartada";
   notaDocente: string | null;
+  // Etapa 3: el veredicto del DOCENTE (no el de la IA), obligatorio al corregir. Puede faltar en una observación
+  // "corregida" guardada ANTES de esta etapa (dato legado): el panel la muestra pidiendo que se complete.
+  veredictoDocente?: "completa" | "incompleta" | "no" | null;
+  // Comparación EFECTIVA (Etapa 3): para "corregida", recalculada con veredictoDocente contra la calificación de
+  // la ronda (listarRondasSesion la calcula una sola vez, ver comparacionEfectiva en arbitroRevision.ts); para
+  // el resto de los estados, es la misma que `comparacion`. null = corregida sin veredictoDocente todavía (hace
+  // falta completarlo): no entra al PDF del curso hasta entonces.
+  comparacionEfectiva?: "sin_observacion" | "error_no_detectado" | "acierto_no_defendido" | null;
 }
-interface RevisionPartida { observaciones: Record<string, ObservacionIA>; intentos?: Record<string, number> }
+// notaGeneral (Etapa 3): nota libre del docente por partida, en los dos modos (oral y escrito) — aparte de la
+// nota puntual de una observación corregida. La guarda guardarNotaPartidaArbitro y sale en el PDF del curso.
+interface RevisionPartida { observaciones: Record<string, ObservacionIA>; intentos?: Record<string, number>; notaGeneral?: string }
 interface RondasData {
   rondas: RondaDoc[];
   totales: TotalPartida[];
@@ -224,10 +234,20 @@ export default function ArbitroPanelPage() {
   const partidasRevisadasRef = useRef<Set<string>>(new Set());
   // Acción del docente sobre una observación puntual: qué ronda tiene abierto el formulario de «Corregir»
   // (con su borrador de nota), cuál se está guardando y el error de la última acción fallida, si la hay.
-  const [corregirAbierto, setCorregirAbierto] = useState<Record<string, string>>({}); // rondaId -> borrador de nota
+  // rondaId -> borrador { nota, veredicto } mientras el formulario de "Corregir" está abierto (Etapa 3: el
+  // veredicto del docente es obligatorio, el selector arranca sin ninguna opción preseleccionada).
+  const [corregirAbierto, setCorregirAbierto] = useState<Record<string, { nota: string; veredicto: "" | "completa" | "incompleta" | "no" }>>({});
   const [guardandoObservacion, setGuardandoObservacion] = useState<string | null>(null);
   const [errorObservacion, setErrorObservacion] = useState<{ id: string; msg: string } | null>(null);
   const [detalleRevisionAbierto, setDetalleRevisionAbierto] = useState<Record<string, boolean>>({}); // por partidaId
+  // Nota general del docente por partida (Etapa 3, en los dos modos): borrador mientras escribe — si todavía no
+  // tocó el campo, se muestra lo que ya está guardado en rondasData.revisiones[pid].notaGeneral. Se guarda sola
+  // al salir del campo (onBlur), no con un botón: así no se pierde si el docente imprime o cambia de sesión sin
+  // acordarse de guardar (ver guardarNotaGeneral e imprimirInforme).
+  const [notaGeneralBorrador, setNotaGeneralBorrador] = useState<Record<string, string>>({});
+  const [guardandoNotaGeneral, setGuardandoNotaGeneral] = useState<string | null>(null); // partidaId en vuelo
+  const [errorNotaGeneral, setErrorNotaGeneral] = useState<{ id: string; msg: string } | null>(null); // partidaId
+  const [notaGeneralGuardada, setNotaGeneralGuardada] = useState<Record<string, boolean>>({}); // partidaId -> se guardó con éxito el último cambio (se borra en cuanto el docente vuelve a tocar el campo)
 
   // Restaura document.title después de imprimir (o de cancelar el diálogo de impresión).
   useEffect(() => {
@@ -238,6 +258,22 @@ export default function ArbitroPanelPage() {
     window.addEventListener("afterprint", restaurar);
     return () => window.removeEventListener("afterprint", restaurar);
   }, []);
+
+  // Si queda algún borrador de nota general sin guardar (distinto de lo último guardado en
+  // rondasData.revisiones[pid].notaGeneral) en CUALQUIER partida de la sesión, que el navegador avise antes de
+  // cerrar la pestaña o salir de la página — para no perder lo escrito. Los navegadores modernos ignoran el
+  // texto que se le ponga a returnValue y muestran su propio diálogo, así que no hace falta un mensaje
+  // traducible. El efecto se reinscribe cada vez que cambia hayNotaGeneralSinGuardar: en cuanto se guarda (o se
+  // descarta el borrador), deja de haber nada sin guardar y el listener se saca solo.
+  const hayNotaGeneralSinGuardar = Object.keys(notaGeneralBorrador).some(
+    pid => notaGeneralBorrador[pid] !== (rondasData?.revisiones?.[pid]?.notaGeneral ?? "")
+  );
+  useEffect(() => {
+    if (!hayNotaGeneralSinGuardar) return;
+    const avisar = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", avisar);
+    return () => window.removeEventListener("beforeunload", avisar);
+  }, [hayNotaGeneralSinGuardar]);
 
   useEffect(() => {
     if (authLoading) return; // esperar a que Firebase Auth termine de restaurar la sesión
@@ -301,17 +337,24 @@ export default function ArbitroPanelPage() {
 
   // Acción del docente sobre UNA observación (confirmar / corregir con nota obligatoria / descartar). Al
   // terminar, se actualiza solo esa observación en el estado local (no hace falta volver a pedir todo).
-  const actuarSobreObservacion = async (partidaId: string, rondaId: string, accion: "confirmar" | "corregir" | "descartar", nota?: string) => {
+  const actuarSobreObservacion = async (partidaId: string, rondaId: string, accion: "confirmar" | "corregir" | "descartar", nota?: string, veredictoDocente?: string) => {
     if (!sesionSeleccionada) return;
     setGuardandoObservacion(rondaId);
     setErrorObservacion(null);
     try {
       const fn = httpsCallable(functions, "revisarObservacionArbitro");
-      const res = await fn({ sessionId: sesionSeleccionada.id, partidaId, rondaId, accion, nota }) as any;
-      const actualizada = res.data?.observacion as ObservacionIA;
+      await fn({ sessionId: sesionSeleccionada.id, partidaId, rondaId, accion, nota, veredictoDocente });
+      // Se vuelve a pedir TODO con listarRondasSesion (en vez de aplicar solo lo que devolvió esta función),
+      // igual que ya hace corregirRonda más abajo: comparacionEfectiva (Etapa 3) la calcula listarRondasSesion,
+      // no revisarObservacionArbitro, así que es la única forma de que el panel la muestre actualizada sin
+      // recalcularla por su cuenta (y sin arriesgarse a que diverja de lo que va a usar el PDF del curso).
+      const lista = httpsCallable(functions, "listarRondasSesion");
+      const res = await lista({ sessionId: sesionSeleccionada.id }) as any;
+      const datos = res.data as RondasData;
+      setRondasData(datos);
       setRevisionPartidas(prev => ({
         ...prev,
-        [partidaId]: { estado: "lista", observaciones: { ...(prev[partidaId]?.observaciones ?? {}), [rondaId]: actualizada } },
+        [partidaId]: { estado: "lista", observaciones: datos.revisiones?.[partidaId]?.observaciones ?? {} },
       }));
       setCorregirAbierto(prev => { const n = { ...prev }; delete n[rondaId]; return n; });
     } catch (e: any) {
@@ -325,6 +368,31 @@ export default function ArbitroPanelPage() {
       }
     }
     setGuardandoObservacion(null);
+  };
+
+  // Nota general del docente por partida (Etapa 3, en los dos modos): la guarda guardarNotaPartidaArbitro en
+  // sesiones_arbitro/{id}/revisiones/{partidaId}.notaGeneral y sale en el PDF del curso. Se vuelve a pedir todo
+  // con listarRondasSesion al guardar (mismo motivo que actuarSobreObservacion: una sola fuente de verdad).
+  const guardarNotaGeneral = async (pid: string) => {
+    if (!sesionSeleccionada) return;
+    const valorGuardado = rondasData?.revisiones?.[pid]?.notaGeneral ?? "";
+    const valor = notaGeneralBorrador[pid] ?? valorGuardado;
+    if (valor === valorGuardado) return; // sin cambios: el blur puede disparar esto sin que haya nada que guardar
+    setGuardandoNotaGeneral(pid);
+    setErrorNotaGeneral(null);
+    try {
+      const fn = httpsCallable(functions, "guardarNotaPartidaArbitro");
+      await fn({ sessionId: sesionSeleccionada.id, partidaId: pid, nota: valor });
+      const lista = httpsCallable(functions, "listarRondasSesion");
+      const res = await lista({ sessionId: sesionSeleccionada.id }) as any;
+      setRondasData(res.data as RondasData);
+      // Vuelve a reflejar lo guardado (ya normalizado por el servidor: espacios, saltos de línea, largo máximo).
+      setNotaGeneralBorrador(prev => { const n = { ...prev }; delete n[pid]; return n; });
+      setNotaGeneralGuardada(prev => ({ ...prev, [pid]: true }));
+    } catch (e: any) {
+      setErrorNotaGeneral({ id: pid, msg: textoErrorArbitro(e, ta, ta.revSaveError) });
+    }
+    setGuardandoNotaGeneral(null);
   };
 
   // Corrección del docente: cambia el reparto de una ronda con veredicto. La verifica el servidor
@@ -491,6 +559,12 @@ export default function ArbitroPanelPage() {
       <main style={{ minHeight: "100vh", backgroundColor: "#f8fafc", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
         <style>{`
           #panel-print-title { display: none; }
+          /* Etapa 3: la nota general es un <textarea> en pantalla (editable), pero un <textarea> imprime
+             CORTADO — solo lo que entra en su recuadro visible, no el texto completo. El campo de edición
+             lleva data-noprint (se oculta al imprimir, como el resto de los controles) y arb-print-only hace
+             lo inverso: invisible en pantalla siempre, visible SOLO al imprimir, para mostrar la nota guardada
+             como texto plano completo (ver el bloque de notaGeneral, más abajo). */
+          .arb-print-only { display: none; }
           @media print {
             [data-noprint] { display: none !important; }
             .arb-ind-panel { display: block !important; }
@@ -498,6 +572,7 @@ export default function ArbitroPanelPage() {
             .arb-chev { display: none; }
             #panel-print-title { display: block !important; margin-bottom: 16px; }
             body { background: white; }
+            .arb-print-only { display: block !important; }
             ${partidaParaImprimir ? `
             [data-partida-id]:not([data-partida-id="${partidaParaImprimir}"]) { display: none !important; }
             [data-informe-general] { display: none !important; }
@@ -821,6 +896,59 @@ export default function ArbitroPanelPage() {
                                 )}
                               </div>
                             )}
+                            {/* Etapa 3: nota general del docente por partida, en los DOS modos (oral y escrito) — aparte
+                                de la nota puntual de una observación corregida. Se guarda en
+                                revisiones/{partidaId}.notaGeneral (guardarNotaPartidaArbitro) y sale en el PDF del
+                                curso. Un docente ajeno (admin viendo la sesión) la ve pero no puede editarla
+                                (readOnly) — mismo criterio que corregir/confirmar/descartar.
+                                Se guarda SOLA al salir del campo (onBlur, y solo si el texto cambió respecto de lo
+                                guardado — ver el chequeo `valor === valorGuardado` al principio de
+                                guardarNotaGeneral), no con un botón. Además, si queda un borrador sin guardar en
+                                CUALQUIER partida de la sesión, un listener de beforeunload (más abajo) le avisa al
+                                docente antes de cerrar la pestaña o salir de la página.
+                                El textarea de edición lleva data-noprint — un <textarea> imprime cortado, no el
+                                texto completo — y lo que está escrito EN ESE MOMENTO (el borrador, no lo último
+                                guardado: así Ctrl+P imprime lo mismo que se ve en pantalla, sin depender de que el
+                                guardado en el servidor ya haya terminado) se repite aparte como texto plano (clase
+                                arb-print-only, ver el <style> de más arriba), que solo se ve al imprimir y solo si
+                                hay algo escrito. */}
+                            {(() => {
+                              const valorGuardado = rondasData?.revisiones?.[pid]?.notaGeneral ?? "";
+                              const valorActual = notaGeneralBorrador[pid] ?? valorGuardado;
+                              return (
+                                <div style={{ marginBottom: 10 }}>
+                                  <div data-noprint>
+                                    <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#334155" }} htmlFor={`nota-general-${pid}`}>{ta.revGeneralNoteLabel}</label>
+                                    <textarea id={`nota-general-${pid}`} rows={2} value={valorActual} placeholder={ta.revGeneralNotePlaceholder}
+                                      readOnly={!rondasData?.puedeCorregir}
+                                      onChange={e => {
+                                        setNotaGeneralBorrador(prev => ({ ...prev, [pid]: e.target.value }));
+                                        setNotaGeneralGuardada(prev => (prev[pid] ? { ...prev, [pid]: false } : prev));
+                                      }}
+                                      onBlur={() => { if (rondasData?.puedeCorregir) guardarNotaGeneral(pid); }}
+                                      style={{ display: "block", width: "100%", marginTop: 4, borderRadius: 8, border: "1px solid #cbd5e1", padding: "6px 8px", fontSize: 12, fontFamily: "inherit", resize: "vertical" }} />
+                                    {rondasData?.puedeCorregir && (
+                                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, flexWrap: "wrap", minHeight: 16 }}>
+                                        <p style={{ margin: 0, fontSize: 11, color: "#64748b" }}>{ta.revNoteGoesInCoursePdf}</p>
+                                        {guardandoNotaGeneral === pid ? (
+                                          <span style={{ fontSize: 11, color: "#64748b" }}>{ta.revGeneralNoteSaving}</span>
+                                        ) : errorNotaGeneral?.id === pid ? (
+                                          <span role="alert" style={{ fontSize: 11, color: "#dc2626" }}>⚠️ {errorNotaGeneral.msg}</span>
+                                        ) : notaGeneralGuardada[pid] ? (
+                                          <span style={{ fontSize: 11, color: "#16a34a" }}>✅ {ta.revGeneralNoteSaved}</span>
+                                        ) : null}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {valorActual && (
+                                    <div className="arb-print-only">
+                                      <strong>{ta.revGeneralNoteLabel}:</strong>
+                                      <div style={{ whiteSpace: "pre-wrap" }}>{valorActual}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                               {items.map(({ n, doc: r, reg }) => {
                                 const calif = (r?.calificacion ?? reg?.calificacion)!;
@@ -835,12 +963,17 @@ export default function ArbitroPanelPage() {
                                 // Revisión con IA (Etapa 2): observación de esta ronda, si la hay (solo aplica a rondas sin disputa en modo escrito).
                                 const obs = r && !fueAlArbitro ? obsPid[r.id] : undefined;
                                 const esMarcadaPendiente = !!obs && obs.comparacion !== "sin_observacion" && obs.estadoDocente === "pendiente";
+                                // Etapa 3: observación "corregida" sin veredictoDocente (dato legado, de antes de que
+                                // este campo existiera): comparacionEfectiva queda en null hasta que se complete, y
+                                // mientras tanto no entra al PDF del curso. Se destaca igual que una marcada pendiente.
+                                const necesitaCompletarVeredicto = !!obs && obs.estadoDocente === "corregida" && obs.comparacionEfectiva === null;
+                                const destacada = esMarcadaPendiente || necesitaCompletarVeredicto;
                                 // Etapa 2: esta ronda agotó los intentos automáticos de revisión sin que Gemini
                                 // devolviera un veredicto válido (ver noRevisablesPid, arriba). Nunca va a tener
                                 // observación propia: el docente la revisa a mano.
                                 const noRevisable = !!(r && !fueAlArbitro && !obs && r.noRevisable);
                                 return (
-                                  <div key={clave} data-testid={`ronda-${n}`} style={{ backgroundColor: "white", borderRadius: 10, padding: "10px 12px", border: `1px solid ${r?.correccion ? "#fcd34d" : esMarcadaPendiente ? "#f59e0b" : "#f1f5f9"}` }}>
+                                  <div key={clave} data-testid={`ronda-${n}`} style={{ backgroundColor: "white", borderRadius: 10, padding: "10px 12px", border: `1px solid ${r?.correccion ? "#fcd34d" : destacada ? "#f59e0b" : "#f1f5f9"}` }}>
                                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                                       <span style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{fillArbitro(ta.roundLabel, { n })}: {r?.equipoPregunta ?? reg?.equipoPregunta} → {r?.equipoResponde ?? reg?.equipoResponde}</span>
                                       <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -866,16 +999,69 @@ export default function ArbitroPanelPage() {
                                         marcada y pendiente, o si el docente abrió «Ver detalle» de la partida. Los botones de
                                         acción sí llevan data-noprint: eso es lo único que no tiene que salir en el informe impreso. */}
                                     {r && obs && (() => {
-                                      const abiertaEnPantalla = esMarcadaPendiente || !!detalleRevisionAbierto[pid];
+                                      const abiertaEnPantalla = destacada || !!detalleRevisionAbierto[pid];
+                                      // Formulario compartido de "Corregir" (Etapa 3: nota + veredicto del docente, obligatorio).
+                                      // Lo usan dos lugares: la observación pendiente real (de abajo) y, si hace falta completar
+                                      // el veredicto de una "corregida" legada, el aviso de arriba — misma acción del servidor
+                                      // ("corregir"), mismo formulario, para no duplicar la UI.
+                                      const formularioCorregir = (rondaId: string, notaInicial: string, etiquetaAbrir: string) => (
+                                        corregirAbierto[rondaId] === undefined ? (
+                                          <button type="button" disabled={guardandoObservacion === rondaId}
+                                            onClick={() => setCorregirAbierto(prev => ({ ...prev, [rondaId]: { nota: notaInicial, veredicto: "" } }))}
+                                            style={{ minHeight: 36, padding: "6px 12px", borderRadius: 8, border: "1px solid #cbd5e1", backgroundColor: "white", color: "#334155", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                                            {etiquetaAbrir}
+                                          </button>
+                                        ) : (
+                                          <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 240px" }}>
+                                            <label style={{ fontSize: 12, fontWeight: 700, color: "#475569" }} htmlFor={`veredicto-${rondaId}`}>{ta.revVerdictLabel}</label>
+                                            <select id={`veredicto-${rondaId}`} value={corregirAbierto[rondaId].veredicto}
+                                              onChange={e => setCorregirAbierto(prev => ({ ...prev, [rondaId]: { ...prev[rondaId], veredicto: e.target.value as "" | "completa" | "incompleta" | "no" } }))}
+                                              style={{ borderRadius: 8, border: "1px solid #cbd5e1", padding: "6px 8px", fontSize: 12, fontFamily: "inherit", backgroundColor: "white" }}>
+                                              <option value="">{ta.revVerdictChoose}</option>
+                                              {(["completa", "incompleta", "no"] as const).map(v => (
+                                                <option key={v} value={v}>{etiquetaCalificacion(v, ta)}</option>
+                                              ))}
+                                            </select>
+                                            <label style={{ fontSize: 12, fontWeight: 700, color: "#475569" }} htmlFor={`nota-${rondaId}`}>{ta.revNoteLabel}</label>
+                                            <textarea id={`nota-${rondaId}`} rows={2} value={corregirAbierto[rondaId].nota} placeholder={ta.revNotePlaceholder}
+                                              onChange={e => setCorregirAbierto(prev => ({ ...prev, [rondaId]: { ...prev[rondaId], nota: e.target.value } }))}
+                                              style={{ width: "100%", borderRadius: 8, border: "1px solid #cbd5e1", padding: "6px 8px", fontSize: 12, fontFamily: "inherit", resize: "vertical" }} />
+                                            <p style={{ margin: 0, fontSize: 11, color: "#64748b", fontWeight: 400 }}>{ta.revNoteGoesInCoursePdf}</p>
+                                            <div style={{ display: "flex", gap: 6 }}>
+                                              <button type="button" disabled={guardandoObservacion === rondaId || !corregirAbierto[rondaId].nota.trim() || !corregirAbierto[rondaId].veredicto}
+                                                onClick={() => actuarSobreObservacion(pid, rondaId, "corregir", corregirAbierto[rondaId].nota, corregirAbierto[rondaId].veredicto)}
+                                                style={{ minHeight: 36, padding: "6px 12px", borderRadius: 8, border: "none", backgroundColor: !corregirAbierto[rondaId].nota.trim() || !corregirAbierto[rondaId].veredicto || guardandoObservacion === rondaId ? "#94a3b8" : "#92400e", color: "white", fontWeight: 700, fontSize: 12, cursor: !corregirAbierto[rondaId].nota.trim() || !corregirAbierto[rondaId].veredicto || guardandoObservacion === rondaId ? "default" : "pointer" }}>
+                                                {guardandoObservacion === rondaId ? ta.revSaving : ta.revCorrect}
+                                              </button>
+                                              <button type="button" disabled={guardandoObservacion === rondaId}
+                                                onClick={() => setCorregirAbierto(prev => { const nn = { ...prev }; delete nn[rondaId]; return nn; })}
+                                                style={{ minHeight: 36, padding: "6px 12px", borderRadius: 8, border: "1px solid #cbd5e1", backgroundColor: "white", color: "#334155", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
+                                                {ta.revCancel}
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )
+                                      );
                                       return (
                                         <div className="arb-ind-panel" hidden={!abiertaEnPantalla}
-                                          style={{ display: abiertaEnPantalla ? "block" : "none", marginTop: 8, borderRadius: 8, padding: "8px 10px", fontSize: 12, lineHeight: 1.5, backgroundColor: esMarcadaPendiente ? "#fffbeb" : "#f8fafc", border: `1px solid ${esMarcadaPendiente ? "#fcd34d" : "#e2e8f0"}` }}>
+                                          style={{ display: abiertaEnPantalla ? "block" : "none", marginTop: 8, borderRadius: 8, padding: "8px 10px", fontSize: 12, lineHeight: 1.5, backgroundColor: destacada ? "#fffbeb" : "#f8fafc", border: `1px solid ${destacada ? "#fcd34d" : "#e2e8f0"}` }}>
                                           {obs.estadoDocente === "confirmada" ? (
                                             <div style={{ color: "#166534" }}>{ta.revStatusConfirmed}</div>
                                           ) : obs.estadoDocente === "corregida" ? (
                                             <>
                                               <div style={{ color: "#92400e" }}>{ta.revStatusCorrected}</div>
                                               {obs.notaDocente && <div style={{ marginTop: 2 }}><strong>{ta.revTeacherNoteLabel}:</strong> {obs.notaDocente}</div>}
+                                              {/* Etapa 3: dato legado (corregida antes de que el veredicto del docente fuera
+                                                  obligatorio, como la observación de YVBRKD) — no entra al PDF del curso hasta
+                                                  que se complete. Reusa el mismo formulario de "Corregir" (misma acción del
+                                                  servidor), con la nota ya cargada para no hacer que el docente la reescriba. */}
+                                              {necesitaCompletarVeredicto && rondasData?.puedeCorregir && r && (
+                                                <div data-noprint style={{ marginTop: 6 }}>
+                                                  <div style={{ color: "#92400e", fontWeight: 700, marginBottom: 4 }}>⚠️ {ta.revCompleteVerdictBanner}</div>
+                                                  {formularioCorregir(r.id, obs.notaDocente || "", ta.revCompleteVerdict)}
+                                                  {errorObservacion?.id === r.id && <div role="alert" style={{ marginTop: 6, color: "#dc2626" }}>⚠️ {errorObservacion.msg}</div>}
+                                                </div>
+                                              )}
                                             </>
                                           ) : obs.estadoDocente === "descartada" ? (
                                             <div style={{ color: "#64748b" }}>{ta.revStatusDiscarded}</div>
@@ -895,32 +1081,7 @@ export default function ArbitroPanelPage() {
                                                     style={{ minHeight: 36, padding: "6px 12px", borderRadius: 8, border: "1px solid #16a34a", backgroundColor: "white", color: "#166534", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
                                                     {ta.revConfirm}
                                                   </button>
-                                                  {corregirAbierto[r.id] === undefined ? (
-                                                    <button type="button" disabled={guardandoObservacion === r.id}
-                                                      onClick={() => setCorregirAbierto(prev => ({ ...prev, [r.id]: "" }))}
-                                                      style={{ minHeight: 36, padding: "6px 12px", borderRadius: 8, border: "1px solid #cbd5e1", backgroundColor: "white", color: "#334155", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                                                      {ta.revCorrect}
-                                                    </button>
-                                                  ) : (
-                                                    <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 240px" }}>
-                                                      <label style={{ fontSize: 12, fontWeight: 700, color: "#475569" }} htmlFor={`nota-${r.id}`}>{ta.revNoteLabel}</label>
-                                                      <textarea id={`nota-${r.id}`} rows={2} value={corregirAbierto[r.id]} placeholder={ta.revNotePlaceholder}
-                                                        onChange={e => setCorregirAbierto(prev => ({ ...prev, [r.id]: e.target.value }))}
-                                                        style={{ width: "100%", borderRadius: 8, border: "1px solid #cbd5e1", padding: "6px 8px", fontSize: 12, fontFamily: "inherit", resize: "vertical" }} />
-                                                      <div style={{ display: "flex", gap: 6 }}>
-                                                        <button type="button" disabled={guardandoObservacion === r.id || !corregirAbierto[r.id].trim()}
-                                                          onClick={() => actuarSobreObservacion(pid, r.id, "corregir", corregirAbierto[r.id])}
-                                                          style={{ minHeight: 36, padding: "6px 12px", borderRadius: 8, border: "none", backgroundColor: !corregirAbierto[r.id].trim() || guardandoObservacion === r.id ? "#94a3b8" : "#92400e", color: "white", fontWeight: 700, fontSize: 12, cursor: !corregirAbierto[r.id].trim() || guardandoObservacion === r.id ? "default" : "pointer" }}>
-                                                          {guardandoObservacion === r.id ? ta.revSaving : ta.revCorrect}
-                                                        </button>
-                                                        <button type="button" disabled={guardandoObservacion === r.id}
-                                                          onClick={() => setCorregirAbierto(prev => { const nn = { ...prev }; delete nn[r.id]; return nn; })}
-                                                          style={{ minHeight: 36, padding: "6px 12px", borderRadius: 8, border: "1px solid #cbd5e1", backgroundColor: "white", color: "#334155", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
-                                                          {ta.revCancel}
-                                                        </button>
-                                                      </div>
-                                                    </div>
-                                                  )}
+                                                  {formularioCorregir(r.id, "", ta.revCorrect)}
                                                   <button type="button" disabled={guardandoObservacion === r.id}
                                                     onClick={() => actuarSobreObservacion(pid, r.id, "descartar")}
                                                     style={{ minHeight: 36, padding: "6px 12px", borderRadius: 8, border: "1px solid #cbd5e1", backgroundColor: "white", color: "#64748b", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
