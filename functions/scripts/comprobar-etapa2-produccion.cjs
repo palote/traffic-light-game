@@ -111,8 +111,13 @@ function comprobarSesionEscrita(id, datos, rondas, revisiones) {
   c(`[${id}] sesión escrita: modoRespuesta normaliza a "escrita"`, modo === "escrita", `valor crudo: ${JSON.stringify(datos.modoRespuesta ?? null)}`);
 
   // ── 2) Rondas ──
-  const sinRespuesta = rondas.filter((r) => !r.tieneRespuesta);
-  c(`[${id}] todas las rondas tienen respuesta (${rondas.length} rondas)`, sinRespuesta.length === 0, `${sinRespuesta.length} sin respuesta: ${sinRespuesta.map((r) => r.id).join(", ")}`);
+  // "pasada" (el equipo pasó la pregunta) y "fuera_de_tema" quedan afuera: en esos dos casos el juego NUNCA
+  // guarda una respuesta (ver pasarPregunta/registrarFueraDeTema en ArbitroJuegoPage.tsx) — es el mismo criterio
+  // que ya usa rondasFaltantesParaRevisar para no pedirles revisión. Exigirles respuesta acá sería un falso
+  // positivo del script, no un problema real de los datos.
+  const debenTenerRespuesta = rondas.filter((r) => r.calificacion !== "pasada" && r.calificacion !== "fuera_de_tema");
+  const sinRespuesta = debenTenerRespuesta.filter((r) => !r.tieneRespuesta);
+  c(`[${id}] todas las rondas que corresponde tienen respuesta (${debenTenerRespuesta.length} de ${rondas.length}; se excluyen pasada/fuera_de_tema)`, sinRespuesta.length === 0, `${sinRespuesta.length} sin respuesta: ${sinRespuesta.map((r) => r.id).join(", ")}`);
 
   const sinDisputa = rondas.filter((r) => !r.tieneDisputa);
   const incompletas = sinDisputa.filter((r) => !r.tienePregunta || !r.calificacion);
