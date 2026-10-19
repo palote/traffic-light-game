@@ -15,7 +15,7 @@ import { resolverRondaOral } from "./arbitroReparto";
 import * as admin from "firebase-admin";
 import { buildArbitroPrompt, buildPromptPreguntaPropia, buildPromptConsignas, buildPromptConsigna, buildPromptInforme, normalizarAreaKey } from "./arbitroPrompt";
 import { normalizarIdiomaSesion, advertirIdiomaSalida } from "./arbitroIdioma";
-import { normalizarModoMetacognicion, normalizarModoRespuesta, sanearEquipoInforme } from "./arbitroIntegrantes";
+import { normalizarModoMetacognicion, normalizarModoRespuesta, normalizarVerTextoDuranteJuego, verTextoDuranteJuegoOIndefinido, sanearEquipoInforme } from "./arbitroIntegrantes";
 import { normalizarPreguntasMeta } from "./arbitroMetaPreguntas";
 import { validarEntradaRonda, construirRonda, idDeRonda, aplicarCorreccion, calcularTotales, OPCIONES_REPARTO, ID_RE, textoMultilinea } from "./arbitroRondas";
 import { rondasFaltantesParaRevisar, construirPromptRevision, parsearRevisionGemini, compararConOtroEquipo, comparacionEfectiva, esNoRevisable, VEREDICTOS_IA, MAX_NOTA_GENERAL_PARTIDA, type EstadoDocenteObservacion, type VeredictoIA } from "./arbitroRevision";
@@ -1338,7 +1338,7 @@ export const crearSesionArbitro = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 60 },
   async (request) => {
     try {
-      const { area, materia, nivel, anio, tema, subtema, ejercicio, duracion = "clase", tiempoPregunta, textoFuente, permitirPreguntasPropias, idioma, modoMetacognicion, preguntasMetacognicion, modoRespuesta } = request.data;
+      const { area, materia, nivel, anio, tema, subtema, ejercicio, duracion = "clase", tiempoPregunta, textoFuente, permitirPreguntasPropias, idioma, modoMetacognicion, preguntasMetacognicion, modoRespuesta, verTextoDuranteJuego } = request.data;
       if (!materia || !nivel || !anio || !tema) {
         throw new HttpsError("invalid-argument", "Faltan campos obligatorios: materia, nivel, año y tema", { motivo: "datos_incompletos" });
       }
@@ -1370,6 +1370,9 @@ export const crearSesionArbitro = onCall(
         // «Modo de respuesta»: 'oral' (por defecto, como siempre) o 'escrita' (cada equipo escribe su respuesta
         // y el informe las incluye todas, no solo las disputas).
         modoRespuesta: normalizarModoRespuesta(modoRespuesta),
+        // «Texto durante el juego»: false (por defecto) = sin el texto disponible durante la ronda; true = con
+        // el texto impreso. Solo tiene efecto si hay textoFuente; sin texto base, igual se guarda como false.
+        verTextoDuranteJuego: normalizarVerTextoDuranteJuego(verTextoDuranteJuego),
         docenteUid: request.auth?.uid ?? null,
         docenteEmail: request.auth?.token?.email ?? null,
       });
@@ -1412,6 +1415,7 @@ export const getSesionArbitro = onCall(
       modoMetacognicion: normalizarModoMetacognicion(data.modoMetacognicion), // las sesiones viejas no tienen el campo: 'grupal'
       preguntasMetacognicion: normalizarPreguntasMeta(data.preguntasMetacognicion), // las sesiones viejas no tienen el campo: [] (4 por defecto)
       modoRespuesta: normalizarModoRespuesta(data.modoRespuesta), // las sesiones viejas no tienen el campo: 'oral'
+      verTextoDuranteJuego: normalizarVerTextoDuranteJuego(data.verTextoDuranteJuego), // las sesiones viejas no tienen el campo: false
       expiresAt: data.expiresAt,
       docenteEmail: data.docenteEmail || "",
     };
@@ -2151,6 +2155,10 @@ export const listarRondasSesion = onCall(
       puedeCorregir: !!request.auth?.uid && request.auth.uid === session.docenteUid,
       opciones: OPCIONES_REPARTO,
       modoRespuesta: normalizarModoRespuesta(session.modoRespuesta), // para que el panel sepa cómo mostrar el informe
+      // boolean | undefined (NO normalizarVerTextoDuranteJuego, que colapsa "sin el campo" en false): el panel
+      // tiene que distinguir una sesión vieja (undefined, no muestra nada) de una que eligió "sin el texto"
+      // (false, sí muestra "Jugado sin el texto" — Pablo, 2026-10-19).
+      verTextoDuranteJuego: verTextoDuranteJuegoOIndefinido(session.verTextoDuranteJuego),
     };
   }
 );

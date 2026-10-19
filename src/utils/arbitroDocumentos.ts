@@ -4,7 +4,7 @@
 // todo sale de las claves `doc*` de es.ts / en.ts (en español, el resultado es idéntico al de antes de la etapa 3).
 import type { TranslationKeys } from "../i18n";
 import { nombreVisible } from "./arbitroNombres";
-import type { ModoMetacognicion } from "./arbitroIntegrantes";
+import type { ModoMetacognicion, ModoRespuesta } from "./arbitroIntegrantes";
 import { preguntasMeta } from "./arbitroMetaPreguntas";
 
 type Tx = TranslationKeys["arbitro"];
@@ -42,15 +42,19 @@ export function nombreArchivoInformeArbitro(juego: string, tema: string, equipos
   return partes.join("_") + sufijo;
 }
 
-/** Instrucciones para los alumnos que se proponen al crear la sesión. */
-export function instruccionesPorDefecto(tx: Tx, tema: string, modoMetacognicion: ModoMetacognicion = "grupal"): string {
+/**
+ * Instrucciones para los alumnos que se proponen al crear la sesión. A diferencia del acordeón "¿Cómo funciona?"
+ * (que se muestra antes de configurar la sesión y por eso queda neutro), esto se genera CON la sesión ya
+ * configurada: el paso 3 y el "antes de jugar" reflejan el modoRespuesta y el verTextoDuranteJuego reales.
+ */
+export function instruccionesPorDefecto(tx: Tx, tema: string, modoMetacognicion: ModoMetacognicion = "grupal", modoRespuesta: ModoRespuesta = "oral", verTextoDuranteJuego = false): string {
   return (
     `${llenar(tx.docInstrToday, { t: tema })}\n\n` +
-    `${tx.docInstrBefore}\n\n` +
+    `${verTextoDuranteJuego ? tx.docInstrBeforeConTexto : tx.docInstrBefore}\n\n` +
     `${tx.docInstrHow}\n` +
     `${tx.docInstrStep1}\n` +
     `${tx.docInstrStep2}\n` +
-    `${tx.docInstrStep3}\n` +
+    `${modoRespuesta === "escrita" ? tx.docInstrStep3Escrita : tx.docInstrStep3}\n` +
     `${tx.docInstrStep4}\n` +
     `${tx.rulesStep5Template}\n` +
     `${modoMetacognicion === "individual" ? tx.docInstrStep6Ind : tx.docInstrStep6}`

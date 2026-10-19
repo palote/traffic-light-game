@@ -8,7 +8,7 @@ module.exports = function (ta, { materia, tema, nivel, anio, instrucciones, ejer
     `📋 Cómo funciona:\n` +
     `1. Formen 2 equipos.\n` +
     `2. Entren al link de esta sesión desde el dispositivo de un integrante de cada equipo — ahí se juega toda la ronda.\n` +
-    `3. Un equipo le hace una pregunta oral al otro; el equipo que responde lo hace en voz alta.\n` +
+    `3. Un equipo le hace la pregunta al otro en voz alta; el equipo que responde contesta también en voz alta.\n` +
     `4. El equipo que preguntó califica la respuesta: completa (1 punto), incompleta (0.5) o incorrecta (0). El juego suma los puntos solo, automáticamente.\n` +
     `${ta.rulesStep5Template}\n` +
     `6. Al terminar, cada equipo completa la metacognición dentro del juego, que se manda al profesor.`

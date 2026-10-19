@@ -23,6 +23,23 @@ export function normalizarModoRespuesta(valor: unknown): ModoRespuesta {
   return valor === "escrita" ? "escrita" : "oral";
 }
 
+// «Texto durante el juego»: sin el texto (por defecto — leen el texto base antes de jugar, pero no lo tienen
+// disponible en pantalla ni impreso durante la ronda) o con el texto impreso (lo tienen a mano para citarlo
+// mientras juegan). Solo tiene sentido si hay texto base cargado; sin texto base, se guarda igual como `false`.
+export function normalizarVerTextoDuranteJuego(valor: unknown): boolean {
+  return valor === true;
+}
+
+/**
+ * Para el panel (encabezado del informe del docente y PDF del curso): a diferencia de
+ * normalizarVerTextoDuranteJuego (siempre boolean, para guardar/jugar), acá hace falta distinguir una sesión
+ * VIEJA que no tiene el campo (no mostrar nada) de una sesión nueva que eligió explícitamente "sin el texto"
+ * (false — sí hay que decir "Jugado sin el texto", porque cambia cómo se leen los resultados).
+ */
+export function verTextoDuranteJuegoOIndefinido(valor: unknown): boolean | undefined {
+  return typeof valor === "boolean" ? valor : undefined;
+}
+
 export function listaIntegrantes(valor: unknown): string[] {
   const crudos: unknown[] = Array.isArray(valor) ? valor : typeof valor === "string" ? valor.split(/[,;\n]+/) : [];
   return crudos

@@ -186,6 +186,7 @@ export default function ArbitroConfigPage() {
   const [duracion, setDuracion] = useState<"clase" | "dia">("clase");
   const [modoMetacognicion, setModoMetacognicion] = useState<ModoMetacognicion>("grupal"); // «Informe de metacognición»: grupal por defecto
   const [modoRespuesta, setModoRespuesta] = useState<ModoRespuesta>("oral"); // «Modo de respuesta»: oral por defecto
+  const [verTextoDuranteJuego, setVerTextoDuranteJuego] = useState(false); // «Texto durante el juego»: sin el texto por defecto
   // Preguntas de metacognición: null = las 4 por defecto del idioma de la sesión (sin tocar); array = lo que está editando el docente.
   const [preguntasMeta, setPreguntasMeta] = useState<string[] | null>(null);
   const [preguntasMetaAbierto, setPreguntasMetaAbierto] = useState(false); // acordeón cerrado por defecto
@@ -351,11 +352,11 @@ export default function ArbitroConfigPage() {
           </button>
         ))}
       </div>
-      {tipoPreguntas === "capacidades" && (
-        <p style={{ margin: "6px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.4 }}>
-          {ta.cfgTypeSkillsHint}
-        </p>
-      )}
+      <p style={{ margin: "6px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.4 }}>
+        {tipoPreguntas === "capacidades" ? ta.cfgTypeSkillsHint : tipoPreguntas === "mixta" ? ta.cfgTypeMixedHint : ta.cfgTypeMemoryHint}
+      </p>
+      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.4 }}>{ta.cfgTypeSuggestion}</p>
+      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.4, fontStyle: "italic" as const }}>{ta.cfgTypeReviewEdit}</p>
     </fieldset>
   );
 
@@ -422,12 +423,12 @@ export default function ArbitroConfigPage() {
 
     try {
       const fn = httpsCallable(getFunctions(app, "us-central1"), "crearSesionArbitro");
-      const res = await fn({ area: areaConfig?.key ?? area, materia, nivel, anio, tema: tema.trim(), subtema: "", ejercicio, duracion, tiempoPregunta, textoFuente, permitirPreguntasPropias, idioma: idiomaSesion, modoMetacognicion, preguntasMetacognicion: preguntasParaGuardar(), modoRespuesta }) as {
+      const res = await fn({ area: areaConfig?.key ?? area, materia, nivel, anio, tema: tema.trim(), subtema: "", ejercicio, duracion, tiempoPregunta, textoFuente, permitirPreguntasPropias, idioma: idiomaSesion, modoMetacognicion, preguntasMetacognicion: preguntasParaGuardar(), modoRespuesta, verTextoDuranteJuego: !!textoFuente.trim() && verTextoDuranteJuego }) as {
         data: { id: string; link: string; expiresAt: string };
       };
       setSesion(res.data);
       setIdiomaCreada(idiomaSesion);
-      setInstrucciones(instruccionesPorDefecto(arbitroDic(idiomaSesion), tema.trim(), modoMetacognicion));
+      setInstrucciones(instruccionesPorDefecto(arbitroDic(idiomaSesion), tema.trim(), modoMetacognicion, modoRespuesta, !!textoFuente.trim() && verTextoDuranteJuego));
       setInforme(informePorDefecto(arbitroDic(idiomaSesion), tema.trim()));
     } catch (err: any) {
       setError(fillArbitro(ta.cfgErrCreate, { detail: textoErrorArbitro(err, ta, err.message) }));
@@ -526,6 +527,16 @@ export default function ArbitroConfigPage() {
   };
 
   const canGenerate = !!area && !!materia && !!tema.trim() && !loading;
+
+  // Punto A.6: a diferencia de getFaltantes() (texto/preguntas, un aviso no bloqueante después de hacer clic),
+  // esto dice por qué el botón está DESHABILITADO — hoy quedaba gris sin ninguna explicación.
+  const camposFaltantesParaGenerar = (): string[] => {
+    const faltan: string[] = [];
+    if (!area) faltan.push(ta.cfgMissingAreaLabel);
+    if (!materia) faltan.push(ta.cfgMissingMateriaLabel);
+    if (!tema.trim()) faltan.push(ta.cfgMissingTemaLabel);
+    return faltan;
+  };
 
   return (
     <>
@@ -638,7 +649,7 @@ export default function ArbitroConfigPage() {
             <div role="status" style={srOnly}>{sesion ? ta.sessionCreatedAnnounce : generandoPreguntas ? ta.generatingQuestions : ""}</div>
 
             {/* Cómo funciona — acordeón */}
-            <ComoFuncionaAccordionES primary={accentColor} light={areaConfig ? areaConfig.light : "#f0f7ff"} border={areaConfig ? areaConfig.border : "#bfdbfe"} />
+            <ComoFuncionaAccordionES primary={accentColor} light={areaConfig ? areaConfig.light : "#f0f7ff"} border={areaConfig ? areaConfig.border : "#bfdbfe"} conTextoDuranteJuego={!!textoFuente.trim() && verTextoDuranteJuego} />
 
             {/* ── Área: línea compacta (área actual + «Cambiar»); las 4 opciones se despliegan al cambiar o si no hay área elegida ── */}
             <div>
@@ -792,6 +803,9 @@ export default function ArbitroConfigPage() {
                   placeholder={ta.cfgBaseTextPlaceholder}
                   style={{ ...inputStyle, resize: "vertical" as const, fontFamily: "inherit", lineHeight: 1.6 }}
                 />
+                {/* El placeholder desaparece apenas se escribe, así que la explicación de por qué conviene
+                    cargar un texto base va acá, visible siempre, y no dentro del placeholder. */}
+                <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgBaseTextHelp}</p>
                 {/* Aviso + contador de caracteres */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginTop: 6, gap: 12 }}>
                   <div style={{ fontSize: 12, color: PALETA.gris, lineHeight: 1.5, flex: 1 }}>
@@ -822,6 +836,32 @@ export default function ArbitroConfigPage() {
                     {textoFuente.length > 8000 ? ta.charsOverLimit : textoFuente.length > 6000 ? ta.charsNearLimit : ""}
                   </div>
                 </div>
+                {/* «Texto durante el juego» (solo si hay texto base cargado): sin el texto (por defecto, se guarda
+                    como false si no hay texto base) o con el texto impreso a mano durante la ronda. */}
+                {textoFuente.trim() && (
+                  <fieldset style={{ ...fieldsetReset, marginTop: 14 }}>
+                    <legend style={{ fontWeight: 700, fontSize: 13, color: "#1e293b", padding: 0, marginBottom: 6 }}>{ta.cfgTextLiveTitle}</legend>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+                      {([
+                        { id: false as const, label: ta.cfgTextLiveWithout },
+                        { id: true as const, label: ta.cfgTextLiveWith },
+                      ]).map(o => (
+                        <button key={String(o.id)} type="button" onClick={() => setVerTextoDuranteJuego(o.id)} aria-pressed={verTextoDuranteJuego === o.id}
+                          style={{
+                            padding: "10px 6px", borderRadius: 10, minHeight: 44,
+                            border: `2px solid ${verTextoDuranteJuego === o.id ? accentColor : "#e2e8f0"}`,
+                            backgroundColor: verTextoDuranteJuego === o.id ? `${accentColor}12` : "white",
+                            color: verTextoDuranteJuego === o.id ? accentColor : "#64748b",
+                            fontWeight: 700, fontSize: 13, cursor: "pointer",
+                          }}>
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgTextLiveWithoutDesc}</p>
+                    <p style={{ margin: "4px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgTextLiveWithDesc}</p>
+                  </fieldset>
+                )}
               </div>
             )}
 
@@ -849,9 +889,11 @@ export default function ArbitroConfigPage() {
                     <p style={{ margin: "0 0 6px", fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>
                       {ta.cfgQuestionsHint1}
                     </p>
-                    <p style={{ margin: "0 0 8px", fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>
-                      {ta.cfgQuestionsHint2}
-                    </p>
+                    {textoFuente.trim() && (
+                      <p style={{ margin: "0 0 8px", fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>
+                        {verTextoDuranteJuego ? ta.cfgQuestionsHint2ConTexto : ta.cfgQuestionsHint2}
+                      </p>
+                    )}
                     {renderSelectorTipoPreguntas()}
                     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" as const }}>
                       <label htmlFor="config-cantidad-preguntas-a" style={{ fontSize: 12, color: "#475569", fontWeight: 600 }}>{ta.cfgGenerateWithAI}</label>
@@ -886,6 +928,38 @@ export default function ArbitroConfigPage() {
               <fieldset style={fieldsetReset}>
                 <PasoLabel n={6} legend>{ta.cfgSessionOptions}</PasoLabel>
                 <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 10 }}>
+            {/* ── Modo de respuesta: oral (por defecto) o escrita — primero dentro del paso 6 ── */}
+            {tema.trim() && (
+              <fieldset style={fieldsetReset}>
+                <legend style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", padding: 0, marginBottom: 8 }}>{ta.cfgAnswerMode}</legend>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+                  {([
+                    { id: "oral" as const, label: ta.cfgAnswerOral },
+                    { id: "escrita" as const, label: ta.cfgAnswerWritten },
+                  ]).map(m => (
+                    <button key={m.id} type="button" onClick={() => setModoRespuesta(m.id)} aria-pressed={modoRespuesta === m.id}
+                      style={{
+                        padding: "10px 6px", borderRadius: 10, minHeight: 44,
+                        border: `2px solid ${modoRespuesta === m.id ? accentColor : "#e2e8f0"}`,
+                        backgroundColor: modoRespuesta === m.id ? `${accentColor}12` : "white",
+                        color: modoRespuesta === m.id ? accentColor : "#64748b",
+                        fontWeight: 700, fontSize: 13, cursor: "pointer",
+                      }}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+                {/* Las dos explicaciones se muestran siempre, elegido o no (antes solo se veía la del modo activo) */}
+                <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgAnswerOralHint}</p>
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgAnswerWrittenHint}</p>
+                {modoRespuesta === "escrita" && tiempoPregunta === 60 && (
+                  <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.ambar, lineHeight: 1.5 }}>
+                    ⚠️ {ta.cfgAnswerWrittenShortTimeWarning}
+                  </p>
+                )}
+              </fieldset>
+            )}
+
             {/* ── Duración ── */}
             {tema.trim() && (
               <fieldset style={fieldsetReset}>
@@ -979,6 +1053,9 @@ export default function ArbitroConfigPage() {
                   ))}
                 </div>
                 <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgMetaHint}</p>
+                {modoMetacognicion === "individual" && (
+                  <p style={{ margin: "4px 0 0", fontSize: 12, color: PALETA.ambar, lineHeight: 1.5 }}>⚠️ {ta.cfgMetaIndividualWarning}</p>
+                )}
                 {/* Preguntas de metacognición (avanzado): acordeón cerrado por defecto, dentro del informe */}
               <div style={{ border: "2px solid #e2e8f0", borderRadius: 12, overflow: "hidden", flexShrink: 0, marginTop: 12 }}>
                 <h3 style={{ margin: 0 }}>
@@ -1024,33 +1101,6 @@ export default function ArbitroConfigPage() {
                   </div>
                 </div>
               </div>
-              </fieldset>
-            )}
-
-            {/* ── Modo de respuesta: oral (por defecto) o escrita ── */}
-            {tema.trim() && (
-              <fieldset style={fieldsetReset}>
-                <legend style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", padding: 0, marginBottom: 8 }}>{ta.cfgAnswerMode}</legend>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
-                  {([
-                    { id: "oral" as const, label: ta.cfgAnswerOral },
-                    { id: "escrita" as const, label: ta.cfgAnswerWritten },
-                  ]).map(m => (
-                    <button key={m.id} type="button" onClick={() => setModoRespuesta(m.id)} aria-pressed={modoRespuesta === m.id}
-                      style={{
-                        padding: "10px 6px", borderRadius: 10, minHeight: 44,
-                        border: `2px solid ${modoRespuesta === m.id ? accentColor : "#e2e8f0"}`,
-                        backgroundColor: modoRespuesta === m.id ? `${accentColor}12` : "white",
-                        color: modoRespuesta === m.id ? accentColor : "#64748b",
-                        fontWeight: 700, fontSize: 13, cursor: "pointer",
-                      }}>
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-                <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>
-                  {modoRespuesta === "escrita" ? ta.cfgAnswerWrittenHint : ta.cfgAnswerOralHint}
-                </p>
               </fieldset>
             )}
 
@@ -1180,15 +1230,26 @@ export default function ArbitroConfigPage() {
               )}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <button onClick={volverAlArbitro} style={btnSecondary}>{ta.jgBack}</button>
-                <button onClick={() => handleGenerar()} disabled={!canGenerate} style={{
-                  padding: "12px 24px", fontSize: 14, fontWeight: 700, borderRadius: 10, border: "none",
-                  background: canGenerate ? headerGrad : PALETA.gris,
-                  color: "white", cursor: canGenerate ? "pointer" : "not-allowed",
-                  minWidth: 200, opacity: canGenerate ? 1 : 0.7,
-                }}>
-                  {loading ? ta.cfgCreating : user ? ta.cfgGenerateSession : ta.cfgLoginAndGenerate}
-                </button>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                  <button onClick={() => handleGenerar()} disabled={!canGenerate} style={{
+                    padding: "12px 24px", fontSize: 14, fontWeight: 700, borderRadius: 10, border: "none",
+                    background: canGenerate ? headerGrad : PALETA.gris,
+                    color: "white", cursor: canGenerate ? "pointer" : "not-allowed",
+                    minWidth: 200, opacity: canGenerate ? 1 : 0.7,
+                  }}>
+                    {loading ? ta.cfgCreating : user ? ta.cfgGenerateSession : ta.cfgLoginAndGenerate}
+                  </button>
+                  {!canGenerate && !loading && camposFaltantesParaGenerar().length > 0 && (
+                    <p style={{ margin: 0, fontSize: 12, color: PALETA.rojo, fontWeight: 600 }}>
+                      {ta.cfgMissingToGenerate(camposFaltantesParaGenerar().join(", "))}
+                    </p>
+                  )}
+                </div>
               </div>
+              {/* A.8: recordatorio de que el puntaje del juego es formativo, no una calificación */}
+              <p style={{ margin: "10px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5, textAlign: "right" as const }}>
+                {ta.cfgFormativeNote}
+              </p>
             </div>
           )}
         </div>
@@ -1413,11 +1474,11 @@ const pageStyle: React.CSSProperties = { minHeight: "100vh", background: "transp
 const cardStyle: React.CSSProperties = { backgroundColor: "white", borderRadius: 20, width: "100%", maxWidth: 700, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", overflow: "hidden", display: "flex", flexDirection: "column" };
 // ─── ComoFuncionaAccordionES ───────────────────────────────────────────────────
 
-function ComoFuncionaAccordionES({ primary, light, border }: { primary: string; light: string; border: string }) {
+function ComoFuncionaAccordionES({ primary, light, border, conTextoDuranteJuego }: { primary: string; light: string; border: string; conTextoDuranteJuego?: boolean }) {
   const ta = useArbitroT();
   const [open, setOpen] = useState(false);
   const etapas = [
-    { numero: "1", titulo: ta.cfgHow1T, quien: ta.cfgHow1W, descripcion: ta.cfgHow1D },
+    { numero: "1", titulo: ta.cfgHow1T, quien: ta.cfgHow1W, descripcion: conTextoDuranteJuego ? ta.cfgHow1DConTexto : ta.cfgHow1D },
     { numero: "2", titulo: ta.cfgHow2T, quien: ta.cfgHow2W, descripcion: ta.cfgHow2D },
     { numero: "3", titulo: ta.cfgHow3T, quien: ta.cfgHow3W, descripcion: ta.cfgHow3D },
     { numero: "4", titulo: ta.cfgHow4T, quien: ta.cfgHow4W, descripcion: ta.cfgHow4D },

@@ -144,6 +144,9 @@ interface RondasData {
   resumen: { rondasConVeredicto: number; rondasCorregidas: number };
   puedeCorregir: boolean;
   modoRespuesta?: string; // 'oral' | 'escrita'; las sesiones viejas no lo traen (= 'oral')
+  // Etapa A.3: boolean solo si la sesión tiene el campo guardado (true/false según lo que eligió el docente);
+  // undefined en una sesión vieja de antes de este cambio — el panel no muestra nada en ese caso.
+  verTextoDuranteJuego?: boolean;
   revisiones?: Record<string, RevisionPartida>; // por partidaId (Etapa 2)
   // Por partida, cuántas rondas todavía faltan revisar (lo calcula listarRondasSesion con la MISMA función que
   // usa revisarPartidaArbitro): el panel solo mira este número, no repite el filtro del servidor.
@@ -680,6 +683,13 @@ export default function ArbitroPanelPage() {
             {nivelDe(sesionSeleccionada.nivel)} · {sesionSeleccionada.anio} ·{" "}
             {new Date(totalPartidaIdentificada?.creadoEn || sesionSeleccionada.creadoEn).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" })}
           </p>
+          {/* Etapa A.3: se muestra en los dos casos (cambia cómo se leen los resultados — Pablo, 2026-10-19),
+              pero NO en una sesión vieja sin el campo guardado (verTextoDuranteJuego === undefined). */}
+          {rondasData?.verTextoDuranteJuego !== undefined && (
+            <p style={{ margin: "4px 0 0", fontSize: 11, color: "#64748b" }}>
+              {rondasData.verTextoDuranteJuego ? ta.panJugadoConTexto : ta.panJugadoSinTexto}
+            </p>
+          )}
         </div>
         {/* Encabezado del PDF del curso (Etapa 3): mismo contenido que el de arriba (equipos, nivel, año, fecha
             de la PARTIDA), pero armado con txCurso — el idioma de la sesión — y con el locale de ESE idioma para
