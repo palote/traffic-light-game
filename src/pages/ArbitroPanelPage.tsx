@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { normalizarModoRespuesta, textoIntegrantes } from "../utils/arbitroIntegrantes";
 import { nombreArchivoInformeArbitro } from "../utils/arbitroDocumentos";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { useArbitroT, useFormatoPuntos, fillArbitro, useLocaleArbitro, useTituloPagina, LanguageSelector, IDIOMAS_ARBITRO } from "../i18n";
+import { useArbitroT, useFormatoPuntos, fillArbitro, useLocaleArbitro, useTituloPagina, LanguageSelector, IDIOMAS_ARBITRO, arbitroDic } from "../i18n";
+import { localeDeIdioma } from "../utils/idiomaSesion";
 import { etiquetaCalificacion } from "../utils/arbitroEtiquetas";
 import { nombreVisible } from "../utils/arbitroNombres";
 import { esIaNoDisponible, motivoDeError, textoErrorArbitro } from "../utils/arbitroErrores";
@@ -11,7 +12,7 @@ import { app } from "../firebase.config";
 import { useAuth } from "../contexts/AuthContext";
 import { PALETA } from "../utils/arbitroPalette";
 import { coloresArea } from "../utils/arbitroAreas";
-import { DialogoEnPagina, fieldsetReset, legendReset, srOnly } from "../utils/arbitroA11y";
+import { DialogoEnPagina, ModalDialogo, fieldsetReset, legendReset, srOnly } from "../utils/arbitroA11y";
 
 const ADMIN_UID = "P2lU12xoCxMkZ0AdZdMoGGksJ5o1";
 
@@ -28,6 +29,10 @@ interface SesionResumen {
   partidasCount?: number;
   textoFuente?: string;
   docenteUid?: string;
+  // Idioma en el que se jugó la sesión ('es' | 'en'; las sesiones viejas no lo traen = 'es'). listarSesionesDocente
+  // ya lo manda (spread de d.data()); el PDF del curso (Etapa 3) lo necesita para armarse en ese idioma, no en el
+  // del panel — ver txCurso, más abajo.
+  idioma?: string;
 }
 
 // Coincide EXACTAMENTE con el JSON que devuelve generarInformeSesion en
@@ -183,6 +188,11 @@ interface InformeSesion {
 // Los colores por área viven en utils/arbitroPalette.ts (clave corta); las sesiones
 // viejas guardaron el nombre completo y coloresArea() también lo acepta.
 
+// Ícono de cada calificación (no se traduce): lo usa el badge del panel (ver badgeCalificacion, hardcodeado al
+// idioma del panel) y la vista del PDF del curso (Etapa 3), que arma sus propias etiquetas en el idioma de la
+// SESIÓN con etiquetaCalificacion(calif, txCurso) pero reutiliza este mismo ícono.
+const ICONO_CALIFICACION: Record<string, string> = { completa: "✅", incompleta: "⚡", pasada: "⏭️", fuera_de_tema: "🚫", no: "❌" };
+
 // Colores del nivel de debate (el texto sale del diccionario, ver nivelEtiqueta).
 const NIVEL_BADGE: Record<string, { color: string; bg: string }> = {
   superficial: { color: "#92400e", bg: "#fef3c7" },
@@ -248,12 +258,21 @@ export default function ArbitroPanelPage() {
   const [guardandoNotaGeneral, setGuardandoNotaGeneral] = useState<string | null>(null); // partidaId en vuelo
   const [errorNotaGeneral, setErrorNotaGeneral] = useState<{ id: string; msg: string } | null>(null); // partidaId
   const [notaGeneralGuardada, setNotaGeneralGuardada] = useState<Record<string, boolean>>({}); // partidaId -> se guardó con éxito el último cambio (se borra en cuanto el docente vuelve a tocar el campo)
+  // PDF del curso (Etapa 3, plan a/c/d/e/f): además del informe del docente (arriba), un PDF por partida en el
+  // idioma de la SESIÓN, para el curso. No escribe nada en Firestore — arma otra vista de lectura con lo que ya
+  // trae rondasData (ver generarPdfCurso y el bloque .arb-curso-pdf, más abajo). modoImprimirCurso distingue esta
+  // impresión de la del docente (misma mecánica de partidaParaImprimir + window.print(), pero con CSS y
+  // contenido propios). avisoPendientesCurso guarda la partida y la cantidad de observaciones sin revisar
+  // cuando hace falta confirmar antes de generar (si no hay ninguna pendiente, se genera directo).
+  const [modoImprimirCurso, setModoImprimirCurso] = useState(false);
+  const [avisoPendientesCurso, setAvisoPendientesCurso] = useState<{ pid: string; cantidad: number } | null>(null);
 
   // Restaura document.title después de imprimir (o de cancelar el diálogo de impresión).
   useEffect(() => {
     const restaurar = () => {
       if (tituloAntesDeImprimir.current !== null) { document.title = tituloAntesDeImprimir.current; tituloAntesDeImprimir.current = null; }
       setPartidaParaImprimir(null);
+      setModoImprimirCurso(false);
     };
     window.addEventListener("afterprint", restaurar);
     return () => window.removeEventListener("afterprint", restaurar);
@@ -547,11 +566,40 @@ export default function ArbitroPanelPage() {
     requestAnimationFrame(() => window.print());
   };
 
+  // PDF del curso de UNA partida (Etapa 3): mismo mecanismo que imprimirInforme (título + partidaParaImprimir +
+  // window.print()), pero además prende modoImprimirCurso, que en el <style> de abajo cambia qué se ve al
+  // imprimir — la vista del docente queda afuera (arb-doc-print-only) y aparece la vista del curso
+  // (arb-curso-pdf), armada en el idioma de la SESIÓN, no el del panel.
+  const generarPdfCurso = (pid: string) => {
+    if (!sesionSeleccionada) return;
+    const tp = totalDePartida(pid);
+    const equipos = tp ? tp.equipos.map(e => e.nombre) : null;
+    const fecha = tp?.creadoEn || sesionSeleccionada.creadoEn;
+    // Sufijo para no pisar el archivo del informe del docente de la misma partida (mismo encabezado y nombre
+    // base, como pidió Pablo, pero no puede ser EXACTAMENTE el mismo nombre si se descargan los dos).
+    tituloAntesDeImprimir.current = document.title;
+    document.title = nombreArchivoInformeArbitro(txCurso.panPdfJuego, sesionSeleccionada.tema, equipos, fecha, `_${txCurso.panPdfCourseSuffix}`);
+    setModoImprimirCurso(true);
+    setPartidaParaImprimir(pid);
+    requestAnimationFrame(() => window.print());
+  };
+
+  // Si hay observaciones sin revisar, avisa cuántas son antes de generar (plan f): no van a salir en el PDF.
+  const pedirPdfCurso = (pid: string, pendientes: number) => {
+    if (pendientes > 0) { setAvisoPendientesCurso({ pid, cantidad: pendientes }); return; }
+    generarPdfCurso(pid);
+  };
+
   const colors = sesionSeleccionada
     ? coloresArea(sesionSeleccionada.area)
     : coloresArea(null);
   const materiaDe = (m: string) => nombreVisible(ta.materiaNames, m);
   const nivelDe = (n: string) => nombreVisible(ta.levelNames, n);
+  // Diccionario del PDF del curso (Etapa 3): el idioma de la SESIÓN, no el del panel (un docente con la interfaz
+  // en español puede haber jugado la sesión en inglés, y la versión para el curso tiene que salir en inglés).
+  const txCurso = arbitroDic(sesionSeleccionada?.idioma);
+  const materiaDeCurso = (m: string) => nombreVisible(txCurso.materiaNames, m);
+  const nivelDeCurso = (n: string) => nombreVisible(txCurso.levelNames, n);
 
   // ── Vista detalle de sesión ─────────────────────────────────────────────
   if (sesionSeleccionada) {
@@ -565,6 +613,15 @@ export default function ArbitroPanelPage() {
              lo inverso: invisible en pantalla siempre, visible SOLO al imprimir, para mostrar la nota guardada
              como texto plano completo (ver el bloque de notaGeneral, más abajo). */
           .arb-print-only { display: none; }
+          /* PDF del curso (Etapa 3, plan a/c/d/e/f): además del informe del docente de arriba, un PDF por
+             partida para el curso, en el idioma de la SESIÓN — otra vista, no una traducción de la misma.
+             #panel-print-title-curso y .arb-curso-pdf viven siempre en el DOM (armados con txCurso) pero
+             ocultos; .arb-doc-print-only marca lo que es SOLO del informe del docente (el encabezado normal,
+             la fila de "Partida N" con los totales, y toda la lista de rondas tal como la ve el docente). Al
+             imprimir en modo curso (modoImprimirCurso) se invierte cuál de los dos juegos de bloques se ve —
+             nunca los dos a la vez — ver el bloque condicional al final de este @media print. */
+          #panel-print-title-curso { display: none; }
+          .arb-curso-pdf { display: none; }
           @media print {
             [data-noprint] { display: none !important; }
             .arb-ind-panel { display: block !important; }
@@ -576,6 +633,14 @@ export default function ArbitroPanelPage() {
             ${partidaParaImprimir ? `
             [data-partida-id]:not([data-partida-id="${partidaParaImprimir}"]) { display: none !important; }
             [data-informe-general] { display: none !important; }
+            ` : ""}
+            ${modoImprimirCurso ? `
+            #panel-print-title { display: none !important; }
+            .arb-print-only { display: none !important; }
+            .arb-ind-panel { display: none !important; }
+            .arb-doc-print-only { display: none !important; }
+            #panel-print-title-curso { display: block !important; margin-bottom: 16px; }
+            .arb-curso-pdf { display: block !important; }
             ` : ""}
           }
         `}</style>
@@ -614,6 +679,24 @@ export default function ArbitroPanelPage() {
           <p style={{ margin: "4px 0 0", fontSize: 12, color: "#475569" }}>
             {nivelDe(sesionSeleccionada.nivel)} · {sesionSeleccionada.anio} ·{" "}
             {new Date(totalPartidaIdentificada?.creadoEn || sesionSeleccionada.creadoEn).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" })}
+          </p>
+        </div>
+        {/* Encabezado del PDF del curso (Etapa 3): mismo contenido que el de arriba (equipos, nivel, año, fecha
+            de la PARTIDA), pero armado con txCurso — el idioma de la sesión — y con el locale de ESE idioma para
+            la fecha, no el del panel. Solo se ve en modoImprimirCurso (ver el <style> de más arriba); siempre
+            imprime una sola partida (partidaParaImprimir viene seteado desde generarPdfCurso), así que
+            equiposIdentificados/totalPartidaIdentificada (ya calculados arriba a partir de partidaParaImprimir)
+            valen igual acá. */}
+        <div id="panel-print-title-curso">
+          <p style={{ margin: "0 0 2px", fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase" as const, letterSpacing: "0.4px" }}>{txCurso.infTitle}</p>
+          <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 900, color: "#1e293b" }}>⚖️ {materiaDeCurso(sesionSeleccionada.materia)}</h1>
+          <p style={{ margin: 0, fontSize: 13, color: "#1e293b" }}>{sesionSeleccionada.tema}</p>
+          {equiposIdentificados && (
+            <p style={{ margin: "4px 0 0", fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{equiposIdentificados.join(" vs ")}</p>
+          )}
+          <p style={{ margin: "4px 0 0", fontSize: 12, color: "#475569" }}>
+            {nivelDeCurso(sesionSeleccionada.nivel)} · {sesionSeleccionada.anio} ·{" "}
+            {new Date(totalPartidaIdentificada?.creadoEn || sesionSeleccionada.creadoEn).toLocaleDateString(localeDeIdioma(sesionSeleccionada.idioma), { day: "numeric", month: "long", year: "numeric" })}
           </p>
         </div>
 
@@ -849,9 +932,17 @@ export default function ArbitroPanelPage() {
                           const fueAlArbitroItem = !!(r.disputa || r.fueAlArbitro || reg?.fueAlArbitro);
                           return !fueAlArbitroItem && !!r.noRevisable && !obsPid[r.id];
                         });
+                        // Punto (f) del plan de Etapa 3: para el PDF del curso, "pendiente" es tanto lo que el
+                        // docente nunca tocó (marcadasPendientes, de arriba) como una "corregida" a la que
+                        // todavía le falta el veredicto (necesitaCompletarVeredicto, por ronda) — ninguna de
+                        // las dos tiene un resultado final, así que ninguna puede entrar al PDF del curso.
+                        const pendientesParaCurso = obsEntries.filter(([, o]) =>
+                          o.comparacion !== "sin_observacion" &&
+                          (o.estadoDocente === "pendiente" || (o.estadoDocente === "corregida" && o.comparacionEfectiva == null))
+                        ).length;
                         return (
                           <div key={pid} data-partida-id={pid} style={{ border: "1px solid #e2e8f0", borderRadius: 12, padding: 14, backgroundColor: "#fafafa" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                            <div className="arb-doc-print-only" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
                               <h3 style={{ margin: 0, fontSize: 12, fontWeight: 800, color: "white", backgroundColor: "#3730a3", borderRadius: 20, padding: "2px 10px" }}>{fillArbitro(ta.gameN, { n: numero })}</h3>
                               {tot && (
                                 <span style={{ fontSize: 12, color: "#475569" }} data-testid="partida-totales">
@@ -866,6 +957,10 @@ export default function ArbitroPanelPage() {
                                   {ta.panPrintThisGame}
                                 </button>
                               )}
+                              <button type="button" data-noprint onClick={() => pedirPdfCurso(pid, pendientesParaCurso)}
+                                style={{ marginLeft: informe ? 0 : "auto", minHeight: 32, padding: "4px 10px", borderRadius: 8, border: "1px solid #cbd5e1", backgroundColor: "white", color: "#334155", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
+                                {ta.panGenerateCoursePdf}
+                              </button>
                             </div>
                             {modoEscritaSesion && (
                               <div data-noprint style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10, fontSize: 12 }}>
@@ -949,7 +1044,7 @@ export default function ArbitroPanelPage() {
                                 </div>
                               );
                             })()}
-                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            <div className="arb-doc-print-only" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                               {items.map(({ n, doc: r, reg }) => {
                                 const calif = (r?.calificacion ?? reg?.calificacion)!;
                                 const b = badgeCalificacion(calif);
@@ -1050,6 +1145,7 @@ export default function ArbitroPanelPage() {
                                           ) : obs.estadoDocente === "corregida" ? (
                                             <>
                                               <div style={{ color: "#92400e" }}>{ta.revStatusCorrected}</div>
+                                              {obs.veredictoDocente && <div style={{ marginTop: 2 }}><strong>{ta.revTeacherVerdictLabel}:</strong> {etiquetaCalificacion(obs.veredictoDocente, ta)}</div>}
                                               {obs.notaDocente && <div style={{ marginTop: 2 }}><strong>{ta.revTeacherNoteLabel}:</strong> {obs.notaDocente}</div>}
                                               {/* Etapa 3: dato legado (corregida antes de que el veredicto del docente fuera
                                                   obligatorio, como la observación de YVBRKD) — no entra al PDF del curso hasta
@@ -1182,6 +1278,96 @@ export default function ArbitroPanelPage() {
                                   </div>
                                 );
                               })}
+                            </div>
+                            {/* PDF del curso (Etapa 3, plan a/c/d/e/f): vista aparte, en el idioma de la SESIÓN
+                                (txCurso), que reemplaza — nunca convive con — la vista de arriba al imprimir en
+                                modoImprimirCurso (ver generarPdfCurso y el <style> de más arriba). Mismo
+                                documento en los dos modos: todas las preguntas y, en las disputas, la
+                                explicación del árbitro; en modo escrito se suman las respuestas y las
+                                observaciones ya revisadas por el docente que siguen siendo una discrepancia
+                                real (comparacionEfectiva), con su nota — las pendientes y las corregidas sin
+                                veredicto NUNCA entran (ver pendientesParaCurso, arriba, que avisa cuántas son
+                                antes de generar). Sin integrantes ni metacognición (plan d): solo equipos. */}
+                            <div className="arb-curso-pdf">
+                              {items.map(({ n, doc: r, reg }) => {
+                                if (!r) return null; // sin documento de ronda (solo informes.registros, de sesiones viejas): no hay bastante para listar acá
+                                const fueAlArbitroItem = !!(r.disputa || r.fueAlArbitro || reg?.fueAlArbitro);
+                                const obs = !fueAlArbitroItem ? obsPid[r.id] : undefined;
+                                // Solo un resultado FINAL entra: confirmada, o corregida con veredicto ya
+                                // completo. comparacionEfectiva es la fuente de verdad para "corregida" (null =
+                                // todavía sin veredicto, no entra) y coincide con `comparacion` para el resto de
+                                // los estados (ver el comentario de ObservacionIA, arriba).
+                                const comparacionFinal = obs && (obs.estadoDocente === "confirmada" || (obs.estadoDocente === "corregida" && obs.comparacionEfectiva != null))
+                                  ? (obs.comparacionEfectiva ?? obs.comparacion)
+                                  : "sin_observacion";
+                                const pregunta = r.pregunta || reg?.pregunta;
+                                const calif = r.calificacion ?? reg?.calificacion;
+                                return (
+                                  <div key={n} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #e2e8f0" }}>
+                                    <div style={{ fontWeight: 700, fontSize: 13 }}>
+                                      {fillArbitro(txCurso.roundLabel, { n })}: {r.equipoPregunta} → {r.equipoResponde}
+                                      {calif && <span style={{ marginLeft: 8, fontWeight: 600 }}>{ICONO_CALIFICACION[calif] ?? ""} {etiquetaCalificacion(calif, txCurso)}</span>}
+                                    </div>
+                                    {pregunta && <div style={{ marginTop: 4, fontSize: 13, lineHeight: 1.5 }}>{pregunta}</div>}
+                                    {modoEscritaSesion && r.respuesta && (
+                                      <div style={{ marginTop: 4, fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                                        <strong style={{ whiteSpace: "normal" }}>{txCurso.panAnswerLabel}</strong> {r.respuesta}
+                                      </div>
+                                    )}
+                                    {fueAlArbitroItem && (
+                                      <div style={{ marginTop: 6, fontSize: 12, color: "#7c3aed", backgroundColor: "#f5f3ff", borderRadius: 6, padding: "6px 10px", lineHeight: 1.5 }}>
+                                        <strong>{txCurso.panWentToReferee}</strong>
+                                        {r.disputa ? (
+                                          <>
+                                            {r.disputa.veredicto && <div style={{ marginTop: 2 }}><strong>{txCurso.verdictLabel}:</strong> {r.disputa.veredicto}</div>}
+                                            {r.disputa.explicacion && <div style={{ marginTop: 2 }}><strong>{txCurso.explanationLabel}:</strong> {r.disputa.explicacion}</div>}
+                                          </>
+                                        ) : (
+                                          reg?.veredictoArbitro && <div style={{ marginTop: 2 }}><strong>{txCurso.explanationLabel}:</strong> {reg.veredictoArbitro}</div>
+                                        )}
+                                        {/* Ajuste pedido (4): si el docente corrigió el REPARTO de puntos de esta disputa
+                                            (r.correccion), decirlo en una frase — sin números, el PDF del curso no lleva
+                                            puntajes. */}
+                                        {r.correccion && <div style={{ marginTop: 4, fontStyle: "italic" }}>{txCurso.revRefereeRulingCorrected}</div>}
+                                      </div>
+                                    )}
+                                    {comparacionFinal !== "sin_observacion" && obs && (
+                                      <div style={{ marginTop: 6, fontSize: 12, backgroundColor: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 6, padding: "6px 10px", lineHeight: 1.5 }}>
+                                        <div style={{ fontWeight: 700, color: "#92400e" }}>
+                                          {comparacionFinal === "error_no_detectado" ? txCurso.revComparisonErrorNotCaught : txCurso.revComparisonNotDefended}
+                                        </div>
+                                        {/* Ajuste pedido (2): sin la calificación que dio el otro equipo, "error no
+                                            detectado"/"acierto no defendido" no se entienden. */}
+                                        {calif && <div style={{ marginTop: 2 }}><strong>{txCurso.revGradedAsLabel}:</strong> {etiquetaCalificacion(calif, txCurso)}</div>}
+                                        {/* Ajuste pedido (1): confirmada = el docente hizo suya la explicación de la IA
+                                            (plan b); corregida = veredicto del docente, sin la explicación de la IA. La
+                                            nota del docente va en las dos, si la hay. */}
+                                        {obs.estadoDocente === "confirmada" && obs.explicacionIA && (
+                                          <div style={{ marginTop: 2 }}><strong>{txCurso.revAiExplanationLabel}:</strong> {obs.explicacionIA}</div>
+                                        )}
+                                        {obs.estadoDocente === "corregida" && obs.veredictoDocente && (
+                                          <div style={{ marginTop: 2 }}><strong>{txCurso.revTeacherVerdictLabel}:</strong> {etiquetaCalificacion(obs.veredictoDocente, txCurso)}</div>
+                                        )}
+                                        {obs.notaDocente && <div style={{ marginTop: 2 }}><strong>{txCurso.revTeacherNoteLabel}:</strong> {obs.notaDocente}</div>}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                              {(() => {
+                                // Ajuste pedido (3): el PDF del curso tiene que mostrar lo que está escrito en el
+                                // campo EN ESE MOMENTO, no lo último guardado — mismo motivo que en el PDF del
+                                // docente (ver valorActual, arriba): al apretar el botón, el campo pierde el foco y
+                                // dispara el guardado, pero ese guardado es async y window.print() no lo espera.
+                                const nota = notaGeneralBorrador[pid] ?? rondasData?.revisiones?.[pid]?.notaGeneral ?? "";
+                                if (!nota) return null;
+                                return (
+                                  <div style={{ marginTop: 4 }}>
+                                    <strong>{txCurso.revGeneralNoteLabel}:</strong>
+                                    <div style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>{nota}</div>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         );
@@ -1337,6 +1523,39 @@ export default function ArbitroPanelPage() {
               </div>
             </div>
           </DialogoEnPagina>
+        )}
+
+        {/* Aviso de observaciones sin revisar antes de generar el PDF del curso (plan f, Etapa 3): no van a
+            salir, así que se confirma antes de imprimir. Mismo patrón que el aviso de "PDF no compartido" de
+            ArbitroConfigPage: cerrar el modal y recién después, con un pequeño delay, disparar la impresión —
+            el modal tarda un instante en desmontarse, y window.print() congela la página; si no se espera, el
+            velo oscuro del modal queda en la captura. */}
+        {avisoPendientesCurso && (
+          <ModalDialogo onCerrar={() => setAvisoPendientesCurso(null)} idTitulo="dlg-curso-pend-titulo" idDescripcion="dlg-curso-pend-desc" panelStyle={{ padding: "28px 28px 24px" }}>
+            <div aria-hidden="true" style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+            <h2 id="dlg-curso-pend-titulo" style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 800, color: "#1e293b" }}>
+              {ta.revCoursePdfPendingTitle}
+            </h2>
+            <p id="dlg-curso-pend-desc" style={{ fontSize: 14, color: "#475569", lineHeight: 1.7, marginBottom: 20 }}>
+              {ta.revCoursePdfPendingDesc(avisoPendientesCurso.cantidad)}
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setAvisoPendientesCurso(null)}
+                style={{ flex: 1, padding: "11px", borderRadius: 10, border: "none", backgroundColor: "#3730a3", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                {ta.revCancel}
+              </button>
+              <button
+                onClick={() => {
+                  const pid = avisoPendientesCurso.pid;
+                  setAvisoPendientesCurso(null);
+                  setTimeout(() => generarPdfCurso(pid), 80);
+                }}
+                style={{ flex: 1, padding: "11px", borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "#475569" }}>
+                {ta.revCoursePdfGenerateAnyway}
+              </button>
+            </div>
+          </ModalDialogo>
         )}
       </main>
     );

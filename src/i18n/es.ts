@@ -998,6 +998,9 @@ export const es = {
     revTeacherNoteLabel: "Nota del docente",
     // Etapa 3: veredicto del docente (obligatorio al corregir) y recordatorio de que la nota sale en el PDF del curso.
     revVerdictLabel: "Veredicto",
+    // Veredicto YA guardado de una observación corregida, mostrado al lado de la nota del docente (no confundir con
+    // revVerdictLabel, que es la etiqueta del selector mientras se está completando el formulario).
+    revTeacherVerdictLabel: "Veredicto del docente",
     revVerdictChoose: "Elegí un veredicto…",
     revVerdictRequired: "Elegí un veredicto para corregir.",
     revNoteGoesInCoursePdf: "Esta nota sale en la versión del informe para el curso.",
@@ -1008,6 +1011,20 @@ export const es = {
     revGeneralNotePlaceholder: "Comentario general sobre esta partida (opcional)…",
     revGeneralNoteSaving: "Guardando…",
     revGeneralNoteSaved: "Nota general guardada.",
+    // Etapa 3: PDF del curso (plan a/c/d/e/f) — botón por partida, nombre de archivo y aviso de observaciones
+    // sin revisar antes de generar (no van a salir en el PDF).
+    panGenerateCoursePdf: "📘 PDF para el curso",
+    panPdfCourseSuffix: "Curso",
+    revCoursePdfPendingTitle: "Observaciones sin revisar",
+    revCoursePdfPendingDesc: (n: number): string => (n === 1
+      ? "Hay 1 observación sin revisar en esta partida: no va a salir en el PDF del curso. ¿Generarlo igual?"
+      : `Hay ${n} observaciones sin revisar en esta partida: no van a salir en el PDF del curso. ¿Generarlo igual?`),
+    revCoursePdfGenerateAnyway: "Generar igual",
+    // Ajustes (2) y (4) del PDF del curso: la calificación que dio el otro equipo (para que "error no detectado"
+    // / "acierto no defendido" se entiendan sin el puntaje) y el aviso de que el docente corrigió el reparto de
+    // una disputa (sin números: el PDF del curso no lleva puntajes).
+    revGradedAsLabel: "Calificación del otro equipo",
+    revRefereeRulingCorrected: "El docente corrigió el fallo del árbitro.",
     optTotal: "{team} tiene toda la razón",
     optPartial: "{team} tiene la mayor parte de la razón",
     optBoth: "Los dos tienen parte de razón",

@@ -969,6 +969,9 @@ export const en = {
     revAiExplanationLabel: "AI explanation",
     revTeacherNoteLabel: "Teacher's note",
     revVerdictLabel: "Verdict",
+    // Already-saved verdict of a corrected observation, shown next to the teacher's note (not the same as
+    // revVerdictLabel, which labels the selector while the form is still being filled in).
+    revTeacherVerdictLabel: "Teacher's verdict",
     revVerdictChoose: "Choose a verdict…",
     revVerdictRequired: "Choose a verdict to correct this.",
     revNoteGoesInCoursePdf: "This note appears in the course version of the report.",
@@ -978,6 +981,20 @@ export const en = {
     revGeneralNotePlaceholder: "General comment about this game (optional)…",
     revGeneralNoteSaving: "Saving…",
     revGeneralNoteSaved: "General note saved.",
+    // Stage 3: course PDF (plan a/c/d/e/f) — per-game button, file name and a warning about unreviewed
+    // observations before generating (they won't appear in the PDF).
+    panGenerateCoursePdf: "📘 PDF for the course",
+    panPdfCourseSuffix: "Course",
+    revCoursePdfPendingTitle: "Unreviewed observations",
+    revCoursePdfPendingDesc: (n: number): string => (n === 1
+      ? "There's 1 unreviewed observation in this game: it won't appear in the course PDF. Generate it anyway?"
+      : `There are ${n} unreviewed observations in this game: they won't appear in the course PDF. Generate it anyway?`),
+    revCoursePdfGenerateAnyway: "Generate anyway",
+    // Adjustments (2) and (4) to the course PDF: the grade the other team gave (so "error not caught" / "answer
+    // not defended" make sense without the score) and a note that the teacher corrected a dispute's ruling (no
+    // numbers: the course PDF carries no scores).
+    revGradedAsLabel: "Other team's grade",
+    revRefereeRulingCorrected: "The teacher corrected the referee's ruling.",
     optTotal: "{team} is entirely right",
     optPartial: "{team} is mostly right",
     optBoth: "Both are partly right",
