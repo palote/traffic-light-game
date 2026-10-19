@@ -7,6 +7,7 @@ import { useFondoDocumento } from "../utils/useFondoDocumento";
 import type { ModoMetacognicion } from "../utils/arbitroIntegrantes";
 import type { ModoRespuesta } from "../utils/arbitroIntegrantes";
 import { MAX_PREGUNTAS_META, MIN_PREGUNTAS_META, MAX_LARGO_PREGUNTA, esIgualALasPorDefecto, listaPreguntasMeta, preguntasPorDefecto } from "../utils/arbitroMetaPreguntas";
+import { MAX_LARGO_CRITERIO, listaCriterios } from "../utils/arbitroCriterios";
 import { instruccionesPorDefecto, informePorDefecto, contenidoCompleto, tituloClassroom } from "../utils/arbitroDocumentos";
 import { nombreVisible } from "../utils/arbitroNombres";
 import { idiomaSesionPorDefecto, type IdiomaSesion } from "../utils/idiomaSesion";
@@ -190,6 +191,10 @@ export default function ArbitroConfigPage() {
   // Preguntas de metacognición: null = las 4 por defecto del idioma de la sesión (sin tocar); array = lo que está editando el docente.
   const [preguntasMeta, setPreguntasMeta] = useState<string[] | null>(null);
   const [preguntasMetaAbierto, setPreguntasMetaAbierto] = useState(false); // acordeón cerrado por defecto
+  // Criterios de calificación (opcionales, B.1): hasta 3 campos de texto libre, ninguno obligatorio.
+  // Sin tocar = los 3 vacíos = sin criterios (funciona exactamente igual que antes de esta función).
+  const [criterios, setCriterios] = useState<string[]>(["", "", ""]);
+  const [criteriosAbierto, setCriteriosAbierto] = useState(false); // acordeón cerrado por defecto
   const [permitirPreguntasPropias, setPermitirPreguntasPropias] = useState(true); // «Permitir preguntas propias»: activada por defecto
   // «Idioma de la sesión»: por defecto, el idioma actual de la interfaz (inglés o, si no, español).
   const { language: idiomaInterfaz } = useI18n();
@@ -393,6 +398,9 @@ export default function ArbitroConfigPage() {
     return lista.length > 0 && !esIgualALasPorDefecto(arbitroDic(idiomaSesion), lista) ? lista : [];
   };
 
+  // Lo que se guarda en la sesión: los criterios no vacíos, tal cual los escribió el docente. [] = sin criterios.
+  const criteriosParaGuardar = (): string[] => listaCriterios(criterios);
+
   const handleGenerar = async (skipCheck = false) => {
     // El juego corre sin banco de preguntas ni texto base, pero los equipos
     // tienen que inventar las preguntas en el momento y el árbitro pierde precisión.
@@ -423,12 +431,12 @@ export default function ArbitroConfigPage() {
 
     try {
       const fn = httpsCallable(getFunctions(app, "us-central1"), "crearSesionArbitro");
-      const res = await fn({ area: areaConfig?.key ?? area, materia, nivel, anio, tema: tema.trim(), subtema: "", ejercicio, duracion, tiempoPregunta, textoFuente, permitirPreguntasPropias, idioma: idiomaSesion, modoMetacognicion, preguntasMetacognicion: preguntasParaGuardar(), modoRespuesta, verTextoDuranteJuego: !!textoFuente.trim() && verTextoDuranteJuego }) as {
+      const res = await fn({ area: areaConfig?.key ?? area, materia, nivel, anio, tema: tema.trim(), subtema: "", ejercicio, duracion, tiempoPregunta, textoFuente, permitirPreguntasPropias, idioma: idiomaSesion, modoMetacognicion, preguntasMetacognicion: preguntasParaGuardar(), modoRespuesta, verTextoDuranteJuego: !!textoFuente.trim() && verTextoDuranteJuego, criteriosCalificacion: criteriosParaGuardar() }) as {
         data: { id: string; link: string; expiresAt: string };
       };
       setSesion(res.data);
       setIdiomaCreada(idiomaSesion);
-      setInstrucciones(instruccionesPorDefecto(arbitroDic(idiomaSesion), tema.trim(), modoMetacognicion, modoRespuesta, !!textoFuente.trim() && verTextoDuranteJuego));
+      setInstrucciones(instruccionesPorDefecto(arbitroDic(idiomaSesion), tema.trim(), modoMetacognicion, modoRespuesta, !!textoFuente.trim() && verTextoDuranteJuego, criteriosParaGuardar()));
       setInforme(informePorDefecto(arbitroDic(idiomaSesion), tema.trim()));
     } catch (err: any) {
       setError(fillArbitro(ta.cfgErrCreate, { detail: textoErrorArbitro(err, ta, err.message) }));
@@ -1102,6 +1110,34 @@ export default function ArbitroConfigPage() {
                 </div>
               </div>
               </fieldset>
+            )}
+
+            {/* ── Criterios de calificación (opcionales, B.1): calcado del acordeón de preguntas de metacognición ── */}
+            {tema.trim() && (
+              <div style={{ border: "2px solid #e2e8f0", borderRadius: 12, overflow: "hidden", flexShrink: 0 }}>
+                <h3 style={{ margin: 0 }}>
+                  <button type="button" id="config-criterios-boton" aria-expanded={criteriosAbierto} aria-controls="config-criterios-panel"
+                    onClick={() => setCriteriosAbierto(v => !v)}
+                    style={{ width: "100%", minHeight: 44, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: "none", backgroundColor: "#f8fafc", color: "#1e293b", fontWeight: 700, fontSize: 14, cursor: "pointer", textAlign: "left" }}>
+                    <span>{ta.cfgCriteriosTitle}</span>
+                    <span aria-hidden="true">{criteriosAbierto ? "▲" : "▼"}</span>
+                  </button>
+                </h3>
+                <div id="config-criterios-panel" role="region" aria-labelledby="config-criterios-boton" hidden={!criteriosAbierto} style={{ padding: criteriosAbierto ? 14 : 0 }}>
+                  <p style={{ margin: "0 0 12px", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgCriteriosHint}</p>
+                  {criterios.map((texto, k) => {
+                    const idC = `config-criterio-${k + 1}`;
+                    return (
+                      <div key={k} style={{ marginBottom: 10 }}>
+                        <label htmlFor={idC} style={{ display: "block", marginBottom: 4, fontSize: 12, fontWeight: 700, color: "#374151" }}>{fillArbitro(ta.cfgCriterioN, { n: k + 1 })}</label>
+                        <textarea id={idC} value={texto} rows={2} maxLength={MAX_LARGO_CRITERIO}
+                          onChange={e => setCriterios(criterios.map((v, j) => j === k ? e.target.value : v))}
+                          style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 13, borderRadius: 10, border: "2px solid #e2e8f0", fontFamily: "inherit", resize: "vertical" }} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             )}
 
                 </div>

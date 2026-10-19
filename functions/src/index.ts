@@ -17,6 +17,7 @@ import { buildArbitroPrompt, buildPromptPreguntaPropia, buildPromptConsignas, bu
 import { normalizarIdiomaSesion, advertirIdiomaSalida } from "./arbitroIdioma";
 import { normalizarModoMetacognicion, normalizarModoRespuesta, normalizarVerTextoDuranteJuego, verTextoDuranteJuegoOIndefinido, sanearEquipoInforme } from "./arbitroIntegrantes";
 import { normalizarPreguntasMeta } from "./arbitroMetaPreguntas";
+import { normalizarCriterios, formatearCriteriosParaPrompt } from "./arbitroCriterios";
 import { validarEntradaRonda, construirRonda, idDeRonda, aplicarCorreccion, calcularTotales, OPCIONES_REPARTO, ID_RE, textoMultilinea } from "./arbitroRondas";
 import { rondasFaltantesParaRevisar, construirPromptRevision, parsearRevisionGemini, compararConOtroEquipo, comparacionEfectiva, esNoRevisable, VEREDICTOS_IA, MAX_NOTA_GENERAL_PARTIDA, type EstadoDocenteObservacion, type VeredictoIA } from "./arbitroRevision";
 
@@ -1338,7 +1339,7 @@ export const crearSesionArbitro = onCall(
   { secrets: [GEMINI_KEY], invoker: "public", timeoutSeconds: 60 },
   async (request) => {
     try {
-      const { area, materia, nivel, anio, tema, subtema, ejercicio, duracion = "clase", tiempoPregunta, textoFuente, permitirPreguntasPropias, idioma, modoMetacognicion, preguntasMetacognicion, modoRespuesta, verTextoDuranteJuego } = request.data;
+      const { area, materia, nivel, anio, tema, subtema, ejercicio, duracion = "clase", tiempoPregunta, textoFuente, permitirPreguntasPropias, idioma, modoMetacognicion, preguntasMetacognicion, modoRespuesta, verTextoDuranteJuego, criteriosCalificacion } = request.data;
       if (!materia || !nivel || !anio || !tema) {
         throw new HttpsError("invalid-argument", "Faltan campos obligatorios: materia, nivel, año y tema", { motivo: "datos_incompletos" });
       }
@@ -1373,6 +1374,9 @@ export const crearSesionArbitro = onCall(
         // «Texto durante el juego»: false (por defecto) = sin el texto disponible durante la ronda; true = con
         // el texto impreso. Solo tiene efecto si hay textoFuente; sin texto base, igual se guarda como false.
         verTextoDuranteJuego: normalizarVerTextoDuranteJuego(verTextoDuranteJuego),
+        // Criterios de calificación (opcionales, B.2): hasta 3 líneas que completan "una respuesta es completa
+        // si…", de la sesión (no por pregunta), fijos al crearla. [] = sin criterios (funciona igual que antes).
+        criteriosCalificacion: normalizarCriterios(criteriosCalificacion),
         docenteUid: request.auth?.uid ?? null,
         docenteEmail: request.auth?.token?.email ?? null,
       });
@@ -1416,6 +1420,7 @@ export const getSesionArbitro = onCall(
       preguntasMetacognicion: normalizarPreguntasMeta(data.preguntasMetacognicion), // las sesiones viejas no tienen el campo: [] (4 por defecto)
       modoRespuesta: normalizarModoRespuesta(data.modoRespuesta), // las sesiones viejas no tienen el campo: 'oral'
       verTextoDuranteJuego: normalizarVerTextoDuranteJuego(data.verTextoDuranteJuego), // las sesiones viejas no tienen el campo: false
+      criteriosCalificacion: normalizarCriterios(data.criteriosCalificacion), // las sesiones viejas no tienen el campo: [] (sin criterios)
       expiresAt: data.expiresAt,
       docenteEmail: data.docenteEmail || "",
     };
@@ -1450,8 +1455,11 @@ async function runArbitro(params: {
   const apiKey = GEMINI_KEY.value();
   if (!apiKey) throw new HttpsError("internal", "Gemini API key no configurada.", { motivo: "ia_no_configurada" });
 
-  // Sin `contexto`: el prompt de producción no lleva línea de área/materia/criterio.
-  // Para activarlas: contexto: { area: AREA_LABEL_ES[k], materia, criterio: criterioDeArea(session.area) }.
+  // `area`/`materia` de `contexto` no se activan hoy (quedan disponibles para más adelante: ver
+  // criterioDeArea/AREA_LABEL_ES en arbitroPrompt.ts). `criterio` SÍ se activa (B.4, criterios de
+  // calificación): si el docente cargó criterios para esta sesión, viajan formateados como lista numerada;
+  // sin criterios, criterioTxt queda "" y el prompt es idéntico byte a byte al de antes de esta función.
+  const criterioTxt = formatearCriteriosParaPrompt(normalizarCriterios(session.criteriosCalificacion));
   const prompt = buildArbitroPrompt({
     materia: session.materia,
     nivel: session.nivel,
@@ -1467,6 +1475,7 @@ async function runArbitro(params: {
     equipoPregunta: esJuegoOral ? nombreEquipo(params.equipoPregunta) : "",
     equipoResponde: esJuegoOral ? nombreEquipo(params.equipoResponde) : "",
     idioma: normalizarIdiomaSesion(session.idioma),
+    contexto: criterioTxt ? { criterio: criterioTxt } : undefined,
     // El prompt recibe la Posición A SIN «(calificó como …)»: la calificación de quien preguntó la lee solo el código.
   });
 
@@ -2159,6 +2168,9 @@ export const listarRondasSesion = onCall(
       // tiene que distinguir una sesión vieja (undefined, no muestra nada) de una que eligió "sin el texto"
       // (false, sí muestra "Jugado sin el texto" — Pablo, 2026-10-19).
       verTextoDuranteJuego: verTextoDuranteJuegoOIndefinido(session.verTextoDuranteJuego),
+      // Criterios de calificación usados en esta sesión (B.5): [] en sesiones viejas sin el campo, o si el
+      // docente no cargó ninguno — el panel no muestra nada en ese caso (ver ArbitroPanelPage.tsx).
+      criteriosCalificacion: normalizarCriterios(session.criteriosCalificacion),
     };
   }
 );
@@ -2268,8 +2280,9 @@ export const revisarPartidaArbitro = onCall(
 
       // Mismos criterios de corrección que requestVeredicto (comparten la rúbrica RUBRICA_CALIFICACION_ES/EN)
       // y el mismo contexto de sesión que usa hoy el árbitro en producción (materia, nivel, año, tema) — SIN
-      // la línea opcional de área/criterio, porque runArbitro tampoco la activa hoy: así la revisión y el
-      // árbitro miden exactamente igual (ver nota en arbitroRevision.ts).
+      // la línea opcional de área, porque runArbitro tampoco la activa hoy. Los criterios de calificación del
+      // docente (B.4) SÍ viajan a los dos por igual (mismo helper formatearCriteriosParaPrompt), para que la
+      // revisión y el árbitro midan exactamente igual (ver nota en arbitroRevision.ts).
       const prompt = construirPromptRevision({
         materia: session.materia,
         nivel: session.nivel,
@@ -2279,6 +2292,7 @@ export const revisarPartidaArbitro = onCall(
         textoFuente: session.textoFuente || "",
         idioma: normalizarIdiomaSesion(session.idioma),
         rondas: faltantes,
+        criterios: formatearCriteriosParaPrompt(normalizarCriterios(session.criteriosCalificacion)),
       });
 
       const textoGemini = await generarTextoGemini(apiKey, {

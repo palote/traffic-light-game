@@ -8,6 +8,7 @@ import { etiquetaCalificacion } from "../utils/arbitroEtiquetas";
 import { nombreVisible } from "../utils/arbitroNombres";
 import { useFondoDocumento } from "../utils/useFondoDocumento";
 import { clavesRespuestas, preguntasMeta } from "../utils/arbitroMetaPreguntas";
+import { listaCriterios } from "../utils/arbitroCriterios";
 import { MAX_INTEGRANTES, MIN_CAMPOS, hayIntegrantes, listaIntegrantes, normalizarModoMetacognicion, normalizarModoRespuesta, textoIntegrantes } from "../utils/arbitroIntegrantes";
 import { calificacionPreguntaParaServidor } from "../utils/arbitroCalificacion";
 import { esIaNoDisponible, esRespuestaNoClara, textoErrorArbitro } from "../utils/arbitroErrores";
@@ -36,6 +37,7 @@ interface SesionData {
   modoMetacognicion?: string; // 'grupal' | 'individual'; las sesiones viejas no lo traen (= 'grupal')
   preguntasMetacognicion?: string[]; // preguntas personalizadas (1 a 6); ausentes o vacías = las 4 por defecto del diccionario
   modoRespuesta?: string; // 'oral' | 'escrita'; las sesiones viejas no lo traen (= 'oral')
+  criteriosCalificacion?: string[]; // hasta 3 líneas (B.3); ausentes o vacías = sin criterios (no se muestra nada)
 }
 
 // Debe coincidir con MAX_RESPUESTA_RONDA en functions/src/arbitroRondas.ts: el maxLength evita que el
@@ -426,6 +428,8 @@ export default function ArbitroJuegoPage() {
   // «Modo de respuesta»: oral (por defecto, como siempre) o escrita (cada equipo escribe y confirma su
   // respuesta en cada ronda; el informe las incluye todas, no solo las disputas).
   const modoEscrita = normalizarModoRespuesta(sesion?.modoRespuesta) === "escrita";
+  // Criterios de calificación de la sesión (B.3): [] si no hay (no se muestra nada, funciona igual que antes).
+  const criteriosSesion = listaCriterios(sesion?.criteriosCalificacion);
   // Turnos de la metacognición individual: un turno por alumno con nombre (equipo 1 y después equipo 2).
   const turnosMeta = [integrantesEquipo1, integrantesEquipo2].flatMap((campos, ei) => listaIntegrantes(campos).map((alumno, ai) => ({ ei, ai, alumno })));
   // Preguntas de metacognición: las de la sesión si el docente las personalizó; si no, las 4 del diccionario.
@@ -889,6 +893,22 @@ export default function ArbitroJuegoPage() {
     </div>
   );
 
+  // Criterios de calificación de la sesión (B.3): recordatorio de qué hace completa una respuesta. [] si la
+  // sesión no tiene ninguno cargado — no muestra nada, funciona igual que antes de esta función.
+  const CriteriosBox = ({ compacto }: { compacto?: boolean }) => {
+    if (criteriosSesion.length === 0) return null;
+    return (
+      <div style={{ backgroundColor: "#f5f3ff", borderRadius: compacto ? 10 : 12, padding: compacto ? "10px 14px" : "14px 16px", border: "1px solid #ddd6fe", marginBottom: compacto ? 12 : 16 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#5b21b6", marginBottom: 4, textTransform: "uppercase" as const }}>
+          {compacto ? t.jgCriteriosCompactTitle : t.jgCriteriosTitle}
+        </div>
+        <ul style={{ margin: 0, paddingLeft: 18, fontSize: compacto ? 12 : 13, color: "#4c1d95", lineHeight: 1.5 }}>
+          {criteriosSesion.map((c, i) => <li key={i}>{c}</li>)}
+        </ul>
+      </div>
+    );
+  };
+
 
   // ── TURNO: elegir la pregunta y hacerla en voz alta ───────────────────────
   // Pantalla única: el equipo elige del banco (o escribe la suya), y recién
@@ -1106,6 +1126,8 @@ export default function ArbitroJuegoPage() {
                   </button>
                 </div>
 
+                <CriteriosBox compacto />
+
                 {modoEscrita ? (
                   <div style={{ marginBottom: 16 }}>
                     <label htmlFor="respuesta-escrita" style={{ ...lbl, color: "#166534" }}>
@@ -1173,6 +1195,8 @@ export default function ArbitroJuegoPage() {
               <div style={{ fontSize: 12, fontWeight: 700, color: "#166534", marginBottom: 4, textTransform: "uppercase" }}>{fillArbitro(t.jgAnswerOf, { team: equipoRespuesta.nombre })}</div>
               <div style={{ fontSize: 13, color: "#14532d", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{respuestaActual}</div>
             </div>
+
+            <CriteriosBox />
 
             <fieldset style={{ ...fieldsetReset, marginBottom: 20 }}>
             <legend style={{ ...legendReset, fontSize: 14, fontWeight: 800, color: "#1e293b", marginBottom: 12 }}>
@@ -1301,6 +1325,8 @@ export default function ArbitroJuegoPage() {
             <div style={{ fontSize: 12, color: "#64748b", textAlign: "center", marginBottom: 20 }}>
               {t.jgDisputeHint}
             </div>
+
+            <CriteriosBox />
 
             {/* Pregunta */}
             <div style={{ marginBottom: 14 }}>

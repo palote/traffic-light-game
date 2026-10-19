@@ -6,6 +6,7 @@ import type { TranslationKeys } from "../i18n";
 import { nombreVisible } from "./arbitroNombres";
 import type { ModoMetacognicion, ModoRespuesta } from "./arbitroIntegrantes";
 import { preguntasMeta } from "./arbitroMetaPreguntas";
+import { listaCriterios } from "./arbitroCriterios";
 
 type Tx = TranslationKeys["arbitro"];
 
@@ -47,7 +48,13 @@ export function nombreArchivoInformeArbitro(juego: string, tema: string, equipos
  * (que se muestra antes de configurar la sesión y por eso queda neutro), esto se genera CON la sesión ya
  * configurada: el paso 3 y el "antes de jugar" reflejan el modoRespuesta y el verTextoDuranteJuego reales.
  */
-export function instruccionesPorDefecto(tx: Tx, tema: string, modoMetacognicion: ModoMetacognicion = "grupal", modoRespuesta: ModoRespuesta = "oral", verTextoDuranteJuego = false): string {
+export function instruccionesPorDefecto(tx: Tx, tema: string, modoMetacognicion: ModoMetacognicion = "grupal", modoRespuesta: ModoRespuesta = "oral", verTextoDuranteJuego = false, criterios: string[] = []): string {
+  // B.5: los criterios de calificación del docente, si los hay, van al final (no son un paso del juego, son
+  // información de cómo se califica) — no corren la numeración de los pasos de arriba.
+  const listaCrit = listaCriterios(criterios);
+  const bloqueCriterios = listaCrit.length > 0
+    ? `\n\n${tx.docInstrCriteriaTitle}\n${listaCrit.map((c, i) => `${i + 1}. ${c}`).join("\n")}`
+    : "";
   return (
     `${llenar(tx.docInstrToday, { t: tema })}\n\n` +
     `${verTextoDuranteJuego ? tx.docInstrBeforeConTexto : tx.docInstrBefore}\n\n` +
@@ -57,7 +64,8 @@ export function instruccionesPorDefecto(tx: Tx, tema: string, modoMetacognicion:
     `${modoRespuesta === "escrita" ? tx.docInstrStep3Escrita : tx.docInstrStep3}\n` +
     `${tx.docInstrStep4}\n` +
     `${tx.rulesStep5Template}\n` +
-    `${modoMetacognicion === "individual" ? tx.docInstrStep6Ind : tx.docInstrStep6}`
+    `${modoMetacognicion === "individual" ? tx.docInstrStep6Ind : tx.docInstrStep6}` +
+    bloqueCriterios
   );
 }
 

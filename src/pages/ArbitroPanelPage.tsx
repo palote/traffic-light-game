@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { normalizarModoRespuesta, textoIntegrantes } from "../utils/arbitroIntegrantes";
 import { nombreArchivoInformeArbitro } from "../utils/arbitroDocumentos";
+import { listaCriterios } from "../utils/arbitroCriterios";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useArbitroT, useFormatoPuntos, fillArbitro, useLocaleArbitro, useTituloPagina, LanguageSelector, IDIOMAS_ARBITRO, arbitroDic } from "../i18n";
 import { localeDeIdioma } from "../utils/idiomaSesion";
@@ -147,6 +148,9 @@ interface RondasData {
   // Etapa A.3: boolean solo si la sesión tiene el campo guardado (true/false según lo que eligió el docente);
   // undefined en una sesión vieja de antes de este cambio — el panel no muestra nada en ese caso.
   verTextoDuranteJuego?: boolean;
+  // Criterios de calificación usados en la sesión (B.5): [] en sesiones viejas sin el campo, o si el docente
+  // no cargó ninguno — no se muestra nada en ese caso.
+  criteriosCalificacion?: string[];
   revisiones?: Record<string, RevisionPartida>; // por partidaId (Etapa 2)
   // Por partida, cuántas rondas todavía faltan revisar (lo calcula listarRondasSesion con la MISMA función que
   // usa revisarPartidaArbitro): el panel solo mira este número, no repite el filtro del servidor.
@@ -690,6 +694,12 @@ export default function ArbitroPanelPage() {
               {rondasData.verTextoDuranteJuego ? ta.panJugadoConTexto : ta.panJugadoSinTexto}
             </p>
           )}
+          {/* B.5: criterios de calificación de la sesión, si el docente cargó alguno. */}
+          {listaCriterios(rondasData?.criteriosCalificacion).length > 0 && (
+            <p style={{ margin: "4px 0 0", fontSize: 11, color: "#475569", lineHeight: 1.4 }}>
+              {ta.panCriteriosLabel} {listaCriterios(rondasData?.criteriosCalificacion).join(" · ")}
+            </p>
+          )}
         </div>
         {/* Encabezado del PDF del curso (Etapa 3): mismo contenido que el de arriba (equipos, nivel, año, fecha
             de la PARTIDA), pero armado con txCurso — el idioma de la sesión — y con el locale de ESE idioma para
@@ -708,6 +718,12 @@ export default function ArbitroPanelPage() {
             {nivelDeCurso(sesionSeleccionada.nivel)} · {sesionSeleccionada.anio} ·{" "}
             {new Date(totalPartidaIdentificada?.creadoEn || sesionSeleccionada.creadoEn).toLocaleDateString(localeDeIdioma(sesionSeleccionada.idioma), { day: "numeric", month: "long", year: "numeric" })}
           </p>
+          {/* B.5: mismos criterios, en el idioma de la sesión (txCurso). */}
+          {listaCriterios(rondasData?.criteriosCalificacion).length > 0 && (
+            <p style={{ margin: "4px 0 0", fontSize: 11, color: "#475569", lineHeight: 1.4 }}>
+              {txCurso.panCriteriosLabel} {listaCriterios(rondasData?.criteriosCalificacion).join(" · ")}
+            </p>
+          )}
         </div>
 
         <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 20px" }}>

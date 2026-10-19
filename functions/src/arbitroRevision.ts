@@ -20,8 +20,8 @@
 //     partida, cuántas rondas faltan: el panel no repite el filtro ni conoce el límite de intentos, solo mira
 //     el número y el campo noRevisable que ya vienen calculados del servidor.
 import type { IdiomaSesion } from "./arbitroIdioma";
-import { RUBRICA_CALIFICACION_ES } from "./arbitroPrompt";
-import { RUBRICA_CALIFICACION_EN } from "./arbitroPromptEn";
+import { RUBRICA_CALIFICACION_ES, criteriosDocenteBloque } from "./arbitroPrompt";
+import { RUBRICA_CALIFICACION_EN, criteriosDocenteBloqueEn } from "./arbitroPromptEn";
 
 export const VEREDICTOS_IA = ["completa", "incompleta", "no"] as const;
 export type VeredictoIA = typeof VEREDICTOS_IA[number];
@@ -136,9 +136,13 @@ export function construirPromptRevision(params: {
   materia: string; nivel: string; anio: string; tema: string; subtema?: string; textoFuente?: string;
   idioma?: IdiomaSesion;
   rondas: RondaParaRevisar[];
+  // Criterios de calificación del docente para la sesión, ya formateados (B.4; ver formatearCriteriosParaPrompt
+  // en arbitroCriterios.ts). "" o ausente = sin criterios: el prompt queda byte a byte igual al de antes de
+  // esta función.
+  criterios?: string;
 }): string {
   const idioma: IdiomaSesion = params.idioma === "en" ? "en" : "es";
-  const { materia, nivel, anio, tema, subtema, textoFuente, rondas } = params;
+  const { materia, nivel, anio, tema, subtema, textoFuente, rondas, criterios } = params;
   const rubrica = idioma === "en" ? RUBRICA_CALIFICACION_EN : RUBRICA_CALIFICACION_ES;
   const etiqueta = idioma === "en" ? ETIQUETA_EN : ETIQUETA_ES;
 
@@ -146,6 +150,7 @@ export function construirPromptRevision(params: {
     const textoFuenteBlock = textoFuente
       ? `\nSESSION BASE TEXT:\n"""\n${textoFuente.substring(0, 8000)}\n"""\nUse it to verify concepts; do not require the answer to repeat its exact words.\n`
       : "";
+    const criteriosBlock = criteriosDocenteBloqueEn(criterios || "");
     // Each question/answer goes inside its OWN """ fence: this call batches several teams' answers into one
     // prompt (one Gemini call per run, see the comment on construirPromptRevision below), so one answer's text
     // must not be able to pass as a new instruction, a fake extra round, or someone else's grade.
@@ -161,7 +166,7 @@ ${r.respuesta.replace(/"""/g, '"')}
 Topic: "${tema}"${subtema ? `\nSubtopic: "${subtema}"` : ""}
 ${textoFuenteBlock}
 For EACH round below, judge the ANSWER on its own merits — not whether the other team's grade seems reasonable — using this rubric (the exact same one the referee uses for disputes):
-
+${criteriosBlock}
 ${rubrica}
 
 Respond ONLY with a valid JSON array, no backticks or extra text, with exactly one object per round you can judge (skip a round only if you genuinely cannot judge it):
@@ -175,6 +180,7 @@ ${listado}`;
   const textoFuenteBlock = textoFuente
     ? `\nTEXTO BASE DE LA SESIÓN:\n"""\n${textoFuente.substring(0, 8000)}\n"""\nUsalo para verificar conceptos; no exijas que la respuesta repita sus palabras exactas.\n`
     : "";
+  const criteriosBlock = criteriosDocenteBloque(criterios || "");
   // Cada pregunta/respuesta va dentro de su PROPIA cerca """: esta llamada junta las respuestas de varios
   // equipos en un solo prompt (una sola llamada a Gemini por corrida, ver el comentario de construirPromptRevision
   // más abajo), así que el texto de una respuesta no puede hacerse pasar por una instrucción nueva, una ronda
@@ -191,7 +197,7 @@ ${r.respuesta.replace(/"""/g, '"')}
 Tema: "${tema}"${subtema ? `\nSubtema: "${subtema}"` : ""}
 ${textoFuenteBlock}
 Para CADA ronda de abajo, juzgá la RESPUESTA por sus propios méritos — no si la calificación del otro equipo te parece razonable — usando esta rúbrica (la misma que usa el árbitro en las disputas):
-
+${criteriosBlock}
 ${rubrica}
 
 Respondé ÚNICAMENTE con un array JSON válido, sin backticks ni texto extra, con exactamente un objeto por cada ronda que puedas juzgar (salteá una ronda solo si de verdad no podés juzgarla):

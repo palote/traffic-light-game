@@ -499,5 +499,28 @@ const obsDe = () => (store.get(`sesiones_arbitro/TSTK7M/revisiones/${P}`) || {})
   const rondaOralTrasNota = listadoOralTrasNota.r.rondas.find((x) => x.id === idDeRonda(PID_ORAL, 1));
   t("  y la ronda oral no queda marcada noRevisable", "undefined", String(rondaOralTrasNota.noRevisable));
 
+  // ════ 22) Criterios de calificación (B.4): se suman al prompt de la revisión, reusando contexto.criterio
+  // sin activar área/materia; sin criterios, el prompt no cambia (ya lo prueba promptB1 más arriba). ════
+  store.set("sesiones_arbitro/CONCRITERIOS", sesion({ criteriosCalificacion: ["usa al menos un dato del texto", "explica el porqué"] }));
+  const PC = "5f1a2b3c4d5e6f7a8b9c0d1e";
+  store.set(`sesiones_arbitro/CONCRITERIOS/rondas/${idDeRonda(PC, 1)}`, {
+    partidaId: PC, ronda: 1, equipoPregunta: "Rojos", equipoResponde: "Azules",
+    pregunta: "Pregunta con criterios", respuesta: "Respuesta con criterios.", calificacion: "completa",
+    fueAlArbitro: false, estado: "jugada", creadoEn: new Date(ahora + 1).toISOString(), disputa: null, correccion: null,
+    reparto: { puntosPregunta: 0, puntosResponde: 1, tieneRazon: null, grado: null },
+  });
+  respuestaGemini = geminiResp([[idDeRonda(PC, 1), "completa"]]);
+  const bCriterios = await run(fns.revisarPartidaArbitro, { sessionId: "CONCRITERIOS", partidaId: PC }, "docente1");
+  assert.ok(bCriterios.ok, "revisión con criterios: " + bCriterios.msg);
+  const promptConCriterios = ultimoPrompt;
+  t("con criterios: el prompt de la revisión lleva el bloque del docente", "true",
+    promptConCriterios.includes("CRITERIOS DE CALIFICACI\u00d3N DEL DOCENTE PARA ESTA SESI\u00d3N"));
+  t("  y los dos criterios tal cual los cargó el docente", "true",
+    promptConCriterios.includes("1. usa al menos un dato del texto") && promptConCriterios.includes("2. explica el porqu\u00e9"));
+  t("  sin activar Área/Materia (runArbitro/revisarPartidaArbitro nunca las pasan)", "false/false",
+    `${promptConCriterios.includes("\nÁrea:")}/${promptConCriterios.includes("\nMateria:")}`);
+  t("sin criterios (TSTK7M, primera corrida): el prompt NO lleva el bloque del docente", "false",
+    promptB1.includes("CRITERIOS DE CALIFICACI\u00d3N DEL DOCENTE"));
+
   console.error = ce; console.table(filas); console.log(`OK: ${filas.length} comprobaciones.`); process.exit(0);
 })().catch((e) => { console.error = ce; console.error("FALLÓ:", e.message); process.exit(1); });
