@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -7,7 +7,7 @@ import { useFondoDocumento } from "../utils/useFondoDocumento";
 import type { ModoMetacognicion } from "../utils/arbitroIntegrantes";
 import type { ModoRespuesta } from "../utils/arbitroIntegrantes";
 import { MAX_PREGUNTAS_META, MIN_PREGUNTAS_META, MAX_LARGO_PREGUNTA, esIgualALasPorDefecto, listaPreguntasMeta, preguntasPorDefecto } from "../utils/arbitroMetaPreguntas";
-import { MAX_LARGO_CRITERIO, listaCriterios } from "../utils/arbitroCriterios";
+import { MAX_LARGO_CRITERIO, MAX_CRITERIOS, CRITERIOS_SUGERIDOS, criteriosDesdeSugeridos } from "../utils/arbitroCriterios";
 import { instruccionesPorDefecto, informePorDefecto, contenidoCompleto, tituloClassroom } from "../utils/arbitroDocumentos";
 import { nombreVisible } from "../utils/arbitroNombres";
 import { idiomaSesionPorDefecto, type IdiomaSesion } from "../utils/idiomaSesion";
@@ -193,8 +193,14 @@ export default function ArbitroConfigPage() {
   const [preguntasMetaAbierto, setPreguntasMetaAbierto] = useState(false); // acordeón cerrado por defecto
   // Criterios de calificación (opcionales, B.1): hasta 3 campos de texto libre, ninguno obligatorio.
   // Sin tocar = los 3 vacíos = sin criterios (funciona exactamente igual que antes de esta función).
-  const [criterios, setCriterios] = useState<string[]>(["", "", ""]);
+  const [criteriosSugeridosMarcados, setCriteriosSugeridosMarcados] = useState<boolean[]>(() => CRITERIOS_SUGERIDOS.map(() => false));
+  const [criterioPropio, setCriterioPropio] = useState("");
   const [criteriosAbierto, setCriteriosAbierto] = useState(false); // acordeón cerrado por defecto
+  // El sugerido "solo escrita" (claridad de lo escrito) no tiene sentido en modo oral: se desmarca solo al cambiar.
+  useEffect(() => {
+    if (modoRespuesta === "escrita") return;
+    setCriteriosSugeridosMarcados(prev => prev.map((marcado, i) => (marcado && CRITERIOS_SUGERIDOS[i].soloEscrita) ? false : marcado));
+  }, [modoRespuesta]);
   const [permitirPreguntasPropias, setPermitirPreguntasPropias] = useState(true); // «Permitir preguntas propias»: activada por defecto
   // «Idioma de la sesión»: por defecto, el idioma actual de la interfaz (inglés o, si no, español).
   const { language: idiomaInterfaz } = useI18n();
@@ -399,7 +405,7 @@ export default function ArbitroConfigPage() {
   };
 
   // Lo que se guarda en la sesión: los criterios no vacíos, tal cual los escribió el docente. [] = sin criterios.
-  const criteriosParaGuardar = (): string[] => listaCriterios(criterios);
+  const criteriosParaGuardar = (): string[] => criteriosDesdeSugeridos(criteriosSugeridosMarcados, criterioPropio, idiomaSesion, modoRespuesta);
 
   const handleGenerar = async (skipCheck = false) => {
     // El juego corre sin banco de preguntas ni texto base, pero los equipos
@@ -936,30 +942,31 @@ export default function ArbitroConfigPage() {
               <fieldset style={fieldsetReset}>
                 <PasoLabel n={6} legend>{ta.cfgSessionOptions}</PasoLabel>
                 <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 10 }}>
-            {/* ── Modo de respuesta: oral (por defecto) o escrita — primero dentro del paso 6 ── */}
+            {/* ── Modo de respuesta: oral (por defecto) o escrita — primero dentro del paso 6. Tarjetas (no
+                botones sueltos): cada una trae nombre, una bajada corta y la explicación completa, siempre
+                visible, elegida o no ── */}
             {tema.trim() && (
               <fieldset style={fieldsetReset}>
                 <legend style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", padding: 0, marginBottom: 8 }}>{ta.cfgAnswerMode}</legend>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+                <div className="arb-una-columna" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {([
-                    { id: "oral" as const, label: ta.cfgAnswerOral },
-                    { id: "escrita" as const, label: ta.cfgAnswerWritten },
+                    { id: "oral" as const, nombre: ta.cfgAnswerOral, tag: ta.cfgAnswerOralTag, hint: ta.cfgAnswerOralHint },
+                    { id: "escrita" as const, nombre: ta.cfgAnswerWritten, tag: ta.cfgAnswerWrittenTag, hint: ta.cfgAnswerWrittenHint },
                   ]).map(m => (
                     <button key={m.id} type="button" onClick={() => setModoRespuesta(m.id)} aria-pressed={modoRespuesta === m.id}
                       style={{
-                        padding: "10px 6px", borderRadius: 10, minHeight: 44,
+                        textAlign: "left", padding: "12px 14px", borderRadius: 10, minHeight: 44,
                         border: `2px solid ${modoRespuesta === m.id ? accentColor : "#e2e8f0"}`,
                         backgroundColor: modoRespuesta === m.id ? `${accentColor}12` : "white",
-                        color: modoRespuesta === m.id ? accentColor : "#64748b",
-                        fontWeight: 700, fontSize: 13, cursor: "pointer",
+                        cursor: "pointer", display: "flex", flexDirection: "column", gap: 4,
                       }}>
-                      {m.label}
+                      <span style={{ fontWeight: 700, fontSize: 14, color: modoRespuesta === m.id ? accentColor : "#1e293b" }}>
+                        {m.nombre} — {m.tag}
+                      </span>
+                      <span style={{ fontSize: 12, fontWeight: 400, color: PALETA.gris, lineHeight: 1.5 }}>{m.hint}</span>
                     </button>
                   ))}
                 </div>
-                {/* Las dos explicaciones se muestran siempre, elegido o no (antes solo se veía la del modo activo) */}
-                <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgAnswerOralHint}</p>
-                <p style={{ margin: "4px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgAnswerWrittenHint}</p>
                 {modoRespuesta === "escrita" && tiempoPregunta === 60 && (
                   <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.ambar, lineHeight: 1.5 }}>
                     ⚠️ {ta.cfgAnswerWrittenShortTimeWarning}
@@ -1125,17 +1132,31 @@ export default function ArbitroConfigPage() {
                 </h3>
                 <div id="config-criterios-panel" role="region" aria-labelledby="config-criterios-boton" hidden={!criteriosAbierto} style={{ padding: criteriosAbierto ? 14 : 0 }}>
                   <p style={{ margin: "0 0 12px", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgCriteriosHint}</p>
-                  {criterios.map((texto, k) => {
-                    const idC = `config-criterio-${k + 1}`;
-                    return (
-                      <div key={k} style={{ marginBottom: 10 }}>
-                        <label htmlFor={idC} style={{ display: "block", marginBottom: 4, fontSize: 12, fontWeight: 700, color: "#374151" }}>{fillArbitro(ta.cfgCriterioN, { n: k + 1 })}</label>
-                        <textarea id={idC} value={texto} rows={2} maxLength={MAX_LARGO_CRITERIO}
-                          onChange={e => setCriterios(criterios.map((v, j) => j === k ? e.target.value : v))}
-                          style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 13, borderRadius: 10, border: "2px solid #e2e8f0", fontFamily: "inherit", resize: "vertical" }} />
-                      </div>
-                    );
-                  })}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {CRITERIOS_SUGERIDOS.map((c, i) => {
+                      if (c.soloEscrita && modoRespuesta !== "escrita") return null;
+                      const marcado = criteriosSugeridosMarcados[i];
+                      const totalMarcados = criteriosSugeridosMarcados.filter(Boolean).length + (criterioPropio.trim() ? 1 : 0);
+                      const bloqueado = !marcado && totalMarcados >= MAX_CRITERIOS;
+                      const texto = idiomaInterfaz === "en" ? c.en : c.es;
+                      const idC = `config-criterio-sugerido-${i}`;
+                      return (
+                        <label key={i} htmlFor={idC} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: bloqueado ? "#94a3b8" : "#374151", cursor: bloqueado ? "default" : "pointer" }}>
+                          <input type="checkbox" id={idC} checked={marcado} disabled={bloqueado}
+                            onChange={e => setCriteriosSugeridosMarcados(prev => prev.map((v, j) => j === i ? e.target.checked : v))}
+                            style={{ marginTop: 2, width: 18, height: 18, flexShrink: 0 }} />
+                          <span>{texto}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div style={{ marginTop: 10 }}>
+                    <label htmlFor="config-criterio-propio" style={{ display: "block", marginBottom: 4, fontSize: 12, fontWeight: 700, color: "#374151" }}>{ta.cfgCriterioPropio}</label>
+                    <textarea id="config-criterio-propio" value={criterioPropio} rows={2} maxLength={MAX_LARGO_CRITERIO}
+                      disabled={!criterioPropio.trim() && criteriosSugeridosMarcados.filter(Boolean).length >= MAX_CRITERIOS}
+                      onChange={e => setCriterioPropio(e.target.value)}
+                      style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 13, borderRadius: 10, border: "2px solid #e2e8f0", fontFamily: "inherit", resize: "vertical" }} />
+                  </div>
                 </div>
               </div>
             )}
