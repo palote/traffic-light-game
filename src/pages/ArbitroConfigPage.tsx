@@ -8,6 +8,7 @@ import type { ModoMetacognicion } from "../utils/arbitroIntegrantes";
 import type { ModoRespuesta } from "../utils/arbitroIntegrantes";
 import { MAX_PREGUNTAS_META, MIN_PREGUNTAS_META, MAX_LARGO_PREGUNTA, esIgualALasPorDefecto, listaPreguntasMeta, preguntasPorDefecto } from "../utils/arbitroMetaPreguntas";
 import { MAX_LARGO_CRITERIO, MAX_CRITERIOS, CRITERIOS_SUGERIDOS, criteriosDesdeSugeridos } from "../utils/arbitroCriterios";
+import { resumenOpcionesSesion } from "../utils/arbitroResumenOpciones";
 import { instruccionesPorDefecto, informePorDefecto, contenidoCompleto, tituloClassroom } from "../utils/arbitroDocumentos";
 import { nombreVisible } from "../utils/arbitroNombres";
 import { idiomaSesionPorDefecto, type IdiomaSesion } from "../utils/idiomaSesion";
@@ -17,6 +18,7 @@ import { PALETA, AREA_COLORS } from "../utils/arbitroPalette";
 import { ModalDialogo, fieldsetReset, legendReset, srOnly } from "../utils/arbitroA11y";
 import { esIaNoDisponible, textoErrorArbitro } from "../utils/arbitroErrores";
 import { getCourses, createCourseWork, type ClassroomCourse } from "../services/classroomService";
+import ProyeccionCodigoArbitro from "../components/ProyeccionCodigoArbitro";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -238,6 +240,11 @@ export default function ArbitroConfigPage() {
   const [creandoTarea, setCreandoTarea] = useState(false);
   const [tareaCreada, setTareaCreada] = useState(false);
   const [errorClassroom, setErrorClassroom] = useState("");
+  const [mostrarProyeccion, setMostrarProyeccion] = useState(false);
+  const [opcionesAbierto, setOpcionesAbierto] = useState(false); // paso 7 "Opciones de la sesión": plegado por defecto (Etapa D)
+  const [masDetalleOral, setMasDetalleOral] = useState(false); // tarjeta Oral: "Más detalle" (Etapa D)
+  const [masDetalleEscrita, setMasDetalleEscrita] = useState(false); // tarjeta Escrito: "Más detalle" (Etapa D)
+  const [intentoCrear, setIntentoCrear] = useState(false); // true tras el primer clic en "Crear sesión" (para el "(obligatorio)" en rojo)
 
   const areaConfig = area ? AREAS[area] : null;
   // Sin área elegida: verde accesible de la paleta (antes tomaba el verde del tema del juego, #22c55e).
@@ -366,8 +373,10 @@ export default function ArbitroConfigPage() {
       <p style={{ margin: "6px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.4 }}>
         {tipoPreguntas === "capacidades" ? ta.cfgTypeSkillsHint : tipoPreguntas === "mixta" ? ta.cfgTypeMixedHint : ta.cfgTypeMemoryHint}
       </p>
-      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.4 }}>{ta.cfgTypeSuggestion}</p>
-      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.4, fontStyle: "italic" as const }}>{ta.cfgTypeReviewEdit}</p>
+      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.4 }}>{modoRespuesta === "oral" ? ta.cfgTypeSuggestionOral : ta.cfgTypeSuggestionEscrita}</p>
+      {ejercicioEsIA && (
+        <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.4, fontStyle: "italic" as const }}>{ta.cfgTypeReviewEdit}</p>
+      )}
     </fieldset>
   );
 
@@ -408,6 +417,13 @@ export default function ArbitroConfigPage() {
   const criteriosParaGuardar = (): string[] => criteriosDesdeSugeridos(criteriosSugeridosMarcados, criterioPropio, idiomaSesion, modoRespuesta);
 
   const handleGenerar = async (skipCheck = false) => {
+    // El botón ya no se deshabilita nativamente cuando falta un campo (Etapa D: así "(obligatorio)"
+    // se puede poner en rojo recién después de un primer intento) — evitamos el doble envío acá.
+    if (loading) return;
+    setIntentoCrear(true);
+    if (!area) { setError(ta.cfgErrArea); return; }
+    if (!materia) { setError(ta.cfgErrMateria); return; }
+    if (!tema.trim()) { setError(ta.cfgErrTema); return; }
     // El juego corre sin banco de preguntas ni texto base, pero los equipos
     // tienen que inventar las preguntas en el momento y el árbitro pierde precisión.
     const faltanGenerar = getFaltantes();
@@ -416,9 +432,6 @@ export default function ArbitroConfigPage() {
       setMostrarAdvertenciaGenerar(true);
       return;
     }
-    if (!area) { setError(ta.cfgErrArea); return; }
-    if (!materia) { setError(ta.cfgErrMateria); return; }
-    if (!tema.trim()) { setError(ta.cfgErrTema); return; }
     setError(null); setLoading(true);
 
     // Iniciar sesión con Google es obligatorio para crear una sesión: así el
@@ -552,6 +565,15 @@ export default function ArbitroConfigPage() {
     return faltan;
   };
 
+  // Paso 7 ("Opciones de la sesión"): plegado por defecto, con un resumen de cómo quedan las opciones
+  // actuales — para que no haga falta desplegarlo si no se las quiere tocar. La función en sí vive en
+  // arbitroResumenOpciones.ts (testable sin renderizar la pantalla); acá solo se le pasa el estado actual.
+  const resumenOpcionesActual = (): string => resumenOpcionesSesion(ta, {
+    duracion, tiempoPregunta, permitirPreguntasPropias, modoMetacognicion,
+    preguntasMetaEditadas: preguntasParaGuardar().length > 0,
+    nCriterios: criteriosParaGuardar().length,
+  });
+
   return (
     <>
       <style>{`
@@ -577,9 +599,6 @@ export default function ArbitroConfigPage() {
               <span style={{ fontSize: 28 }}>{areaConfig ? areaConfig.emoji : "⚖️"}</span>
               <div>
                 <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{ta.sesTitle}</h1>
-                <p style={{ margin: "4px 0 0", fontSize: 13 }}>
-                  {area ? nombreVisible(ta.areaNames, area) : ta.cfgPickArea}
-                </p>
               </div>
             </div>
             <div className="arb-hdr-ctl" style={{
@@ -663,7 +682,7 @@ export default function ArbitroConfigPage() {
             <div role="status" style={srOnly}>{sesion ? ta.sessionCreatedAnnounce : generandoPreguntas ? ta.generatingQuestions : ""}</div>
 
             {/* Cómo funciona — acordeón */}
-            <ComoFuncionaAccordionES primary={accentColor} light={areaConfig ? areaConfig.light : "#f0f7ff"} border={areaConfig ? areaConfig.border : "#bfdbfe"} conTextoDuranteJuego={!!textoFuente.trim() && verTextoDuranteJuego} />
+            <ComoFuncionaAccordionES primary={PALETA.grisOscuro} light="#f8fafc" border="#e2e8f0" conTextoDuranteJuego={!!textoFuente.trim() && verTextoDuranteJuego} />
 
             {/* ── Área: línea compacta (área actual + «Cambiar»); las 4 opciones se despliegan al cambiar o si no hay área elegida ── */}
             <div>
@@ -671,16 +690,16 @@ export default function ArbitroConfigPage() {
                 <div style={{
                   display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
                   padding: "8px 12px", borderRadius: 12,
-                  backgroundColor: areaConfig ? `${areaConfig.primary}12` : "#f0f7ff",
-                  border: `2px solid ${areaConfig ? areaConfig.primary : "#bfdbfe"}`,
+                  backgroundColor: "#f8fafc",
+                  border: "2px solid #e2e8f0",
                 }}>
                   <span aria-hidden="true" style={{ fontSize: 22 }}>{areaConfig?.emoji}</span>
                   <span style={{ flex: 1, minWidth: 0, fontSize: 14, color: PALETA.grisOscuro }}>
-                    {ta.cfgAreaShort}: <strong style={{ color: areaConfig?.primary, fontWeight: 800 }}>{nombreVisible(ta.areaNames, area)}</strong>
+                    {ta.cfgAreaShort}: <strong style={{ color: "#1e293b", fontWeight: 800 }}>{nombreVisible(ta.areaNames, area)}</strong>
                   </span>
                   <button type="button" aria-expanded={areaAbierto} aria-controls="config-area-opciones" aria-label={ta.cfgAreaChangeLabel}
                     onClick={() => setAreaAbierto(v => !v)}
-                    style={{ minHeight: 44, padding: "0 14px", borderRadius: 10, border: `2px solid ${areaConfig ? areaConfig.primary : "#bfdbfe"}`, backgroundColor: "white", color: areaConfig ? areaConfig.primary : "#1e293b", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    style={{ minHeight: 44, padding: "0 14px", borderRadius: 10, border: "2px solid #cbd5e1", backgroundColor: "white", color: "#475569", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                     {ta.cfgAreaChange}
                   </button>
                 </div>
@@ -706,26 +725,26 @@ export default function ArbitroConfigPage() {
             </div>
 
             {/* ── Idioma del juego: antes de las preguntas, porque el generador con IA usa el idioma de la sesión ── */}
-              <fieldset style={fieldsetReset}>
-                <legend style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", padding: 0, marginBottom: 8 }}>{ta.cfgSessionLang}</legend>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+              <fieldset style={{ ...fieldsetReset, display: "flex", flexWrap: "wrap" as const, alignItems: "center", gap: 10, rowGap: 6 }}>
+                <legend style={{ ...legendReset, display: "inline-flex" as const, width: "auto", fontWeight: 700, fontSize: 14, color: "#1e293b" }}>{ta.cfgSessionLang}</legend>
+                <div style={{ display: "flex", gap: 6 }}>
                   {([
                     { id: "es" as const, label: ta.cfgLangEs },
                     { id: "en" as const, label: ta.cfgLangEn },
                   ]).map(i => (
                     <button key={i.id} type="button" lang={i.id} onClick={() => setIdiomaSesion(i.id)} aria-pressed={idiomaSesion === i.id}
                       style={{
-                        padding: "10px 6px", borderRadius: 10, minHeight: 44,
+                        padding: "6px 14px", borderRadius: 8, minHeight: 32,
                         border: `2px solid ${idiomaSesion === i.id ? accentColor : "#e2e8f0"}`,
                         backgroundColor: idiomaSesion === i.id ? `${accentColor}12` : "white",
                         color: idiomaSesion === i.id ? accentColor : "#64748b",
-                        fontWeight: 700, fontSize: 13, cursor: "pointer",
+                        fontWeight: 700, fontSize: 12, cursor: "pointer",
                       }}>
                       {i.label}
                     </button>
                   ))}
                 </div>
-                <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgSessionLangHint}</p>
+                <p style={{ margin: 0, fontSize: 12, color: PALETA.gris, lineHeight: 1.5, flexBasis: "100%" as const }}>{ta.cfgSessionLangHint}</p>
               </fieldset>
 
             {/* ── Nivel + Año ── */}
@@ -783,7 +802,7 @@ export default function ArbitroConfigPage() {
             {materia && (
               <div>
                 <PasoLabel n={3} htmlFor="config-tema">
-                  {ta.cfgTopic} <span style={{ color: PALETA.rojo, fontWeight: 700 }}>({ta.required})</span>
+                  {ta.cfgTopic} <span style={{ color: (intentoCrear && !tema.trim()) ? PALETA.rojo : PALETA.gris, fontWeight: 700 }}>({ta.required})</span>
                 </PasoLabel>
                 <input
                   id="config-tema"
@@ -823,7 +842,7 @@ export default function ArbitroConfigPage() {
                 {/* Aviso + contador de caracteres */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginTop: 6, gap: 12 }}>
                   <div style={{ fontSize: 12, color: PALETA.gris, lineHeight: 1.5, flex: 1 }}>
-                    ⚠️ <strong>{ta.cfgBeforePlayStrong}</strong> {ta.cfgBeforePlayA} <strong>{ta.cfgBeforePlayStrong2}</strong>{ta.cfgBeforePlayB}
+                    📖 <strong>{ta.cfgBeforePlayStrong}</strong> {ta.cfgBeforePlayA} <strong>{ta.cfgBeforePlayStrong2}</strong>{ta.cfgBeforePlayB}
                   </div>
                   {textoFuente.length > 0 && (
                     <div style={{
@@ -879,27 +898,61 @@ export default function ArbitroConfigPage() {
               </div>
             )}
 
-            {/* ── Material adicional (colapsable) ── */}
+            {/* ── 5. Modo de respuesta: tarjetas con título + una línea + detalle expandible (Etapa D) ── */}
+            {tema.trim() && (
+              <fieldset style={fieldsetReset}>
+                <PasoLabel n={5} legend>{ta.cfgAnswerMode}</PasoLabel>
+                <div className="arb-una-columna" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
+                  {([
+                    { id: "oral" as const, titulo: ta.cfgAnswerOralTitle, resumen: ta.cfgAnswerOralSummary, hint: ta.cfgAnswerOralHint, abierto: masDetalleOral, setAbierto: setMasDetalleOral },
+                    { id: "escrita" as const, titulo: ta.cfgAnswerWrittenTitle, resumen: ta.cfgAnswerWrittenSummary, hint: ta.cfgAnswerWrittenHint, abierto: masDetalleEscrita, setAbierto: setMasDetalleEscrita },
+                  ]).map(m => (
+                    <div key={m.id} style={{
+                      padding: "12px 14px", borderRadius: 10,
+                      border: `2px solid ${modoRespuesta === m.id ? accentColor : "#e2e8f0"}`,
+                      backgroundColor: modoRespuesta === m.id ? `${accentColor}12` : "white",
+                    }}>
+                      <button type="button" onClick={() => setModoRespuesta(m.id)} aria-pressed={modoRespuesta === m.id}
+                        style={{
+                          width: "100%", textAlign: "left" as const, background: "none", border: "none", padding: 0, margin: 0,
+                          cursor: "pointer", display: "flex", flexDirection: "column", gap: 4,
+                        }}>
+                        <span style={{ fontWeight: 700, fontSize: 14, color: modoRespuesta === m.id ? accentColor : "#1e293b" }}>
+                          {m.titulo}
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 400, color: PALETA.gris, lineHeight: 1.5 }}>{m.resumen}</span>
+                      </button>
+                      <button type="button" aria-expanded={m.abierto} aria-controls={`config-modo-detalle-${m.id}`}
+                        onClick={() => m.setAbierto(v => !v)}
+                        style={{ marginTop: 6, background: "none", border: "none", padding: 0, fontSize: 12, fontWeight: 600, color: accentColor, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                        <span aria-hidden="true">ⓘ</span> {ta.cfgAnswerMoreDetail} <span aria-hidden="true">{m.abierto ? "▲" : "▼"}</span>
+                      </button>
+                      {m.abierto && (
+                        <p id={`config-modo-detalle-${m.id}`} style={{ margin: "6px 0 0", fontSize: 12, fontWeight: 400, color: PALETA.gris, lineHeight: 1.5 }}>{m.hint}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {modoRespuesta === "escrita" && tiempoPregunta === 60 && (
+                  <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.ambar, lineHeight: 1.5 }}>
+                    ⚠️ {ta.cfgAnswerWrittenShortTimeWarning}
+                  </p>
+                )}
+              </fieldset>
+            )}
+
+            {/* ── 6. Preguntas para el juego: mismo formato que los demás pasos; sigue siendo plegable ── */}
             {tema.trim() && (
               <div id="banco-preguntas">
-                <button onClick={() => setShowMaterial(!showMaterial)} aria-expanded={showMaterial} style={{
-                  width: "100%", padding: "11px 16px", borderRadius: 10, textAlign: "left" as const,
-                  border: `1px solid ${showMaterial ? accentColor : "#e2e8f0"}`,
-                  backgroundColor: showMaterial ? `${accentColor}08` : "#f8fafc",
-                  color: showMaterial ? accentColor : "#475569",
-                  fontWeight: 600, fontSize: 13, cursor: "pointer",
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ width: 20, height: 20, borderRadius: "50%", backgroundColor: `${accentColor}20`, color: accentColor, fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      5
-                    </span>
-                    {ta.cfgGameQuestions}
-                  </span>
-                  <span style={{ fontSize: 12 }}>{showMaterial ? ta.cfgHide : ta.cfgAdd}</span>
-                </button>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <PasoLabel n={6}>{ta.cfgGameQuestions}</PasoLabel>
+                  <button type="button" onClick={() => setShowMaterial(!showMaterial)} aria-expanded={showMaterial} aria-controls="banco-preguntas-panel"
+                    style={{ background: "none", border: "none", padding: "4px 8px", fontSize: 12, fontWeight: 600, color: accentColor, cursor: "pointer" }}>
+                    {showMaterial ? ta.cfgHide : ta.cfgAdd}
+                  </button>
+                </div>
                 {showMaterial && (
-                  <div style={{ marginTop: 8 }}>
+                  <div id="banco-preguntas-panel" style={{ marginTop: 8 }}>
                     <p style={{ margin: "0 0 6px", fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>
                       {ta.cfgQuestionsHint1}
                     </p>
@@ -910,7 +963,6 @@ export default function ArbitroConfigPage() {
                     )}
                     {renderSelectorTipoPreguntas()}
                     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" as const }}>
-                      <label htmlFor="config-cantidad-preguntas-a" style={{ fontSize: 12, color: "#475569", fontWeight: 600 }}>{ta.cfgGenerateWithAI}</label>
                       <input id="config-cantidad-preguntas-a" aria-label={ta.questionsCountName} type="number" min={3} max={30} value={cantidadPreguntas}
                         onChange={e => setCantidadPreguntas(Math.min(30, Math.max(3, parseInt(e.target.value) || 6)))}
                         style={{ width: 56, padding: "6px 8px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 13 }} />
@@ -937,43 +989,23 @@ export default function ArbitroConfigPage() {
               </div>
             )}
 
-            {/* ── 6. Opciones de la sesión: agrupa los controles que antes iban sin número ── */}
+            {/* ── 7. Opciones de la sesión: plegado por defecto, con resumen de los valores actuales (Etapa D) ── */}
             {tema.trim() && (
               <fieldset style={fieldsetReset}>
-                <PasoLabel n={6} legend>{ta.cfgSessionOptions}</PasoLabel>
-                <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 10 }}>
-            {/* ── Modo de respuesta: oral (por defecto) o escrita — primero dentro del paso 6. Tarjetas (no
-                botones sueltos): cada una trae nombre, una bajada corta y la explicación completa, siempre
-                visible, elegida o no ── */}
-            {tema.trim() && (
-              <fieldset style={fieldsetReset}>
-                <legend style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", padding: 0, marginBottom: 8 }}>{ta.cfgAnswerMode}</legend>
-                <div className="arb-una-columna" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  {([
-                    { id: "oral" as const, nombre: ta.cfgAnswerOral, tag: ta.cfgAnswerOralTag, hint: ta.cfgAnswerOralHint },
-                    { id: "escrita" as const, nombre: ta.cfgAnswerWritten, tag: ta.cfgAnswerWrittenTag, hint: ta.cfgAnswerWrittenHint },
-                  ]).map(m => (
-                    <button key={m.id} type="button" onClick={() => setModoRespuesta(m.id)} aria-pressed={modoRespuesta === m.id}
-                      style={{
-                        textAlign: "left", padding: "12px 14px", borderRadius: 10, minHeight: 44,
-                        border: `2px solid ${modoRespuesta === m.id ? accentColor : "#e2e8f0"}`,
-                        backgroundColor: modoRespuesta === m.id ? `${accentColor}12` : "white",
-                        cursor: "pointer", display: "flex", flexDirection: "column", gap: 4,
-                      }}>
-                      <span style={{ fontWeight: 700, fontSize: 14, color: modoRespuesta === m.id ? accentColor : "#1e293b" }}>
-                        {m.nombre} — {m.tag}
-                      </span>
-                      <span style={{ fontSize: 12, fontWeight: 400, color: PALETA.gris, lineHeight: 1.5 }}>{m.hint}</span>
-                    </button>
-                  ))}
+                <PasoLabel n={7} legend>{ta.cfgSessionOptions}</PasoLabel>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginTop: 8, flexWrap: "wrap" as const }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgOptsLeaveAsIs}</p>
+                    <p style={{ margin: "4px 0 0", fontSize: 12, color: "#475569", lineHeight: 1.5, fontWeight: 600 }}>{resumenOpcionesActual()}</p>
+                  </div>
+                  <button type="button" aria-expanded={opcionesAbierto} aria-controls="config-opciones-panel"
+                    onClick={() => setOpcionesAbierto(v => !v)}
+                    style={{ minHeight: 36, padding: "0 14px", borderRadius: 10, border: "2px solid #cbd5e1", backgroundColor: "white", color: "#475569", fontWeight: 700, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>
+                    {opcionesAbierto ? ta.cfgOptsHide : ta.cfgOptsChange}
+                  </button>
                 </div>
-                {modoRespuesta === "escrita" && tiempoPregunta === 60 && (
-                  <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.ambar, lineHeight: 1.5 }}>
-                    ⚠️ {ta.cfgAnswerWrittenShortTimeWarning}
-                  </p>
-                )}
-              </fieldset>
-            )}
+                {opcionesAbierto && (
+                <div id="config-opciones-panel" style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 16 }}>
 
             {/* ── Duración ── */}
             {tema.trim() && (
@@ -1067,7 +1099,9 @@ export default function ArbitroConfigPage() {
                     </button>
                   ))}
                 </div>
-                <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>{ta.cfgMetaHint}</p>
+                <p style={{ margin: "6px 0 0", fontSize: 12, color: PALETA.gris, lineHeight: 1.5 }}>
+                  {modoMetacognicion === "individual" ? ta.cfgMetaIndividualHint : ta.cfgMetaGroupHint}
+                </p>
                 {modoMetacognicion === "individual" && (
                   <p style={{ margin: "4px 0 0", fontSize: 12, color: PALETA.ambar, lineHeight: 1.5 }}>⚠️ {ta.cfgMetaIndividualWarning}</p>
                 )}
@@ -1162,6 +1196,7 @@ export default function ArbitroConfigPage() {
             )}
 
                 </div>
+                )}
               </fieldset>
             )}
 
@@ -1200,6 +1235,10 @@ export default function ArbitroConfigPage() {
                     {ta.cfgShareClassroom}
                   </button>
                 </div>
+                <button onClick={() => setMostrarProyeccion(true)}
+                  style={{ width: "100%", padding: "11px 16px", borderRadius: 10, border: `2px solid ${accentColor}`, backgroundColor: "white", color: accentColor, fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 10 }}>
+                  📽️ {ta.proyButton}
+                </button>
                 <a href="/arbitro-panel"
                   style={{ display: "block", textAlign: "center", marginTop: 10, padding: "8px 0", minHeight: 24, fontSize: 13, color: PALETA.grisOscuro, textDecoration: "none", fontWeight: 600 }}>
                   {ta.cfgSeeHistory}
@@ -1220,7 +1259,6 @@ export default function ArbitroConfigPage() {
                       <div>
                       {renderSelectorTipoPreguntas()}
                       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" as const }}>
-                        <label htmlFor="config-cantidad-preguntas-b" style={{ fontSize: 12, color: "#475569", fontWeight: 600 }}>{ta.cfgGenerateWithAI}</label>
                         <input id="config-cantidad-preguntas-b" aria-label={ta.questionsCountName} type="number" min={3} max={30} value={cantidadPreguntas}
                           onChange={e => setCantidadPreguntas(Math.min(30, Math.max(3, parseInt(e.target.value) || 6)))}
                           style={{ width: 56, padding: "6px 8px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 13 }} />
@@ -1288,7 +1326,7 @@ export default function ArbitroConfigPage() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <button onClick={volverAlArbitro} style={btnSecondary}>{ta.jgBack}</button>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                  <button onClick={() => handleGenerar()} disabled={!canGenerate} style={{
+                  <button onClick={() => handleGenerar()} aria-disabled={!canGenerate} style={{
                     padding: "12px 24px", fontSize: 14, fontWeight: 700, borderRadius: 10, border: "none",
                     background: canGenerate ? headerGrad : PALETA.gris,
                     color: "white", cursor: canGenerate ? "pointer" : "not-allowed",
@@ -1519,6 +1557,15 @@ export default function ArbitroConfigPage() {
               )}
             </div>
         </ModalDialogo>
+      )}
+
+      {mostrarProyeccion && sesion && (
+        <ProyeccionCodigoArbitro
+          codigo={sesion.id}
+          idioma={idiomaCreada}
+          colorPrimario={accentColor}
+          onCerrar={() => setMostrarProyeccion(false)}
+        />
       )}
     </>
   );

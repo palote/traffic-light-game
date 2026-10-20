@@ -238,7 +238,14 @@ export default function ArbitroJuegoPage() {
     return { guardada: g, resuelta: !g };
   });
 
-  const aplicarPartida = (g: PartidaGuardada) => {
+  // conservarPartidaIdPropio: true para el restore silencioso del armado de equipos (ver
+  // el useEffect de más abajo) — ahí puede haber otra pestaña arrancando una partida distinta
+  // bajo el mismo código, y como en el armado todavía no se mandó nada al servidor (partidaId
+  // solo lo usan registrarRonda y el informe final), no hay nada que perder si esta pestaña
+  // sigue con el suyo. En continuarPartida (el alumno elige "Continuar" en el diálogo) se
+  // mantiene el comportamiento de siempre: ahí sí hace falta el partidaId guardado, para que
+  // las rondas que ya se registraron en el servidor sigan bajo el mismo id.
+  const aplicarPartida = (g: PartidaGuardada, opts?: { conservarPartidaIdPropio?: boolean }) => {
     setNombreEquipo1(g.nombreEquipo1); setNombreEquipo2(g.nombreEquipo2);
     setColorEquipo1(g.colorEquipo1); setColorEquipo2(g.colorEquipo2);
     setIntegrantesEquipo1(g.integrantesEquipo1); setIntegrantesEquipo2(g.integrantesEquipo2);
@@ -246,7 +253,7 @@ export default function ArbitroJuegoPage() {
     setPreguntaNumero(g.preguntaNumero); setEquipoPreguntaIdx(g.equipoPreguntaIdx);
     setPuntosEquipo1(g.puntosEquipo1); setPuntosEquipo2(g.puntosEquipo2);
     setRegistros(g.registros);
-    if (g.partidaId) setPartidaId(g.partidaId);
+    if (g.partidaId && !opts?.conservarPartidaIdPropio) setPartidaId(g.partidaId);
     setPreguntaActual(g.preguntaActual); setUsarPreguntaPropia(g.usarPreguntaPropia); setPreguntaBorrador(g.preguntaBorrador);
     setRespuestaActual(g.respuestaActual); setCalificacionActual(g.calificacionActual); setJustificacionCalificacion(g.justificacionCalificacion);
     setDisputaPregunta(g.disputaPregunta); setDisputaRespuesta(g.disputaRespuesta);
@@ -271,10 +278,12 @@ export default function ArbitroJuegoPage() {
   };
 
   // Un guardado que quedó en la pantalla de armado de equipos no es "una partida en curso":
-  // se restaura sin preguntar (son solo los nombres que ya habían escrito).
+  // se restaura sin preguntar (son solo los nombres que ya habían escrito). Puede ser OTRA
+  // pestaña de este navegador arrancando una partida distinta con el mismo código (nadie
+  // mandó nada al servidor todavía), así que esta pestaña sigue con su propio partidaId.
   useEffect(() => {
     purgarPartidasVencidas();
-    if (rec.guardada && rec.guardada.pantalla === "setup") aplicarPartida(rec.guardada);
+    if (rec.guardada && rec.guardada.pantalla === "setup") aplicarPartida(rec.guardada, { conservarPartidaIdPropio: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -727,6 +736,7 @@ export default function ArbitroJuegoPage() {
                 round: g.preguntaNumero, total: g.vueltasTotales,
               })}
             </div>
+            <div style={{ fontSize: 12, color: PALETA.gris, marginTop: -12, marginBottom: 18 }}>{t.resumeOtherTab}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <button onClick={continuarPartida} style={btnPrimario(colors.gradient, false)}>{t.resumeContinue}</button>
               <button onClick={empezarDeNuevo}

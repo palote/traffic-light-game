@@ -37,3 +37,18 @@ export function textoErrorArbitro(err: any, ta: object, respaldo?: string): stri
   if (typeof texto === "string" && texto) return texto;
   return respaldo ?? String(err?.message || "");
 }
+
+// Como textoErrorArbitro, pero antes de mirar errorMotivo_<motivo> prueba `reemplazos`: una
+// pantalla que necesita su propia redacción para uno o más motivos puntuales (por ejemplo,
+// el ingreso de alumnos por código, que no puede reusar los errorMotivo_sesion_* genéricos
+// porque esos hablan de un link) se lo pasa acá, sin tocar el diccionario compartido.
+export function textoErrorArbitroConReemplazos(
+  err: any,
+  ta: object,
+  reemplazos: Record<string, string | undefined>,
+  respaldo?: string
+): string {
+  const m = motivoDeError(err);
+  if (m && reemplazos[m]) return reemplazos[m] as string;
+  return textoErrorArbitro(err, ta, respaldo);
+}

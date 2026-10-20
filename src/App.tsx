@@ -56,6 +56,7 @@ import { I18nProvider, useI18n, htmlLangForPath } from "./i18n";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
 import { setManifestForRoute } from "./utils/dynamicManifest";
+import { normalizarCodigoSesion } from "./utils/arbitroCodigo";
 
 import type { Game } from "./types/game";
 
@@ -129,6 +130,7 @@ const ArbitroLandingPage = lazy(() => import("./pages/ArbitroLandingPage"));
 const ArbitrosInfoPage = lazy(() => import("./pages/ArbitrosInfoPage"));
 const ArbitrosPublicaPage = lazy(() => import("./pages/ArbitrosPublicaPage"));
 const ArbitroJuegoPage = lazy(() => import("./pages/ArbitroJuegoPage"));
+const ArbitroIngresoPage = lazy(() => import("./pages/ArbitroIngresoPage"));
 
 // 📊 A/B TEST DASHBOARD
 import { ABTestDashboard } from "./components/ABTestDashboard";
@@ -543,6 +545,22 @@ function ArbitroLangManager() {
   return null;
 }
 
+// 🆕 /arbitro-juego/:sessionId: si el código en la URL trae minúsculas, espacios o guiones
+// de más, redirige a la forma canónica ANTES de montar ArbitroJuegoPage. No hace esta
+// comprobación como un return temprano dentro de ArbitroJuegoPage: al cambiar solo el
+// parámetro de la URL, React reutiliza la misma instancia del componente, y si el primer
+// render no llegó a llamar a todos sus hooks (por el return temprano) y el segundo sí,
+// rompe las reglas de hooks. Este wrapper, en cambio, llama siempre el mismo único hook
+// (useParams) y decide ANTES de montar ArbitroJuegoPage, que así nace ya con el código bueno.
+function ArbitroJuegoRutaCanonica() {
+  const { sessionId } = useParams<{ sessionId: string }>();
+  const canonico = sessionId ? normalizarCodigoSesion(sessionId) : sessionId;
+  if (sessionId && canonico !== sessionId) {
+    return <Navigate to={`/arbitro-juego/${canonico}`} replace />;
+  }
+  return <ArbitroJuegoPage />;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -781,7 +799,26 @@ function App() {
                   path="/arbitro-juego/:sessionId"
                   element={
                     <Suspense fallback={<div>Cargando...</div>}>
-                      <ArbitroJuegoPage />
+                      <ArbitroJuegoRutaCanonica />
+                    </Suspense>
+                  }
+                />
+                {/* 🆕 ÁRBITRO: ingreso de alumnos — un campo con el código de sesión.
+                    Misma página en los dos dominios y en las dos rutas; el idioma sale
+                    del dominio (como el resto de las pantallas del árbitro). */}
+                <Route
+                  path="/alumnos"
+                  element={
+                    <Suspense fallback={<div>Cargando...</div>}>
+                      <ArbitroIngresoPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/students"
+                  element={
+                    <Suspense fallback={<div>Loading...</div>}>
+                      <ArbitroIngresoPage />
                     </Suspense>
                   }
                 />

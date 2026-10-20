@@ -110,9 +110,9 @@ ok(cfg.includes("instruccionesPorDefecto(arbitroDic(idiomaSesion), tema.trim(), 
 
 // 6) modo de respuesta: tarjetas, mismos valores internos, oral por defecto
 ok(/const \[modoRespuesta, setModoRespuesta\] = useState<ModoRespuesta>\("oral"\)/.test(cfg), "oral sigue siendo el valor por defecto");
-ok(/\{ id: "oral" as const, nombre: ta\.cfgAnswerOral, tag: ta\.cfgAnswerOralTag, hint: ta\.cfgAnswerOralHint \}/.test(cfg) && /\{ id: "escrita" as const, nombre: ta\.cfgAnswerWritten, tag: ta\.cfgAnswerWrittenTag, hint: ta\.cfgAnswerWrittenHint \}/.test(cfg), "las tarjetas guardan 'oral'/'escrita' como valor interno (mismos de siempre)");
+ok(/\{ id: "oral" as const, titulo: ta\.cfgAnswerOralTitle, resumen: ta\.cfgAnswerOralSummary, hint: ta\.cfgAnswerOralHint,/.test(cfg) && /\{ id: "escrita" as const, titulo: ta\.cfgAnswerWrittenTitle, resumen: ta\.cfgAnswerWrittenSummary, hint: ta\.cfgAnswerWrittenHint,/.test(cfg), "las tarjetas guardan 'oral'/'escrita' como valor interno (mismos de siempre)");
 ok(/onClick=\{\(\) => setModoRespuesta\(m\.id\)\} aria-pressed=\{modoRespuesta === m\.id\}/.test(cfg), "cada tarjeta es seleccionable (aria-pressed) y setea modoRespuesta");
-ok(/\{m\.nombre\} — \{m\.tag\}/.test(cfg) && /\{m\.hint\}/.test(cfg), "cada tarjeta muestra nombre, bajada y explicación");
+ok(/\{m\.titulo\}/.test(cfg) && /\{m\.resumen\}/.test(cfg) && /\{m\.hint\}/.test(cfg), "cada tarjeta muestra título, resumen de una línea y (al abrir 'Más detalle') la explicación completa");
 
 // 7) juego
 const juego = leer("src/pages/ArbitroJuegoPage.tsx");
@@ -135,7 +135,7 @@ ok(/criterios de calificaci[oó]n/.test(es.cfgHow3D) && /docente/.test(es.cfgHow
 ok(/grading criteria/i.test(en.cfgHow3D) && /teacher/i.test(en.cfgHow3D), "en: cfgHow3D menciona los criterios del docente");
 
 // 10) claves es/en
-for (const k of ["cfgCriteriosTitle", "cfgCriteriosHint", "cfgCriterioPropio", "cfgAnswerMode", "cfgAnswerOral", "cfgAnswerWritten", "cfgAnswerOralTag", "cfgAnswerWrittenTag", "cfgAnswerOralHint", "cfgAnswerWrittenHint", "cfgAnswerWrittenShortTimeWarning", "jgCriteriosTitle", "jgCriteriosCompactTitle", "panCriteriosLabel", "docInstrCriteriaTitle", "cfgHow3D"]) ok(es[k] && en[k], `texto ${k} en es y en`);
+for (const k of ["cfgCriteriosTitle", "cfgCriteriosHint", "cfgCriterioPropio", "cfgAnswerMode", "cfgAnswerOralTitle", "cfgAnswerWrittenTitle", "cfgAnswerOralSummary", "cfgAnswerWrittenSummary", "cfgAnswerMoreDetail", "cfgAnswerOralHint", "cfgAnswerWrittenHint", "cfgAnswerWrittenShortTimeWarning", "jgCriteriosTitle", "jgCriteriosCompactTitle", "panCriteriosLabel", "docInstrCriteriaTitle", "cfgHow3D"]) ok(es[k] && en[k], `texto ${k} en es y en`);
 ok(!("cfgCriterioN" in es) && !("cfgCriterioN" in en), "cfgCriterioN ya no existe (los campos fijos de texto libre se reemplazaron por sugeridos + propio)");
 
 if (fallos) { console.error(`\nFALLÓ: ${fallos} de ${total} comprobaciones`); process.exit(1); }

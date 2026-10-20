@@ -14,6 +14,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { PALETA } from "../utils/arbitroPalette";
 import { coloresArea } from "../utils/arbitroAreas";
 import { DialogoEnPagina, ModalDialogo, fieldsetReset, legendReset, srOnly } from "../utils/arbitroA11y";
+import ProyeccionCodigoArbitro from "../components/ProyeccionCodigoArbitro";
 
 const ADMIN_UID = "P2lU12xoCxMkZ0AdZdMoGGksJ5o1";
 
@@ -228,6 +229,7 @@ export default function ArbitroPanelPage() {
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [mostrarTexto, setMostrarTexto] = useState(false);
   const [modoAdmin, setModoAdmin] = useState(false);
+  const [proyeccionSesion, setProyeccionSesion] = useState<SesionResumen | null>(null);
   const [todasSesiones, setTodasSesiones] = useState<SesionResumen[]>([]);
   const [loadingAdmin, setLoadingAdmin] = useState(false);
   const [rondasData, setRondasData] = useState<RondasData | null>(null);
@@ -1702,6 +1704,12 @@ export default function ArbitroPanelPage() {
                         style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: c.gradient, color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                         {sesion.tieneInforme ? ta.panViewReport : ta.panGenerateReport}
                       </button>
+                      {new Date(sesion.expiresAt) > new Date() && (
+                        <button onClick={() => setProyeccionSesion(sesion)}
+                          style={{ padding: "8px 16px", borderRadius: 8, border: `2px solid ${c.primary}`, backgroundColor: "white", color: c.primary, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                          📽️ {ta.proyButton}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1710,6 +1718,15 @@ export default function ArbitroPanelPage() {
           })}
         </div>
       </div>
+
+      {proyeccionSesion && (
+        <ProyeccionCodigoArbitro
+          codigo={proyeccionSesion.id}
+          idioma={proyeccionSesion.idioma}
+          colorPrimario={coloresArea(proyeccionSesion.area).primary}
+          onCerrar={() => setProyeccionSesion(null)}
+        />
+      )}
     </main>
   );
 }

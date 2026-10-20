@@ -105,7 +105,7 @@ ok(/textoIntegrantes\(eq\.integrantes\)/.test(panel) && /eq\.individuales/.test(
 const selects = [...ext.matchAll(/\.select\(([^)]*)\)/g)].map((m) => m[1]).join(" ");
 ok(selects.length > 0 && !/individuales|modoMetacognicion|integrantes|alumno|equipos|respuestas/.test(selects), "el extractor no pide integrantes, equipos, respuestas ni reflexiones individuales en ningún select");
 ok(!/\.(get|data)\(\)\s*\.\s*(equipos|individuales)|\.individuales|\.integrantes/.test(ext), "el extractor no lee esos campos de los documentos");
-for (const k of ["jgStudentN", "jgStudentPlaceholder", "jgAddStudent", "jgAddStudentTo", "jgRemoveStudent", "jgRemoveStudentLabel", "jgMembersNotice", "jgMembersNoticeInd", "jgMetaIndTurn", "jgMetaIndIntro", "jgMetaIndNext", "jgMetaIndSkip", "cfgMetaMode", "cfgMetaGroup", "cfgMetaIndividual", "cfgMetaHint", "docInstrStep6Ind", "docIndStudent"])
+for (const k of ["jgStudentN", "jgStudentPlaceholder", "jgAddStudent", "jgAddStudentTo", "jgRemoveStudent", "jgRemoveStudentLabel", "jgMembersNotice", "jgMembersNoticeInd", "jgMetaIndTurn", "jgMetaIndIntro", "jgMetaIndNext", "jgMetaIndSkip", "cfgMetaMode", "cfgMetaGroup", "cfgMetaIndividual", "cfgMetaGroupHint", "cfgMetaIndividualHint", "docInstrStep6Ind", "docIndStudent"])
   ok(typeof es[k] === "string" && typeof en[k] === "string" && es[k] && en[k], `texto ${k} en es y en`);
 
 if (fallos) { console.error(`\nFALLÓ: ${fallos} de ${total} comprobaciones`); process.exit(1); }
