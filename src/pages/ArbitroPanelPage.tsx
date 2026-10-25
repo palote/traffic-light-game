@@ -305,7 +305,7 @@ export default function ArbitroPanelPage() {
 
   useEffect(() => {
     if (authLoading) return; // esperar a que Firebase Auth termine de restaurar la sesión
-    if (!user) { navigate("/login"); return; }
+    if (!user) { navigate("/login?next=/arbitro-panel"); return; }
 
     const fn = httpsCallable(functions, "listarSesionesDocente");
     // El servidor usa el uid de la sesión autenticada; no se envía uid desde acá.

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { ref, onValue, off, remove, get, query, orderByChild, equalTo } from "firebase/database";
 import { database } from "../firebase.config";
 import { useAuth } from "../contexts/AuthContext";
-import { useGameMode, type GameMode } from "../contexts/GameModeContext";
+import { useGameMode, getThemeByMode, type GameMode } from "../contexts/GameModeContext";
 import { useI18n, useArbitroT, LanguageSelector } from "../i18n";
 import { nombreVisible } from "../utils/arbitroNombres";
 import { AREAS_ORDEN, AREA_EMOJI, AREA_LABELS_ES } from "../utils/arbitroAreas";
@@ -427,6 +427,8 @@ export function DashboardPage() {
   const { t, language } = useI18n();
   const ta = useArbitroT();
   const theme = getLocalizedTheme(language);
+  // Encabezado fijo: colores y nombre de primaria, sin importar el modo elegido (el selector vive en la tarjeta del Semáforo).
+  const headerTheme = getThemeByMode("traffic-light", language);
   // Única fuente de áreas: utils/arbitroAreas (claves, emoji, nombre interno) + AREA_COLORS + ta.areaNames.
   const areasArbitro = AREAS_ORDEN.map((key) => ({
     key,
@@ -546,20 +548,14 @@ export function DashboardPage() {
     <div style={{ minHeight: "100vh", background: `linear-gradient(180deg, ${theme.cardHoverBg} 0%, #f8fafc 50%, #f1f5f9 100%)`, fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif" }}>
 
       {/* ── HEADER ── */}
-      <header style={{ background: theme.primaryGradient, padding: "20px 32px", color: "white", boxShadow: `0 4px 20px ${theme.primary}40` }}>
+      <header style={{ background: headerTheme.primaryGradient, padding: "20px 32px", color: "white", boxShadow: `0 4px 20px ${headerTheme.primary}40` }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 28 }}>{theme.icon}</span>
+            <span style={{ fontSize: 28 }}>{headerTheme.icon}</span>
             <div>
-              <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{theme.name}</h1>
+              <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{headerTheme.name}</h1>
               <p style={{ margin: 0, fontSize: 11, opacity: 0.85 }}>{t.dashboard.tagline}</p>
             </div>
-            {/* Mode button — shows current level, click to change */}
-            <button
-              onClick={() => setShowModeSelector(true)}
-              style={{ padding: "6px 14px", fontSize: 13, fontWeight: 700, borderRadius: 20, border: "2px solid rgba(255,255,255,0.4)", backgroundColor: "rgba(255,255,255,0.15)", color: "white", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, marginLeft: 8 }}>
-              {modeBtnLabel}
-            </button>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <LanguageSelector compact />
@@ -585,106 +581,97 @@ export function DashboardPage() {
           </div>
         )}
 
+        {/* Aviso para actuar: solo aparece si hay autoevaluaciones pendientes de revisar */}
         <EvaluationsSection gamesWithEvaluations={gamesWithEvaluations} t={t} />
 
-        {/* ══ SECCIÓN 1: TRABAJO EN GRUPO · ÁRBITROS DE APRENDIZAJE ══ */}
-        <div style={{ marginBottom: 48 }}>
+        {/* ══ ÁRBITROS Y SEMÁFORO, LADO A LADO (en el celular, uno debajo del otro, Árbitros primero) ══ */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 20, marginBottom: 32 }}>
 
-          {/* Título de sección */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-              <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>
-                {t.dashboard.groupWork}
-              </h2>
-              <div style={{ width: 1, height: 14, backgroundColor: "#cbd5e1" }} />
-              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#1e293b" }}>
-                {t.dashboard.arbitrosTitle}
-              </h2>
-              <span style={{ fontSize: 13, color: "#94a3b8" }}>·</span>
-              <button onClick={() => navigate("/arbitros-info")} style={{ background: "none", border: "none", color: "#1e40af", cursor: "pointer", fontSize: 13, textDecoration: "underline", padding: 0 }}>
+          {/* Tarjeta Árbitros — trabajo en grupo */}
+          <div style={{ backgroundColor: "white", borderRadius: 20, padding: 28, boxShadow: "0 4px 16px rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>
+                {t.dashboard.arbLabel}
+              </div>
+              <h2 style={{ margin: "0 0 8px 0", fontSize: 22, fontWeight: 800, color: "#1e293b" }}>{t.dashboard.arbitrosTitle}</h2>
+              <p style={{ margin: 0, fontSize: 14, color: "#1e40af", lineHeight: 1.5 }}>{t.dashboard.arbDesc}</p>
+            </div>
+
+            {/* Áreas como botones chicos */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {areasArbitro.map(area => (
+                <button key={area.key} onClick={() => navigate(`/arbitro-config?area=${area.key}`)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999, border: `1.5px solid ${area.primary}35`, background: "white", color: area.primary, fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "background-color 0.2s" }}
+                  onMouseOver={e => { e.currentTarget.style.backgroundColor = `${area.primary}12`; }}
+                  onMouseOut={e => { e.currentTarget.style.backgroundColor = "white"; }}>
+                  <span>{area.emoji}</span>{area.nombre}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginTop: "auto", paddingTop: 4 }}>
+              <button onClick={() => navigate("/arbitro-panel")}
+                style={{ padding: "11px 20px", fontSize: 14, fontWeight: 700, borderRadius: 10, border: "none", background: "linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%)", color: "white", cursor: "pointer" }}>
+                {ta.cfgMySessions}
+              </button>
+              <button onClick={() => navigate("/arbitros-info")} style={{ background: "none", border: "none", color: "#1e40af", cursor: "pointer", fontSize: 13, textDecoration: "underline", padding: "8px 4px" }}>
                 {t.dashboard.moreInfo}
               </button>
             </div>
           </div>
 
-          {/* Cards de área */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 14 }}>
-            {areasArbitro.map(area => (
-              <button key={area.key} onClick={() => navigate(`/arbitro-config?area=${area.key}`)}
-                style={{ padding: 20, borderRadius: 16, border: "2px solid transparent", background: "white", boxShadow: "0 3px 12px rgba(0,0,0,0.06)", cursor: "pointer", transition: "all 0.2s", textAlign: "left", display: "flex", flexDirection: "column", gap: 10 }}
-                onMouseOver={e => { e.currentTarget.style.transform = "translateY(-5px)"; e.currentTarget.style.boxShadow = `0 12px 28px ${area.primary}22`; e.currentTarget.style.borderColor = area.primary; }}
-                onMouseOut={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 3px 12px rgba(0,0,0,0.06)"; e.currentTarget.style.borderColor = "transparent"; }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: area.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, boxShadow: `0 4px 12px ${area.primary}30` }}>
-                  {area.emoji}
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 3, lineHeight: 1.3 }}>{area.nombre}</div>
-                  <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.4 }}>{area.desc}</div>
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: area.primary }}>{t.dashboard.configureSession}</div>
-              </button>
-            ))}
-          </div>
-        </div>
+          {/* Tarjeta Semáforo — la dinámica completa */}
+          <div style={{ backgroundColor: "white", borderRadius: 20, padding: 28, boxShadow: "0 4px 16px rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>
+                {t.dashboard.semaforoLabel}
+              </div>
+              <h2 style={{ margin: "0 0 8px 0", fontSize: 22, fontWeight: 800, color: "#1e293b" }}>{theme.name}</h2>
+              <p style={{ margin: 0, fontSize: 14, color: "#1e40af", lineHeight: 1.5 }}>{t.dashboard.semaforoDesc}</p>
+            </div>
 
-        {/* ══ SECCIÓN 2: LA DINÁMICA COMPLETA · EL JUEGO DEL SEMÁFORO ══ */}
-        <div style={{ marginBottom: 48 }}>
+            {/* Selector de nivel — antes vivía en el encabezado */}
+            <button onClick={() => setShowModeSelector(true)}
+              style={{ alignSelf: "flex-start", padding: "8px 16px", fontSize: 13, fontWeight: 700, borderRadius: 20, border: `2px solid ${theme.primary}40`, backgroundColor: theme.cardHoverBg, color: theme.primary, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              {modeBtnLabel}
+            </button>
 
-          {/* Título de sección */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-              <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>
-                {t.dashboard.fullDynamic}
-              </h2>
-              <div style={{ width: 1, height: 14, backgroundColor: "#cbd5e1" }} />
-              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#1e293b" }}>
-                {theme.name}
-              </h2>
-              <span style={{ fontSize: 13, color: "#94a3b8" }}>·</span>
-              <button onClick={() => navigate("/about")} style={{ background: "none", border: "none", color: "#1e40af", cursor: "pointer", fontSize: 13, textDecoration: "underline", padding: 0 }}>
-                {t.dashboard.moreInfo}
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <button
+                onClick={() => { setVideoLevel('selector'); setShowVideoModal(true); }}
+                style={{ padding: "10px 22px", fontSize: 13, fontWeight: 700, borderRadius: 10, border: "none", background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)", color: "white", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8, boxShadow: "0 3px 12px rgba(239,68,68,0.35)" }}>
+                ▶ {t.dashboard.watchVideo}
               </button>
             </div>
-          </div>
 
-          {/* Botón video */}
-          <div style={{ marginBottom: 20, display: "flex", justifyContent: "center" }}>
-            <button
-              onClick={() => { setVideoLevel('selector'); setShowVideoModal(true); }}
-              style={{ padding: "11px 24px", fontSize: 14, fontWeight: 700, borderRadius: 10, border: "none", background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)", color: "white", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8, boxShadow: "0 3px 12px rgba(239,68,68,0.35)" }}>
-              ▶ {t.dashboard.watchVideo}
-            </button>
-          </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <button onClick={() => navigate("/setup")}
+                style={{ padding: 16, borderRadius: 14, border: "none", backgroundColor: theme.cardHoverBg, cursor: "pointer", textAlign: "left", display: "flex", flexDirection: "column", gap: 6 }}>
+                <span style={{ fontSize: 20 }}>🚀</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{GAME_CARDS_STRINGS.newGame[lang].title}</span>
+                <span style={{ fontSize: 12, color: `color-mix(in srgb, ${theme.primary} 60%, black)`, fontWeight: 600 }}>{GAME_CARDS_STRINGS.newGame[lang].cta}</span>
+              </button>
+              <button onClick={() => navigate("/library")}
+                style={{ padding: 16, borderRadius: 14, border: "none", backgroundColor: "#f5f3ff", cursor: "pointer", textAlign: "left", display: "flex", flexDirection: "column", gap: 6 }}>
+                <span style={{ fontSize: 20 }}>🌐</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{GAME_CARDS_STRINGS.community[lang].title}</span>
+                <span style={{ fontSize: 12, color: "#6d28d9", fontWeight: 600 }}>{GAME_CARDS_STRINGS.community[lang].cta}</span>
+              </button>
+            </div>
 
-          {/* Cards del juego */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
-            <button onClick={() => navigate("/setup")}
-              style={{ padding: 28, borderRadius: 18, border: "none", backgroundColor: "white", boxShadow: "0 4px 16px rgba(0,0,0,0.08)", cursor: "pointer", transition: "all 0.3s", textAlign: "left", display: "flex", flexDirection: "column", gap: 14 }}
-              onMouseOver={e => { e.currentTarget.style.transform = "translateY(-6px)"; e.currentTarget.style.boxShadow = `0 16px 36px ${theme.primary}28`; }}
-              onMouseOut={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"; }}>
-              <div style={{ width: 52, height: 52, borderRadius: 14, background: theme.primaryGradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, boxShadow: `0 6px 20px ${theme.primary}35` }}>🚀</div>
-              <div>
-                <h3 style={{ margin: "0 0 6px 0", fontSize: 18, fontWeight: 700, color: "#1e293b" }}>{GAME_CARDS_STRINGS.newGame[lang].title}</h3>
-                <p style={{ margin: 0, fontSize: 13, color: "#1e40af", lineHeight: 1.5 }}>{GAME_CARDS_STRINGS.newGame[lang].description}</p>
-              </div>
-              <div style={{ color: `color-mix(in srgb, ${theme.primary} 60%, black)`, fontWeight: 600, fontSize: 13 }}>{GAME_CARDS_STRINGS.newGame[lang].cta}</div>
-            </button>
-
-            <button onClick={() => navigate("/library")}
-              style={{ padding: 28, borderRadius: 18, border: "none", backgroundColor: "white", boxShadow: "0 4px 16px rgba(0,0,0,0.08)", cursor: "pointer", transition: "all 0.3s", textAlign: "left", display: "flex", flexDirection: "column", gap: 14 }}
-              onMouseOver={e => { e.currentTarget.style.transform = "translateY(-6px)"; e.currentTarget.style.boxShadow = "0 16px 36px #8b5cf628"; }}
-              onMouseOut={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"; }}>
-              <div style={{ width: 52, height: 52, borderRadius: 14, background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, boxShadow: "0 6px 20px #8b5cf635" }}>🌐</div>
-              <div>
-                <h3 style={{ margin: "0 0 6px 0", fontSize: 18, fontWeight: 700, color: "#1e293b" }}>{GAME_CARDS_STRINGS.community[lang].title}</h3>
-                <p style={{ margin: 0, fontSize: 13, color: "#1e40af", lineHeight: 1.5 }}>{GAME_CARDS_STRINGS.community[lang].description}</p>
-              </div>
-              <div style={{ color: "#6d28d9", fontWeight: 600, fontSize: 13 }}>{GAME_CARDS_STRINGS.community[lang].cta}</div>
+            <button onClick={() => navigate("/about")}
+              style={{ background: "none", border: "none", color: "#1e40af", cursor: "pointer", fontSize: 13, textDecoration: "underline", padding: "8px 4px", textAlign: "left", marginTop: "auto" }}>
+              {t.dashboard.moreInfo}
             </button>
           </div>
         </div>
 
         <DashboardBanners />
+
+        {/* ══ LO QUE ES SOLO DEL SEMÁFORO: estadísticas y Mis juegos ══ */}
+        <h2 style={{ margin: "40px 0 20px", fontSize: 13, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>
+          {theme.name}
+        </h2>
 
         <TeacherStatsCard stats={teacherStats} loading={loadingStats} collapsed={statsCollapsed} onToggle={() => setStatsCollapsed(!statsCollapsed)} />
 
@@ -743,7 +730,7 @@ export function DashboardPage() {
             style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, marginBottom: toolsCollapsed ? 0 : 16, background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
             <span style={{ fontSize: 18 }}>🛠️</span>
             <div style={{ flex: 1 }}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: "#1e293b" }}>
+              <span style={{ fontSize: 22, fontWeight: 800, color: "#1e293b" }}>
                 {t.dashboard.moreTools}
               </span>
               {toolsCollapsed && (

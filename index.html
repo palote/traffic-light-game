@@ -20,7 +20,92 @@
     <meta name="apple-mobile-web-app-title" content="TL Game" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+    <link rel="manifest" href="/manifest.json" />
     <title>Traffic Light Game</title>
+
+    <!-- Elige el manifest.json (+ apple-touch-icon + apple-mobile-web-app-title) correcto antes de que
+         React monte, para que no haya un instante con el manifiesto equivocado. Misma regla que
+         src/utils/dynamicManifest.ts + src/utils/nextRoute.ts (que siguen aplicándola al navegar
+         dentro de la app); si se cambia una, hay que cambiar la otra — lo chequea
+         functions/scripts/verificar-etapa-e.cjs. -->
+    <script id="manifest-inline">
+      (function () {
+        function esRutaArbitro(pathname) {
+          return pathname.indexOf("/arbitro") === 0 || pathname.indexOf("/sesion/") === 0
+            || pathname.indexOf("/alumnos") === 0 || pathname.indexOf("/students") === 0;
+        }
+        // Igual que src/utils/nextRoute.ts: no alcanza con mirar si el string "parece" empezar con
+        // una sola barra — el parser de URLs trata "\" como separador y descarta tabs antes de armar
+        // la URL final, así que "/\evil.com" o "/\t/evil.com" resuelven a otro origen. Por eso se
+        // resuelve con new URL(next, origen) y se compara el origen resultante.
+        function rutaSiguienteValida(next, origen) {
+          if (typeof next !== "string" || next.length === 0) return "/";
+          if (next.indexOf("/") !== 0) return "/";
+          var url;
+          try { url = new URL(next, origen); } catch (e) { return "/"; }
+          if (url.origin !== origen) return "/";
+          return url.pathname + url.search + url.hash;
+        }
+        function esRutaArbitroParaManifest(pathname, search, origen) {
+          if (esRutaArbitro(pathname)) return true;
+          if (pathname === "/login") {
+            var params = new URLSearchParams(search);
+            var next = rutaSiguienteValida(params.get("next"), origen);
+            var nextPathname = next.split(/[?#]/)[0];
+            return esRutaArbitro(nextPathname);
+          }
+          return false;
+        }
+        function idiomaPorDominio(hostname) {
+          var h = String(hostname || "").toLowerCase();
+          if (h.indexOf("eljuegodelsemaforo") !== -1) return "es";
+          if (h.indexOf("trafficlight") !== -1 || h.indexOf("traffic-light") !== -1) return "en";
+          return null;
+        }
+
+        var pathname = window.location.pathname;
+        var search = window.location.search;
+        var origen = window.location.origin;
+        var hostname = window.location.hostname;
+
+        var esArbitro = esRutaArbitroParaManifest(pathname, search, origen);
+
+        var manifestHref, iconHref, titleContent;
+        if (esArbitro) {
+          var esIngles = idiomaPorDominio(hostname) === "en";
+          manifestHref = esIngles ? "/manifest-arbitro-en.json" : "/manifest-arbitro.json";
+          iconHref = "/icons/arbitro-icon-192.png";
+          titleContent = esIngles ? "Referees" : "Árbitro IA";
+        } else {
+          manifestHref = "/manifest.json";
+          iconHref = "/icons/icon-192x192.png";
+          titleContent = "TL Game";
+        }
+
+        function setLinkHref(rel, href) {
+          var link = document.querySelector('link[rel="' + rel + '"]');
+          if (!link) {
+            link = document.createElement("link");
+            link.rel = rel;
+            document.head.appendChild(link);
+          }
+          link.href = href;
+        }
+        function setMetaContent(name, content) {
+          var meta = document.querySelector('meta[name="' + name + '"]');
+          if (!meta) {
+            meta = document.createElement("meta");
+            meta.name = name;
+            document.head.appendChild(meta);
+          }
+          meta.setAttribute("content", content);
+        }
+
+        setLinkHref("manifest", manifestHref);
+        setLinkHref("apple-touch-icon", iconHref);
+        setMetaContent("apple-mobile-web-app-title", titleContent);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

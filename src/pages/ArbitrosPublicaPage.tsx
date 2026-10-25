@@ -2,6 +2,7 @@
 // Portada pública de los Árbitros de Aprendizaje (/arbitros): no pide sesión. Entrada para el jurado y para quien
 // llega por primera vez. Las áreas salen del catálogo común (utils/arbitroAreas) y se muestran con nombreVisible.
 import { Link } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import { useI18n, useArbitroT, useTituloPagina, LanguageSelector, IDIOMAS_ARBITRO } from "../i18n";
 import { es } from "../i18n/es";
 import { en } from "../i18n/en";
@@ -35,6 +36,7 @@ function BotonProbar({ ta, variante }: { ta: { pubTryClass: string; pubNewTab: s
 export default function ArbitrosPublicaPage() {
   const ta = useArbitroT();
   const { language } = useI18n();
+  const { user } = useAuth();
   // Mismo criterio que el resto del árbitro: solo hay textos en español e inglés (el portugués cae en español).
   const dash = (language === "en" ? en : es).dashboard;
   useTituloPagina(`${ta.infTitle} — ${ta.pageTitleSuffix}`);
@@ -63,9 +65,15 @@ export default function ArbitrosPublicaPage() {
           </Link>
           <nav style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <LanguageSelector compact tone="onLight" idiomas={IDIOMAS_ARBITRO} />
-            <Link to="/login" className="arb-pub-link" style={{ color: AZUL, fontSize: 14, fontWeight: 600, textDecoration: "underline", padding: "8px 4px" }}>
-              {ta.pubLogin}
-            </Link>
+            {user ? (
+              <Link to="/arbitro-panel" className="arb-pub-link" style={{ color: AZUL, fontSize: 14, fontWeight: 600, textDecoration: "underline", padding: "8px 4px" }}>
+                {ta.cfgMySessions}
+              </Link>
+            ) : (
+              <Link to="/login?next=/arbitro-panel" className="arb-pub-link" style={{ color: AZUL, fontSize: 14, fontWeight: 600, textDecoration: "underline", padding: "8px 4px" }}>
+                {ta.pubLogin}
+              </Link>
+            )}
           </nav>
         </div>
       </header>

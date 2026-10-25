@@ -529,7 +529,7 @@ function ManifestManager() {
   const location = useLocation();
   useEffect(() => {
     setManifestForRoute();
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
   return null;
 }
 

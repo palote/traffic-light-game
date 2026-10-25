@@ -125,18 +125,15 @@ export default function ArbitrosInfoPage() {
             <div style={{ padding: "0 24px 20px" }}>
               <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 16, fontSize: 14, color: "#374151", lineHeight: 1.7 }}>
                 <p style={{ margin: "0 0 12px" }}>
-                  {ta.infSem1a} <strong>{ta.infSemName}</strong>{ta.infSem1b}
-                </p>
-                <p style={{ margin: "0 0 12px" }}>
-                  {ta.infSem2}
-                </p>
-                <p style={{ margin: 0 }}>
                   <button
                     onClick={() => navigate("/about")}
-                    style={{ background: "none", border: "none", color: "#0369a1", cursor: "pointer", fontSize: 14, fontWeight: 600, padding: 0, textDecoration: "underline" }}
+                    style={{ background: "none", border: "none", color: "#0369a1", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: 0, textDecoration: "underline" }}
                   >
-                    {ta.infMore}
-                  </button>
+                    {ta.infSemName}
+                  </button>{ta.infSem1b}
+                </p>
+                <p style={{ margin: 0 }}>
+                  {ta.infSem2}
                 </p>
               </div>
             </div>

@@ -59,9 +59,12 @@ const bloque = app.slice(app.indexOf('path="/arbitros"'), app.indexOf('path="/ar
 ok(app.includes('path="/arbitros"') && bloque.includes("<ArbitrosPublicaPage />") && !bloque.includes("ProtectedRoute"), 'App.tsx: /arbitros debe ser una ruta pública (sin ProtectedRoute)');
 for (const ruta of ["/arbitro-config", "/arbitro/:area", "/arbitros-info", "/arbitro-panel"]) { const i = app.indexOf(`path="${ruta}"`); ok(i > 0, `App.tsx: falta la ruta ${ruta}`); }
 const pub = leer("pages/ArbitrosPublicaPage.tsx");
-ok(!/useAuth|AuthContext|ProtectedRoute/.test(pub), "ArbitrosPublicaPage no debe depender de la sesión");
+// Etapa E: la portada ahora SÍ mira useAuth (solo para elegir "Iniciar sesión" vs. "Mis sesiones" en el
+// encabezado), pero sigue sin estar protegida por sesión: no ProtectedRoute, se puede ver sin iniciar sesión.
+ok(!/ProtectedRoute/.test(pub), "ArbitrosPublicaPage no debe estar protegida por sesión (ProtectedRoute)");
 ok(!/DashboardPage|Semáforo|useGameMode/.test(pub), "ArbitrosPublicaPage no debe mezclar el dashboard ni el Semáforo");
-ok(/<Link to="\/login"/.test(pub), "ArbitrosPublicaPage: debe tener el link a /login");
+ok(/<Link to="\/login\?next=\/arbitro-panel"/.test(pub), "ArbitrosPublicaPage: sin sesión, el link va a /login?next=/arbitro-panel");
+ok(/<Link to="\/arbitro-panel"/.test(pub) && /\{ta\.cfgMySessions\}/.test(pub), "ArbitrosPublicaPage: con sesión, muestra Mis sesiones (cfgMySessions) → /arbitro-panel");
 const { esRutaArbitro } = cargar("utils/arbitroRoutes.ts");
 ok(esRutaArbitro("/arbitros"), "/arbitros cae bajo las rutas del árbitro (idioma es/en, <html lang>)");
 // El resto del sitio no limita idiomas

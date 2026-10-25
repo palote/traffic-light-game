@@ -3,13 +3,17 @@
   "short_name": "TL Game",
   "description": "Juego educativo interactivo de semáforos para el aula",
   "start_url": "/",
+  "id": "/",
   "display": "standalone",
   "background_color": "#1a1a1a",
   "theme_color": "#646cff",
   "orientation": "any",
   "scope": "/",
   "lang": "es",
-  "categories": ["education", "games"],
+  "categories": [
+    "education",
+    "games"
+  ],
   "icons": [
     {
       "src": "/icons/icon-72x72.png",
@@ -80,14 +84,24 @@
       "short_name": "Crear",
       "description": "Crear un nuevo juego",
       "url": "/dashboard",
-      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icons/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Unirse",
       "short_name": "Unirse",
       "description": "Unirse a un juego con código",
       "url": "/join",
-      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icons/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

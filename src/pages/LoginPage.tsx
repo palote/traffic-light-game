@@ -3,14 +3,17 @@
 // ✅ UX: Tagline y características actualizadas
 
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useI18n, LanguageSelector } from "../i18n";
+import { rutaSiguienteValida } from "../utils/nextRoute";
 
 export function LoginPage() {
   const navigate = useNavigate();
   const { user, loginWithGoogle, loading } = useAuth();
   const { t, language } = useI18n();
+  const [searchParams] = useSearchParams();
+  const next = rutaSiguienteValida(searchParams.get("next"));
 
   const pageTexts = {
     title: language === 'es'
@@ -63,8 +66,8 @@ export function LoginPage() {
   };
 
   useEffect(() => {
-    if (user && !loading) navigate("/");
-  }, [user, loading, navigate]);
+    if (user && !loading) navigate(next);
+  }, [user, loading, navigate, next]);
 
   const handleLogin = async () => {
     try { await loginWithGoogle(); }
