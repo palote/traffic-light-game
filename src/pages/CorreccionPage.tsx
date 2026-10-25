@@ -382,7 +382,7 @@ export function CorreccionPage() {
             </p>
             <button onClick={handleLoginAndContinue} style={{ ...btnPrimary, fontSize:15, padding:'14px 32px' }}>Continuar con Google</button>
             <br/>
-            <button onClick={() => navigate('/')} style={{ ...btnSecondary, marginTop:12 }}>← Volver</button>
+            <button onClick={() => navigate('/herramientas')} style={{ ...btnSecondary, marginTop:12 }}>← Volver</button>
           </div>
         </div>
       </div>
@@ -408,7 +408,7 @@ export function CorreccionPage() {
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             <LanguageSelector compact />
-            <button onClick={() => navigate('/')} style={closeBtnStyle}>✕</button>
+            <button onClick={() => navigate('/herramientas')} style={closeBtnStyle}>✕</button>
           </div>
         </div>
 
@@ -652,7 +652,7 @@ Criterio 2: Uso del lenguaje
           <button onClick={() => {
             if (step === 3) { setStep(2); setCurrentResult(null); setBatchResults([]); }
             else if (step === 2) setStep(1);
-            else navigate('/');
+            else navigate('/herramientas');
           }} style={btnSecondary}>
             ← {step > 1 ? 'Atrás' : 'Volver'}
           </button>

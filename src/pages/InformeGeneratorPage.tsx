@@ -197,7 +197,7 @@ export function InformeGeneratorPage() {
   const handleNext = () => setStep(prev => Math.min(prev + 1, 3) as 1|2|3);
   const handleBack = () => {
     if (step > 1) { setStep(prev => (prev - 1) as 1|2|3); return; }
-    navigate('/');
+    navigate('/herramientas');
   };
 
   const handleCopy = async () => {
@@ -335,7 +335,7 @@ Respondé ÚNICAMENTE con el texto del informe, sin título, sin comillas, sin e
               Continuar con Google
             </button>
             <br />
-            <button onClick={() => navigate('/')} style={{ ...btnSecondary, marginTop: 12 }}>
+            <button onClick={() => navigate('/herramientas')} style={{ ...btnSecondary, marginTop: 12 }}>
               ← Volver al inicio
             </button>
           </div>
@@ -371,7 +371,7 @@ Respondé ÚNICAMENTE con el texto del informe, sin título, sin comillas, sin e
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <LanguageSelector compact />
-            <button onClick={() => navigate('/')} style={closeBtnStyle}>✕</button>
+            <button onClick={() => navigate('/herramientas')} style={closeBtnStyle}>✕</button>
           </div>
         </div>
 
@@ -665,7 +665,7 @@ Respondé ÚNICAMENTE con el texto del informe, sin título, sin comillas, sin e
                           Creá una actividad con el Juego del Semáforo — los alumnos debaten, clasifican y consolidan juntos.
                         </p>
                       </div>
-                      <button onClick={() => navigate('/')}
+                      <button onClick={() => navigate('/herramientas')}
                         style={{ padding: '12px 20px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', color: 'white', cursor: 'pointer', flexShrink: 0 }}>
                         Crear juego →
                       </button>

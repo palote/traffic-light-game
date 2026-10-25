@@ -83,7 +83,7 @@
       "name": "Crear Juego",
       "short_name": "Crear",
       "description": "Crear un nuevo juego",
-      "url": "/dashboard",
+      "url": "/setup",
       "icons": [
         {
           "src": "/icons/icon-192x192.png",

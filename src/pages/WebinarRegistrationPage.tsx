@@ -120,7 +120,7 @@ export function WebinarRegistrationPage() {
           <h1 style={{ color: "#64748b", marginBottom: 8 }}>{t.webinar.noWebinar}</h1>
           <p style={{ color: "#94a3b8", marginBottom: 24 }}>{t.webinar.noWebinarDesc}</p>
           <a
-            href="/dashboard"
+            href="/semaforo"
             style={{
               display: "inline-block",
               background: "#3b82f6",
@@ -226,7 +226,7 @@ export function WebinarRegistrationPage() {
           </div>
           
           <a
-            href="/dashboard"
+            href="/semaforo"
             style={{
               display: "inline-block",
               background: "#3b82f6",

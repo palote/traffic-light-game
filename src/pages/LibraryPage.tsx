@@ -461,7 +461,7 @@ export function LibraryPage() {
       <header style={{ background: theme.primaryGradient, padding: "24px 32px", color: "white", boxShadow: `0 4px 20px ${theme.primary}40` }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <button onClick={() => navigate("/")} style={{ padding: "8px 12px", fontSize: 14, fontWeight: 600, backgroundColor: "rgba(255,255,255,0.2)", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}>
+            <button onClick={() => navigate("/semaforo")} style={{ padding: "8px 12px", fontSize: 14, fontWeight: 600, backgroundColor: "rgba(255,255,255,0.2)", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}>
               ← {t.common.back}
             </button>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

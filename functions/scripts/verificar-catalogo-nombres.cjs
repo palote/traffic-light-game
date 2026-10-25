@@ -132,9 +132,11 @@ ok(todos.length > 50, "el recorrido de src/ debería ver todos los archivos");
 // La portada pública /arbitros usa la misma fuente (catálogo común + areaNames + descripciones del diccionario)
 const publica = leer(SRC, "pages/ArbitrosPublicaPage.tsx");
 ok(/AREAS_ORDEN\.map/.test(publica) && /nombreVisible\(ta\.areaNames, AREA_LABELS_ES\[key\]\)/.test(publica) && /arbAreaDescs\[key\]/.test(publica), "ArbitrosPublicaPage: las tarjetas de área deben salir de AREAS_ORDEN + AREA_LABELS_ES + nombreVisible + arbAreaDescs");
-// La portada usa la fuente común y los diccionarios
-const portada = leer(SRC, "pages/DashboardPage.tsx");
-ok(/AREAS_ORDEN\.map/.test(portada) && /nombreVisible\(ta\.areaNames, AREA_LABELS_ES\[key\]\)/.test(portada), "DashboardPage: las tarjetas de área deben salir de AREAS_ORDEN + AREA_LABELS_ES + nombreVisible(ta.areaNames, …)");
+// Nota (Etapa F): antes acá se chequeaba que "la portada" (DashboardPage) repitiera el mismo patrón de
+// tarjetas de área que ArbitrosPublicaPage. Etapa F sacó esas tarjetas por área de la página de inicio
+// a propósito (la tarjeta de Árbitros en HomePage.tsx ya no lista áreas, solo rótulo/nombre/descripción/CTA),
+// así que esa comprobación quedó obsoleta y se eliminó; el patrón AREAS_ORDEN+AREA_LABELS_ES+nombreVisible
+// sigue protegido arriba, sobre ArbitrosPublicaPage.tsx (la única pantalla que todavía lista áreas).
 // Descripciones de las tarjetas de la portada: las cuatro áreas, en es/en/pt
 for (const [idioma, nombre] of [["es", "es"], ["en", "en"], ["pt", "pt"]]) {
   const dic = cargar("i18n/" + nombre + ".ts", nombre);

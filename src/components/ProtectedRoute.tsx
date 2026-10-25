@@ -1,9 +1,10 @@
 // src/components/ProtectedRoute.tsx
 // Protege rutas que requieren autenticación
 
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useI18n } from "../i18n";
+import { rutaSiguienteValida } from "../utils/nextRoute";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -12,6 +13,7 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading, authRequired } = useAuth();
   const { t } = useI18n();
+  const location = useLocation();
 
   // Si auth no es requerido, mostrar directamente
   if (!authRequired) {
@@ -36,9 +38,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  // Si no hay usuario, redirigir a login
+  // Si no hay usuario, redirigir a login y volver después a la ruta que se quería ver
   if (!user) {
-    return <Navigate to="/login" replace />;
+    const next = rutaSiguienteValida(location.pathname + location.search + location.hash);
+    return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace />;
   }
 
   // Usuario autenticado, mostrar contenido

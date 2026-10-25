@@ -131,6 +131,9 @@ export function DashboardBanners() {
   const shouldShowWebinar = (config: WebinarConfig | null, dismissed: boolean): boolean => {
     if (!config?.active || dismissed) return false;
     if (config.language && config.language !== language) return false;
+    // Un webinar con fecha ya pasada no se muestra más (antes no había ningún chequeo de fecha).
+    const fecha = new Date(config.date);
+    if (!isNaN(fecha.getTime()) && fecha.getTime() < Date.now()) return false;
     if (config.requireFinishedGame) {
       if (checkingGames) return false;
       if (!hasFinishedGame) return false;

@@ -219,7 +219,7 @@ export default function PlanificacionGeneratorPage() {
             </div>
           </div>
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/herramientas")}
             style={{
               background: "rgba(255,255,255,0.2)",
               border: "none",
@@ -454,7 +454,7 @@ export default function PlanificacionGeneratorPage() {
                       Creá una actividad con el Juego del Semáforo — los alumnos debaten, clasifican y consolidan juntos.
                     </p>
                     <button
-                      onClick={() => navigate("/")}
+                      onClick={() => navigate("/herramientas")}
                       style={{ marginTop: "16px", backgroundColor: "white", color: "#ea580c", fontWeight: 700, padding: "10px 20px", borderRadius: "12px", border: "none", cursor: "pointer", fontSize: "13px" }}
                       onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#fffbeb")}
                       onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "white")}
@@ -472,7 +472,7 @@ export default function PlanificacionGeneratorPage() {
         {!downloaded && (
           <div style={{ padding: "16px 28px", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <button
-              onClick={() => navigate("/")}
+              onClick={() => navigate("/herramientas")}
               style={{ padding: "12px 20px", fontSize: 14, fontWeight: 600, borderRadius: 10, border: "2px solid #e2e8f0", backgroundColor: "white", color: "#64748b", cursor: "pointer" }}
             >
               ← Volver

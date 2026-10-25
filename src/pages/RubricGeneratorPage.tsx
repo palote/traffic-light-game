@@ -297,7 +297,7 @@ Respondé ÚNICAMENTE con un array JSON de strings, sin texto adicional, sin mar
   const handleBack = () => {
     if (step === 3 && rubricType === 'period') { setStep(1); return; }
     if (step > 1) { setStep(prev => (prev - 1) as 1|2|3); return; }
-    navigate('/');
+    navigate('/herramientas');
   };
 
   // ── Validaciones ──────────────────────────────────────────────────────────────
@@ -451,7 +451,7 @@ Respondé ÚNICAMENTE con JSON válido, sin markdown:
               Continuar con Google
             </button>
             <br />
-            <button onClick={() => navigate('/')} style={{ ...btnSecondary, marginTop: 12, fontSize: 14 }}>
+            <button onClick={() => navigate('/herramientas')} style={{ ...btnSecondary, marginTop: 12, fontSize: 14 }}>
               ← Volver al inicio
             </button>
           </div>
@@ -519,7 +519,7 @@ Respondé ÚNICAMENTE con JSON válido, sin markdown:
                   Creá una actividad con el Juego del Semáforo — los alumnos debaten, clasifican y consolidan juntos.
                 </p>
               </div>
-              <button onClick={() => navigate('/')}
+              <button onClick={() => navigate('/herramientas')}
                 style={{ padding: '12px 20px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, boxShadow: '0 4px 12px rgba(34,197,94,0.3)' }}>
                 Crear juego →
               </button>
@@ -559,7 +559,7 @@ Respondé ÚNICAMENTE con JSON válido, sin markdown:
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <LanguageSelector compact />
-            <button onClick={() => navigate('/')} style={closeBtnStyle}>✕</button>
+            <button onClick={() => navigate('/herramientas')} style={closeBtnStyle}>✕</button>
           </div>
         </div>
 

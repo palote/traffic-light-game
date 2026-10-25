@@ -205,35 +205,14 @@ console.log("── 6) ManifestManager (App.tsx) reacciona también a location.s
     /useEffect\(\(\) => \{\s*setManifestForRoute\(\);\s*\}, \[location\.pathname, location\.search\]\);/.test(app));
 }
 
-console.log("── 7) Página principal: encabezado fijo, tarjetas, Herramientas plegada ──");
+console.log("── 7) Página principal (diseño de Etapa E): sección superada por Etapa F ──");
 {
-  const dash = leer("pages/DashboardPage.tsx");
-  ok("no quedan referencias a dashboard.groupWork", !/dashboard\.groupWork/.test(dash));
-  ok("no quedan referencias a dashboard.fullDynamic", !/dashboard\.fullDynamic/.test(dash));
-  ok("el encabezado usa headerTheme (fijo), no theme (según el modo)", /headerTheme\.primaryGradient/.test(dash) && /headerTheme\.icon/.test(dash) && /headerTheme\.name/.test(dash));
-  ok("headerTheme viene de getThemeByMode(\"traffic-light\", …) — primaria, fijo", /getThemeByMode\("traffic-light", language\)/.test(dash));
-  ok("la tagline del encabezado sigue mostrándose", /t\.dashboard\.tagline/.test(dash));
-  ok("el botón de selector de nivel ya no está en el <header>", (() => {
-    const header = dash.slice(dash.indexOf("<header"), dash.indexOf("</header>"));
-    return !/setShowModeSelector/.test(header);
-  })());
-  ok("el selector de nivel vive ahora en la tarjeta del Semáforo", /setShowModeSelector\(true\)/.test(dash));
-  ok("tarjeta Árbitros: rótulo nuevo", /t\.dashboard\.arbLabel/.test(dash));
-  ok("tarjeta Árbitros: descripción nueva", /t\.dashboard\.arbDesc/.test(dash));
-  ok("tarjeta Árbitros: botón Mis sesiones (cfgMySessions) → /arbitro-panel", /navigate\("\/arbitro-panel"\)[^]*?\{ta\.cfgMySessions\}/.test(dash));
-  ok("tarjeta Árbitros: Más info → /arbitros-info", /navigate\("\/arbitros-info"\)/.test(dash));
-  ok("tarjeta Semáforo: rótulo nuevo", /t\.dashboard\.semaforoLabel/.test(dash));
-  ok("tarjeta Semáforo: descripción nueva", /t\.dashboard\.semaforoDesc/.test(dash));
-  ok("tarjeta Semáforo: título sigue siendo theme.name (según el modo)", /\{theme\.name\}/.test(dash));
-  ok("tarjeta Semáforo: Más info → /about", /navigate\("\/about"\)/.test(dash));
-  ok("las dos tarjetas están en un grid (lado a lado / apiladas en celular)", /gridTemplateColumns: "repeat\(auto-fit, minmax\(340px, 1fr\)\)"/.test(dash));
-  // Árbitros antes que Semáforo en el código fuente (primero en el celular)
-  const iArb = dash.indexOf("t.dashboard.arbLabel");
-  const iSem = dash.indexOf("t.dashboard.semaforoLabel");
-  ok("la tarjeta de Árbitros aparece antes que la del Semáforo", iArb > 0 && iSem > iArb);
-  // Herramientas: mismo nivel visual, plegada por defecto, mismas herramientas
-  ok("Herramientas sigue arrancando plegada (useState(true))", /const \[toolsCollapsed, setToolsCollapsed\] = useState\(true\);/.test(dash));
-  ok("TOOLS no cambió de longitud (se siguen listando las mismas herramientas)", /const TOOLS = \[/.test(dash));
+  // Etapa E armó una sola página "/" con encabezado fijo + tarjetas Árbitros/Semáforo + Herramientas
+  // plegada. Etapa F reemplazó ese diseño a propósito por tres páginas separadas (HomePage.tsx,
+  // SemaforoPage.tsx, HerramientasPage.tsx con las herramientas sin plegar), así que las comprobaciones
+  // de esta sección ya no aplican: no es una regresión, es el cambio de diseño que pidió el docente.
+  // El equivalente vigente vive en verificar-etapa-f.cjs (secciones 1, 4, 5 y 8).
+  ok("sección superada por Etapa F — sin comprobaciones propias", true);
 }
 
 console.log("── 8) /arbitros-info: ya no dice \"forman parte\" ──");

@@ -8,7 +8,7 @@ const ARCHIVOS = [
   "src/pages/ArbitroPanelPage.tsx","src/pages/ArbitroLandingPage.tsx","src/pages/ArbitrosInfoPage.tsx","src/pages/ArbitrosPublicaPage.tsx","src/utils/arbitroPasos.ts",
   "src/utils/arbitroAreas.ts","src/utils/arbitroPalette.ts","src/utils/arbitroPartida.ts","src/utils/arbitroErrores.ts",
   "src/components/PWAMiniBadge.tsx","src/utils/arbitroA11y.tsx","src/utils/arbitroDocumentos.ts",
-  "src/pages/DashboardPage.tsx", "src/components/DashboardBanners.tsx",
+  "src/pages/HomePage.tsx", "src/pages/SemaforoPage.tsx", "src/pages/HerramientasPage.tsx", "src/components/DashboardBanners.tsx",
 ];
 const PALABRAS = /\b(el|la|los|las|de|del|con|para|por|sin|que|una|uno|y|o|tu|tus|su|sus|este|esta|esto|ya|más|mas|aún|todavía|equipo|equipos|ronda|rondas|puntos?|pregunta|respuesta|sesión|sesion|docente|alumnos?|cargando|volver|guardar|enviar|siguiente|anterior|elegí|escribí|completá|verificá|intentá|esperá|probá|tocá|ingresá|nombre|materia|nivel|árbitro|arbitro|juego|partida|resultados?|ganador|empate|error|usuario|clase|grupo|curso)\b/i;
 const ACENTOS = /[áéíóúñÁÉÍÓÚÑ¿¡]/;
@@ -54,8 +54,8 @@ for (const rel of ARCHIVOS) {
   };
   visit(sf);
 }
-// ── Portada (DashboardPage) y banners: todo texto elegido por idioma debe tener es, en y pt ──
-for (const rel of ["src/pages/DashboardPage.tsx", "src/components/DashboardBanners.tsx"]) {
+// ── Portada (ahora HomePage/SemaforoPage/HerramientasPage) y banners: todo texto elegido por idioma debe tener es, en y pt ──
+for (const rel of ["src/pages/HomePage.tsx", "src/pages/SemaforoPage.tsx", "src/pages/HerramientasPage.tsx", "src/components/DashboardBanners.tsx"]) {
   const src = fs.readFileSync(path.join(root, rel), "utf8");
   const lineas = src.split("\n");
   lineas.forEach((l, i) => {

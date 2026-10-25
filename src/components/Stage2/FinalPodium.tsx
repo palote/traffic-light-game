@@ -535,7 +535,7 @@ export function FinalPodium({ teams, gameId, config: propConfig }: FinalPodiumPr
       {/* Botones de acción */}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", justifyContent: "center" }}>
         <button
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/semaforo")}
           style={{
             padding: "16px 48px",
             fontSize: 18,

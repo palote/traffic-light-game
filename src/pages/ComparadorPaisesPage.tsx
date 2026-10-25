@@ -239,7 +239,7 @@ export default function ComparadorPaisesPage() {
               <p style={{ margin: "4px 0 0", fontSize: 13, opacity: 0.9 }}>Tabla comparativa con datos reales + análisis IA en Excel</p>
             </div>
           </div>
-          <button onClick={() => navigate("/")} style={closeBtnStyle}>✕</button>
+          <button onClick={() => navigate("/herramientas")} style={closeBtnStyle}>✕</button>
         </div>
 
         {/* ── Body scrollable ── */}
@@ -410,7 +410,7 @@ export default function ComparadorPaisesPage() {
                   <div>
                     <p className="font-bold text-lg leading-tight">🚦 ¿Querés trabajar este contenido con toda la clase?</p>
                     <p className="text-sm mt-2 text-yellow-100">Creá una actividad con el Juego del Semáforo — los alumnos debaten, clasifican y consolidan juntos.</p>
-                    <button onClick={() => navigate("/")} className="mt-4 bg-white text-orange-500 font-bold py-2 px-5 rounded-lg text-sm hover:bg-yellow-50 transition-colors">
+                    <button onClick={() => navigate("/herramientas")} className="mt-4 bg-white text-orange-500 font-bold py-2 px-5 rounded-lg text-sm hover:bg-yellow-50 transition-colors">
                       Crear juego →
                     </button>
                   </div>
@@ -423,7 +423,7 @@ export default function ComparadorPaisesPage() {
         {/* ── Footer con botones ── */}
         {!downloaded && (
           <div style={{ padding: "16px 28px", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <button onClick={() => navigate("/")} style={btnSecondary}>← Volver</button>
+            <button onClick={() => navigate("/herramientas")} style={btnSecondary}>← Volver</button>
             <button
               onClick={handleSubmit}
               disabled={loading || selected.length < 2}

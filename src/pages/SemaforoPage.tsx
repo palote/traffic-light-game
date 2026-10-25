@@ -1,15 +1,13 @@
-// src/pages/DashboardPage.tsx
+// src/pages/SemaforoPage.tsx
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ref, onValue, off, remove, get, query, orderByChild, equalTo } from "firebase/database";
 import { database } from "../firebase.config";
 import { useAuth } from "../contexts/AuthContext";
-import { useGameMode, getThemeByMode, type GameMode } from "../contexts/GameModeContext";
-import { useI18n, useArbitroT, LanguageSelector } from "../i18n";
-import { nombreVisible } from "../utils/arbitroNombres";
-import { AREAS_ORDEN, AREA_EMOJI, AREA_LABELS_ES } from "../utils/arbitroAreas";
-import { AREA_COLORS } from "../utils/arbitroPalette";
+import { useGameMode, type GameMode } from "../contexts/GameModeContext";
+import { useI18n } from "../i18n";
 import { DashboardBanners } from "../components/DashboardBanners";
+import { SiteHeader } from "../components/SiteHeader";
 import { saveTeacherGame } from "../services/teacherLibraryService";
 import type { NewTeacherGame } from "../types/teacherLibrary";
 
@@ -36,78 +34,6 @@ const GAME_CARDS_STRINGS = {
   },
 };
 
-// i18n-clave: diccionario es/en/pt de la propia pantalla (los tres idiomas son obligatorios; lo controla verificar-textos-fijos)
-const TOOLS = [
-  {
-    id: "rubric", icon: "📐", route: "/rubric-generator", color: "#f59e0b",
-    es: { title: "Generador de Rúbricas", desc: "Rúbricas alineadas a tus actividades con IA" },
-    en: { title: "Rubric Generator", desc: "Activity-aligned rubrics with AI" },
-    pt: { title: "Gerador de Rubricas", desc: "Rubricas alinhadas às suas atividades com IA" }
-  },
-  {
-    id: "adapter", icon: "✏️", route: "/consigna-adapter", color: "#06b6d4",
-    es: { title: "Adaptador de Consignas", desc: "Tres niveles de dificultad en segundos" },
-    en: { title: "Assignment Adapter", desc: "Three difficulty levels in seconds" },
-    pt: { title: "Adaptador de Enunciados", desc: "Três níveis de dificuldade em segundos" }
-  },
-  {
-    id: "informe", icon: "📋", route: "/informe-generator", color: "#10b981",
-    es: { title: "Generador de Informes", desc: "Informes pedagógicos listos para copiar" },
-    en: { title: "Report Generator", desc: "Pedagogical reports ready to copy" },
-    pt: { title: "Gerador de Relatórios", desc: "Relatórios pedagógicos prontos para copiar" }
-  },
-  {
-    id: "presentismo", icon: "📅", route: "/presentismo-generator", color: "#0ea5e9",
-    es: { title: "Planilla de Presentismo", desc: "Ideal para registrar el presentismo del período" },
-    en: { title: "Attendance Sheet", desc: "Ideal for recording period attendance" },
-    pt: { title: "Planilha de Presença", desc: "Ideal para registrar presença do período" }
-  },
-  {
-    id: "horario", icon: "🗓️", route: "/horario-generator", color: "#f59e0b",
-    es: { title: "Generador de Horarios", desc: "Horarios con dropdowns por materia" },
-    en: { title: "Schedule Generator", desc: "Schedules with subject dropdowns" },
-    pt: { title: "Gerador de Horários", desc: "Horários com menus por disciplina" }
-  },
-  {
-    id: "presentacion", icon: "📊", route: "/presentacion-generator", color: "#8b5cf6",
-    es: { title: "Generador de Presentaciones", desc: "PowerPoint con diseño profesional" },
-    en: { title: "Presentation Generator", desc: "PowerPoint with professional design" },
-    pt: { title: "Gerador de Apresentações", desc: "PowerPoint com design profissional" }
-  },
-  {
-    id: "secuencia", icon: "📚", route: "/secuencia-generator", color: "#6366f1",
-    es: { title: "Secuencias Didácticas", desc: "Planificá clases completas con IA" },
-    en: { title: "Lesson Sequences", desc: "Plan complete lessons with AI" },
-    pt: { title: "Sequências Didáticas", desc: "Planeje aulas completas com IA" }
-  },
-  {
-    id: "planificacion", icon: "📅", route: "/planificacion-generator", color: "#f97316",
-    es: { title: "Generador de Planificaciones", desc: "Planificación docente completa con cronograma en Word" },
-    en: { title: "Lesson Planner", desc: "Complete teacher planning with Word timeline" },
-    pt: { title: "Gerador de Planejamentos", desc: "Planejamento docente completo com cronograma em Word" }
-  },
-  {
-    id: "comparador", icon: "🌍", route: "/comparador-paises", color: "#14b8a6",
-    es: { title: "Comparador de Países", desc: "Datos del Banco Mundial + análisis IA en Excel" },
-    en: { title: "Country Comparator", desc: "World Bank data + AI analysis in Excel" },
-    pt: { title: "Comparador de Países", desc: "Dados do Banco Mundial + análise IA em Excel" }
-  },
-  {
-    id: "ecuaciones", icon: "📈", route: "/ecuaciones-generator", color: "#6366f1",
-    es: { title: "Generador de Ecuaciones", desc: "Tabla de valores con fórmulas editables en Excel" },
-    en: { title: "Equation Generator", desc: "Value table with editable formulas in Excel" },
-    pt: { title: "Gerador de Equações", desc: "Tabela de valores com fórmulas editáveis em Excel" }
-  },
-  {
-    id: "bingo-familiar",
-    icon: "🎰",
-    route: "/bingo-familiar",
-    color: "#7B2D8B",
-    es: { title: "Bingo Familiar",   desc: "Bingo para adultos y toda la familia" },
-    en: { title: "Family Bingo",     desc: "Bingo for adults and the whole family" },
-    pt: { title: "Bingo Familiar",   desc: "Bingo para adultos e toda a família"   },
-  },
-];
 
 // ============================================
 // ShareGameModal
@@ -420,29 +346,18 @@ function GameCard({ game, onContinue, onDelete, onShare, selfEvalCount = 0 }: { 
 // ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
-export function DashboardPage() {
+export function SemaforoPage() {
   const navigate = useNavigate();
-  const { user, logout, isAdmin } = useAuth();
+  const { user } = useAuth();
   const { mode, setMode, getLocalizedTheme } = useGameMode();
   const { t, language } = useI18n();
-  const ta = useArbitroT();
+  // Página del Semáforo: el nombre y los colores siguen el modo elegido (toda la página es del juego).
   const theme = getLocalizedTheme(language);
-  // Encabezado fijo: colores y nombre de primaria, sin importar el modo elegido (el selector vive en la tarjeta del Semáforo).
-  const headerTheme = getThemeByMode("traffic-light", language);
-  // Única fuente de áreas: utils/arbitroAreas (claves, emoji, nombre interno) + AREA_COLORS + ta.areaNames.
-  const areasArbitro = AREAS_ORDEN.map((key) => ({
-    key,
-    emoji: AREA_EMOJI[key],
-    ...AREA_COLORS[key],
-    nombre: nombreVisible(ta.areaNames, AREA_LABELS_ES[key]),
-    desc: t.dashboard.arbAreaDescs[key],
-  }));
 
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [videoLevel, setVideoLevel] = useState<'selector' | 'primary' | 'secondary'>('selector');
   const [statsCollapsed, setStatsCollapsed] = useState(true);
-  const [toolsCollapsed, setToolsCollapsed] = useState(true);
   const [gamesCollapsed, setGamesCollapsed] = useState(false);
   const [activeGames, setActiveGames] = useState<ActiveGame[]>([]);
   const [loadingGames, setLoadingGames] = useState(true);
@@ -521,7 +436,6 @@ export function DashboardPage() {
     if (!loadingGames && activeGames.length > 0) loadEvals();
   }, [activeGames, loadingGames]);
 
-  const handleLogout = async () => { try { await logout(); navigate("/login"); } catch (e) { console.error(e); } };
   const handleContinueGame = (game: ActiveGame) => {
     if (game.currentStage === 2 || game.status === "stage2") { navigate(`/stage2/classroom/${game.id}`); return; }
     navigate(`/classroom/${game.id}`);
@@ -547,30 +461,7 @@ export function DashboardPage() {
   return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(180deg, ${theme.cardHoverBg} 0%, #f8fafc 50%, #f1f5f9 100%)`, fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif" }}>
 
-      {/* ── HEADER ── */}
-      <header style={{ background: headerTheme.primaryGradient, padding: "20px 32px", color: "white", boxShadow: `0 4px 20px ${headerTheme.primary}40` }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 28 }}>{headerTheme.icon}</span>
-            <div>
-              <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{headerTheme.name}</h1>
-              <p style={{ margin: 0, fontSize: 11, opacity: 0.85 }}>{t.dashboard.tagline}</p>
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <LanguageSelector compact />
-            <span style={{ fontSize: 13, opacity: 0.85 }}>{user?.email}</span>
-            {isAdmin && (
-              <button onClick={() => navigate("/admin/metrics")} style={{ padding: "6px 12px", fontSize: 12, fontWeight: 600, borderRadius: 8, border: "2px solid rgba(255,255,255,0.3)", backgroundColor: "rgba(255,255,255,0.1)", color: "white", cursor: "pointer" }}>
-                ⚙️ {t.common.admin}
-              </button>
-            )}
-            <button onClick={handleLogout} style={{ padding: "8px 16px", fontSize: 14, fontWeight: 600, borderRadius: 8, border: "none", backgroundColor: "rgba(255,255,255,0.2)", color: "white", cursor: "pointer" }}>
-              {t.auth.logout}
-            </button>
-          </div>
-        </div>
-      </header>
+      <SiteHeader theme={theme} backTo="/" />
 
       {/* ── MAIN ── */}
       <main style={{ maxWidth: 1200, margin: "0 auto", padding: "40px 24px" }}>
@@ -581,98 +472,43 @@ export function DashboardPage() {
           </div>
         )}
 
-        {/* Aviso para actuar: solo aparece si hay autoevaluaciones pendientes de revisar */}
+        {/* 1) Aviso para actuar: solo aparece si hay autoevaluaciones pendientes de revisar */}
         <EvaluationsSection gamesWithEvaluations={gamesWithEvaluations} t={t} />
 
-        {/* ══ ÁRBITROS Y SEMÁFORO, LADO A LADO (en el celular, uno debajo del otro, Árbitros primero) ══ */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 20, marginBottom: 32 }}>
+        {/* 2) Selector primaria/secundaria */}
+        <button onClick={() => setShowModeSelector(true)}
+          style={{ marginBottom: 20, padding: "8px 16px", fontSize: 13, fontWeight: 700, borderRadius: 20, border: `2px solid ${theme.primary}40`, backgroundColor: theme.cardHoverBg, color: theme.primary, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          {modeBtnLabel}
+        </button>
 
-          {/* Tarjeta Árbitros — trabajo en grupo */}
-          <div style={{ backgroundColor: "white", borderRadius: 20, padding: 28, boxShadow: "0 4px 16px rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>
-                {t.dashboard.arbLabel}
-              </div>
-              <h2 style={{ margin: "0 0 8px 0", fontSize: 22, fontWeight: 800, color: "#1e293b" }}>{t.dashboard.arbitrosTitle}</h2>
-              <p style={{ margin: 0, fontSize: 14, color: "#1e40af", lineHeight: 1.5 }}>{t.dashboard.arbDesc}</p>
-            </div>
-
-            {/* Áreas como botones chicos */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {areasArbitro.map(area => (
-                <button key={area.key} onClick={() => navigate(`/arbitro-config?area=${area.key}`)}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999, border: `1.5px solid ${area.primary}35`, background: "white", color: area.primary, fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "background-color 0.2s" }}
-                  onMouseOver={e => { e.currentTarget.style.backgroundColor = `${area.primary}12`; }}
-                  onMouseOut={e => { e.currentTarget.style.backgroundColor = "white"; }}>
-                  <span>{area.emoji}</span>{area.nombre}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginTop: "auto", paddingTop: 4 }}>
-              <button onClick={() => navigate("/arbitro-panel")}
-                style={{ padding: "11px 20px", fontSize: 14, fontWeight: 700, borderRadius: 10, border: "none", background: "linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%)", color: "white", cursor: "pointer" }}>
-                {ta.cfgMySessions}
-              </button>
-              <button onClick={() => navigate("/arbitros-info")} style={{ background: "none", border: "none", color: "#1e40af", cursor: "pointer", fontSize: 13, textDecoration: "underline", padding: "8px 4px" }}>
-                {t.dashboard.moreInfo}
-              </button>
-            </div>
-          </div>
-
-          {/* Tarjeta Semáforo — la dinámica completa */}
-          <div style={{ backgroundColor: "white", borderRadius: 20, padding: 28, boxShadow: "0 4px 16px rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>
-                {t.dashboard.semaforoLabel}
-              </div>
-              <h2 style={{ margin: "0 0 8px 0", fontSize: 22, fontWeight: 800, color: "#1e293b" }}>{theme.name}</h2>
-              <p style={{ margin: 0, fontSize: 14, color: "#1e40af", lineHeight: 1.5 }}>{t.dashboard.semaforoDesc}</p>
-            </div>
-
-            {/* Selector de nivel — antes vivía en el encabezado */}
-            <button onClick={() => setShowModeSelector(true)}
-              style={{ alignSelf: "flex-start", padding: "8px 16px", fontSize: 13, fontWeight: 700, borderRadius: 20, border: `2px solid ${theme.primary}40`, backgroundColor: theme.cardHoverBg, color: theme.primary, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
-              {modeBtnLabel}
-            </button>
-
-            <div style={{ display: "flex", justifyContent: "center" }}>
-              <button
-                onClick={() => { setVideoLevel('selector'); setShowVideoModal(true); }}
-                style={{ padding: "10px 22px", fontSize: 13, fontWeight: 700, borderRadius: 10, border: "none", background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)", color: "white", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8, boxShadow: "0 3px 12px rgba(239,68,68,0.35)" }}>
-                ▶ {t.dashboard.watchVideo}
-              </button>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <button onClick={() => navigate("/setup")}
-                style={{ padding: 16, borderRadius: 14, border: "none", backgroundColor: theme.cardHoverBg, cursor: "pointer", textAlign: "left", display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontSize: 20 }}>🚀</span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{GAME_CARDS_STRINGS.newGame[lang].title}</span>
-                <span style={{ fontSize: 12, color: `color-mix(in srgb, ${theme.primary} 60%, black)`, fontWeight: 600 }}>{GAME_CARDS_STRINGS.newGame[lang].cta}</span>
-              </button>
-              <button onClick={() => navigate("/library")}
-                style={{ padding: 16, borderRadius: 14, border: "none", backgroundColor: "#f5f3ff", cursor: "pointer", textAlign: "left", display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontSize: 20 }}>🌐</span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{GAME_CARDS_STRINGS.community[lang].title}</span>
-                <span style={{ fontSize: 12, color: "#6d28d9", fontWeight: 600 }}>{GAME_CARDS_STRINGS.community[lang].cta}</span>
-              </button>
-            </div>
-
-            <button onClick={() => navigate("/about")}
-              style={{ background: "none", border: "none", color: "#1e40af", cursor: "pointer", fontSize: 13, textDecoration: "underline", padding: "8px 4px", textAlign: "left", marginTop: "auto" }}>
-              {t.dashboard.moreInfo}
-            </button>
-          </div>
+        {/* 3) Video + Comenzar juego nuevo + Actividades de la comunidad */}
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+          <button
+            onClick={() => { setVideoLevel('selector'); setShowVideoModal(true); }}
+            style={{ padding: "10px 22px", fontSize: 13, fontWeight: 700, borderRadius: 10, border: "none", background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)", color: "white", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8, boxShadow: "0 3px 12px rgba(239,68,68,0.35)" }}>
+            ▶ {t.dashboard.watchVideo}
+          </button>
         </div>
 
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12, marginBottom: 32 }}>
+          <button onClick={() => navigate("/setup")}
+            style={{ padding: 16, borderRadius: 14, border: "none", backgroundColor: theme.cardHoverBg, cursor: "pointer", textAlign: "left", display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 20 }}>🚀</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{GAME_CARDS_STRINGS.newGame[lang].title}</span>
+            <span style={{ fontSize: 12, color: `color-mix(in srgb, ${theme.primary} 60%, black)`, fontWeight: 600 }}>{GAME_CARDS_STRINGS.newGame[lang].cta}</span>
+          </button>
+          <button onClick={() => navigate("/library")}
+            style={{ padding: 16, borderRadius: 14, border: "none", backgroundColor: "#f5f3ff", cursor: "pointer", textAlign: "left", display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 20 }}>🌐</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{GAME_CARDS_STRINGS.community[lang].title}</span>
+            <span style={{ fontSize: 12, color: "#6d28d9", fontWeight: 600 }}>{GAME_CARDS_STRINGS.community[lang].cta}</span>
+          </button>
+        </div>
+
+        {/* 4) Avisos */}
         <DashboardBanners />
 
-        {/* ══ LO QUE ES SOLO DEL SEMÁFORO: estadísticas y Mis juegos ══ */}
-        <h2 style={{ margin: "40px 0 20px", fontSize: 13, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>
-          {theme.name}
-        </h2>
-
+        {/* 5) Tu actividad */}
         <TeacherStatsCard stats={teacherStats} loading={loadingStats} collapsed={statsCollapsed} onToggle={() => setStatsCollapsed(!statsCollapsed)} />
 
         {/* ══ MIS JUEGOS (colapsable) ══ */}
@@ -724,55 +560,7 @@ export function DashboardPage() {
           )}
         </div>
 
-        {/* ══ SECCIÓN 4: MÁS HERRAMIENTAS (colapsable) ══ */}
-        <div style={{ marginBottom: 32 }}>
-          <button onClick={() => setToolsCollapsed(!toolsCollapsed)}
-            style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, marginBottom: toolsCollapsed ? 0 : 16, background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
-            <span style={{ fontSize: 18 }}>🛠️</span>
-            <div style={{ flex: 1 }}>
-              <span style={{ fontSize: 22, fontWeight: 800, color: "#1e293b" }}>
-                {t.dashboard.moreTools}
-              </span>
-              {toolsCollapsed && (
-                <p style={{ margin: "2px 0 0", fontSize: 12, color: "#94a3b8", fontWeight: 400 }}>
-                  {t.dashboard.moreToolsDesc}
-                </p>
-              )}
-            </div>
-            <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600, flexShrink: 0 }}>
-              {toolsCollapsed ? t.dashboard.showAll : t.dashboard.hide}
-            </span>
-          </button>
-
-          {!toolsCollapsed && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 12 }}>
-              {TOOLS.map(tool => {
-                const toolLang = (tool as any)[language] || (tool as any).es;
-                return (
-                  <button key={tool.id} onClick={() => navigate(tool.route)}
-                    style={{ padding: "16px 18px", borderRadius: 14, border: "1px solid #e2e8f0", backgroundColor: "white", boxShadow: "0 2px 6px rgba(0,0,0,0.04)", cursor: "pointer", transition: "all 0.2s", textAlign: "left", display: "flex", alignItems: "flex-start", gap: 12 }}
-                    onMouseOver={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = `0 6px 18px ${tool.color}22`; e.currentTarget.style.borderColor = tool.color; }}
-                    onMouseOut={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.04)"; e.currentTarget.style.borderColor = "#e2e8f0"; }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 9, backgroundColor: `${tool.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
-                      {tool.icon}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: "#1e293b", marginBottom: 2, lineHeight: 1.3 }}>{toolLang.title}</div>
-                      <div style={{ fontSize: 10, color: "#64748b", lineHeight: 1.35 }}>{toolLang.desc}</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
       </main>
-
-      <footer style={{ padding: "24px", textAlign: "center", color: "#64748b", fontSize: 14 }}>
-        <button onClick={() => navigate("/about")} style={{ background: "none", border: "none", color: "#1e40af", cursor: "pointer", fontSize: 14, textDecoration: "underline" }}>
-          {t.dashboard.aboutThisProject}
-        </button>
-      </footer>
 
       <ModeSelectorModal isOpen={showModeSelector} onClose={() => setShowModeSelector(false)} onSelect={setMode} currentMode={mode} />
 

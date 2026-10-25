@@ -1058,7 +1058,7 @@ export function GameResultsPage() {
       <div style={contentStyle}>
         <div style={{ marginBottom: 24 }}>
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/semaforo")}
             style={{
               background: "none",
               border: "none",

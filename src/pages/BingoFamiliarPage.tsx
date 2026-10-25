@@ -264,7 +264,7 @@ export default function BingoFamiliarPage() {
       )}
 
       {/* Back link */}
-      <a href="/" style={{
+      <a href="/herramientas" style={{
         marginTop: 36,
         color: "rgba(232,197,255,0.6)",
         fontSize: "0.85rem",

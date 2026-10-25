@@ -309,7 +309,7 @@ export function PresentacionGeneratorPage() {
             </p>
             <button onClick={handleLoginAndContinue} style={{ ...btnPrimary, fontSize: 15, padding: '14px 32px' }}>Continuar con Google</button>
             <br />
-            <button onClick={() => navigate('/')} style={{ ...btnSecondary, marginTop: 12 }}>← Volver</button>
+            <button onClick={() => navigate('/herramientas')} style={{ ...btnSecondary, marginTop: 12 }}>← Volver</button>
           </div>
         </div>
       </div>
@@ -333,7 +333,7 @@ export function PresentacionGeneratorPage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <LanguageSelector compact />
-            <button onClick={() => navigate('/')} style={closeBtnStyle}>✕</button>
+            <button onClick={() => navigate('/herramientas')} style={closeBtnStyle}>✕</button>
           </div>
         </div>
 
@@ -510,7 +510,7 @@ export function PresentacionGeneratorPage() {
                         Creá una actividad con el Juego del Semáforo — los alumnos debaten, clasifican y consolidan juntos.
                       </p>
                     </div>
-                    <button onClick={() => navigate('/')}
+                    <button onClick={() => navigate('/herramientas')}
                       style={{ padding: '10px 18px', fontSize: 13, fontWeight: 700, borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', color: 'white', cursor: 'pointer', flexShrink: 0 }}>
                       Crear juego →
                     </button>
@@ -523,7 +523,7 @@ export function PresentacionGeneratorPage() {
 
         {/* Footer */}
         <div style={{ padding: '16px 28px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <button onClick={() => step > 1 ? setStep(1) : navigate('/')} style={btnSecondary}>
+          <button onClick={() => step > 1 ? setStep(1) : navigate('/herramientas')} style={btnSecondary}>
             ← {step > 1 ? 'Atrás' : 'Volver'}
           </button>
           {step === 1 ? (

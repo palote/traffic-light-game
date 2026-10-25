@@ -229,7 +229,7 @@ ${jsonStructure}`;
               Continuar con Google
             </button>
             <br />
-            <button onClick={() => navigate('/')} style={{ ...btnSecondary, marginTop: 12, fontSize: 14 }}>
+            <button onClick={() => navigate('/herramientas')} style={{ ...btnSecondary, marginTop: 12, fontSize: 14 }}>
               ← Volver al inicio
             </button>
           </div>
@@ -257,7 +257,7 @@ ${jsonStructure}`;
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <LanguageSelector compact />
-            <button onClick={() => navigate('/')} style={closeBtnStyle}>✕</button>
+            <button onClick={() => navigate('/herramientas')} style={closeBtnStyle}>✕</button>
           </div>
         </div>
 
@@ -429,7 +429,7 @@ ${jsonStructure}`;
                       Creá una actividad con el Juego del Semáforo — los alumnos debaten, clasifican y consolidan juntos.
                     </p>
                   </div>
-                  <button onClick={() => navigate('/')}
+                  <button onClick={() => navigate('/herramientas')}
                     style={{ padding: '12px 20px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                     Crear juego →
                   </button>
@@ -449,7 +449,7 @@ ${jsonStructure}`;
         {/* Footer — solo visible si no hay resultado */}
         {!result && (
           <div style={{ padding: '16px 28px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <button onClick={() => navigate('/')} style={btnSecondary}>← Volver</button>
+            <button onClick={() => navigate('/herramientas')} style={btnSecondary}>← Volver</button>
             <button onClick={handleGenerate} disabled={!canGenerate || isGenerating}
               style={{ ...btnPrimary, opacity: (!canGenerate || isGenerating) ? 0.5 : 1, minWidth: 200 }}>
               {isGenerating ? '⏳ Adaptando…' : '✨ Adaptar consigna'}

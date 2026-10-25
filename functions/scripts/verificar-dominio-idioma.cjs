@@ -62,7 +62,7 @@ const pub = leer("pages/ArbitrosPublicaPage.tsx");
 // Etapa E: la portada ahora SÍ mira useAuth (solo para elegir "Iniciar sesión" vs. "Mis sesiones" en el
 // encabezado), pero sigue sin estar protegida por sesión: no ProtectedRoute, se puede ver sin iniciar sesión.
 ok(!/ProtectedRoute/.test(pub), "ArbitrosPublicaPage no debe estar protegida por sesión (ProtectedRoute)");
-ok(!/DashboardPage|Semáforo|useGameMode/.test(pub), "ArbitrosPublicaPage no debe mezclar el dashboard ni el Semáforo");
+ok(!/DashboardPage|SemaforoPage|HomePage|HerramientasPage|Semáforo|useGameMode/.test(pub), "ArbitrosPublicaPage no debe mezclar el dashboard ni el Semáforo");
 ok(/<Link to="\/login\?next=\/arbitro-panel"/.test(pub), "ArbitrosPublicaPage: sin sesión, el link va a /login?next=/arbitro-panel");
 ok(/<Link to="\/arbitro-panel"/.test(pub) && /\{ta\.cfgMySessions\}/.test(pub), "ArbitrosPublicaPage: con sesión, muestra Mis sesiones (cfgMySessions) → /arbitro-panel");
 const { esRutaArbitro } = cargar("utils/arbitroRoutes.ts");
@@ -83,7 +83,7 @@ ok(siguienteIdioma("es") === "en" && siguienteIdioma("en") === "pt" && siguiente
 ok(idiomaMostrado("pt") === "pt", "fuera del árbitro pt se muestra como PT");
 ok(/tone\?: 'onDark' \| 'onColor' \| 'onLight'/.test(idx) && idx.includes("nombreAccesible[language]"), "LanguageSelector debe tener tone y aria-label");
 // El resto de las páginas que ya lo usaban conservan el estilo por defecto (sin tone)
-for (const f of ["pages/DashboardPage.tsx", "pages/LoginPage.tsx", "pages/LibraryPage.tsx"]) ok(!/tone=/.test(leer(f)), `${f}: no debe cambiar de estilo`);
+for (const f of ["components/SiteHeader.tsx", "pages/LoginPage.tsx", "pages/LibraryPage.tsx"]) ok(!/tone=/.test(leer(f)), `${f}: no debe cambiar de estilo`);
 
 // ── 4. Enlaces y dominios ──
 const cfg = leer("pages/ArbitroConfigPage.tsx");

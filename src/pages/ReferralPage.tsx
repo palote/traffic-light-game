@@ -72,7 +72,7 @@ export function ReferralPage() {
             <div style={{ color: "#a16207" }}>{t.referral.rewardsDetail}</div>
           </div>
           <a
-            href="/dashboard"
+            href="/semaforo"
             style={{
               display: "inline-block",
               background: "#3b82f6",

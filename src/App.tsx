@@ -14,7 +14,9 @@ import { AdminBulkUploadPage } from "./pages/admin/AdminBulkUploadPage";
 import { AdminLibraryFixPage } from "./pages/admin/AdminLibraryFixPage";
 
 // ✅ PÁGINAS
-import { DashboardPage } from "./pages/DashboardPage";
+import { HomePage } from "./pages/HomePage";
+import { SemaforoPage } from "./pages/SemaforoPage";
+import { HerramientasPage } from "./pages/HerramientasPage";
 import { AboutPage } from "./pages/AboutPage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { JoinGamePage } from "./pages/JoinGamePage";
@@ -203,7 +205,7 @@ function ClassroomRouteWrapper() {
             await completeCurationAndStartStage1(gameId, questions, bonusPoints);
             navigate(`/classroom/${gameId}`);
           }}
-          onBack={() => navigate("/")}
+          onBack={() => navigate("/semaforo")}
         />
       );
     }
@@ -579,25 +581,27 @@ function App() {
                 {/* Política de privacidad */}
                 <Route path="/privacy" element={<PrivacyPage />} />
 
-                {/* DASHBOARD */}
+                {/* PÁGINA PRINCIPAL: pública, entrada a las tres propuestas */}
+                <Route path="/" element={<HomePage />} />
+
+                {/* SEMÁFORO: todo lo que antes vivía en "/" y es solo del Semáforo (con sesión) */}
                 <Route
-                  path="/"
+                  path="/semaforo"
                   element={
                     <ProtectedRoute>
-                      <DashboardPage />
+                      <SemaforoPage />
                     </ProtectedRoute>
                   }
                 />
 
-                {/* ABOUT / FAQ */}
-                <Route
-                  path="/about"
-                  element={
-                    <ProtectedRoute>
-                      <AboutPage />
-                    </ProtectedRoute>
-                  }
-                />
+                {/* HERRAMIENTAS: pública, todas las tarjetas a la vista */}
+                <Route path="/herramientas" element={<HerramientasPage />} />
+
+                {/* /dashboard ya no existe: por los que la tengan guardada (bookmark, atajo viejo) */}
+                <Route path="/dashboard" element={<Navigate to="/semaforo" replace />} />
+
+                {/* ABOUT / FAQ: pública, no muestra datos del usuario */}
+                <Route path="/about" element={<AboutPage />} />
 
                 {/* REFERRAL PAGE */}
                 <Route path="/referir" element={<ReferralPage />} />
